@@ -1,12 +1,15 @@
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
-import { getThemeTokens, ThemeId } from '../../src/theme/themeSettings';
-
-const theme = getThemeTokens(ThemeId.RI_CHU_THEME);
+import { useTheme } from '../../src/theme/ThemeContext';
+import { getThemeTokens } from '../../src/theme/themeSettings';
+import { FLOATING_SPACE } from '../../src/theme/layoutSettings';
 
 export default function HomeScreen() {
+  const { themeId } = useTheme();
+  const theme = getThemeTokens(themeId);
+
   return (
-    <View style={[styles.container, { backgroundColor: theme.background }]}>
+    <View style={[styles.container, { backgroundColor: 'transparent' }]}>
       <Text style={[styles.title, { color: theme.text }]}>首頁（待實作）</Text>
     </View>
   );
@@ -18,6 +21,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: 16,
+    paddingBottom: FLOATING_SPACE,
   },
   title: {
     fontSize: 18,

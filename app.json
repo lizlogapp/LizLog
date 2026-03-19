@@ -1,29 +1,27 @@
 {
   "expo": {
-    "name": "CURSOR",
-    "slug": "CURSOR",
+    "name": "蜥日日記",
+    "slug": "lizlog",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/icon.png",
+    "icon": "./assets/branding/logos/logo-image-only.png",
     "userInterfaceStyle": "light",
     "splash": {
-      "image": "./assets/splash-icon.png",
+      "image": "./assets/branding/logos/logo-image-only.png",
       "resizeMode": "contain",
-      "backgroundColor": "#ffffff"
+      "backgroundColor": "#FFFEFA"
     },
     "ios": {
       "supportsTablet": true
     },
     "android": {
       "adaptiveIcon": {
-        "backgroundColor": "#E6F4FE",
-        "foregroundImage": "./assets/android-icon-foreground.png",
-        "backgroundImage": "./assets/android-icon-background.png",
-        "monochromeImage": "./assets/android-icon-monochrome.png"
+        "backgroundColor": "#FFFEFA",
+        "foregroundImage": "./assets/branding/logos/logo-image-only.png"
       }
     },
     "web": {
-      "favicon": "./assets/favicon.png"
+      "favicon": "./assets/branding/logos/logo-image-only.png"
     },
     "plugins": [
       "expo-router"
