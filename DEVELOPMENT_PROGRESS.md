@@ -44,6 +44,15 @@
 - 完成內容：建立基礎/主題/字體三份設定檔，包含日初/澄日兩主題色彩 token、黑階/白階文字 token，以及暇日/余白字體與字級（含中級/小/大映射）。
 - 驗證方式：依流程在首次實作頁面後以 `npx expo start` 進行主題視覺一致性檢查
 
+### Phase 4：App 骨架與 Expo Router 路由建立
+- 狀態：已完成（骨架/路由已建立，尚待視覺驗證）
+- 完成時間：2026-03-19
+- 完成內容：
+  - 更新入口設定：`package.json` 改為 `expo-router/entry`，並新增 `babel.config.js`（`expo-router/babel`）
+  - 建立路由檔案：`app/_layout.tsx`、`app/(tabs)/_layout.tsx`
+  - 建立底部 5 分頁 tabs placeholder：`index`（首頁）、`records`（紀錄）、`analytics`（分析）、`pets`（寵物）、`settings`（設定）
+- 驗證方式：請於實機/模擬器執行 `npx expo start`，確認 tabs 可切換且畫面顏色符合 Day 主題
+
 ### Phase 9：文件與測試驗證流程落地（確保可穩定迭代）
 - 狀態：未開始
 - 完成時間：--
