@@ -53,6 +53,18 @@
   - 建立底部 5 分頁 tabs placeholder：`index`（首頁）、`records`（紀錄）、`analytics`（分析）、`pets`（寵物）、`settings`（設定）
 - 驗證方式：請於實機/模擬器執行 `npx expo start`，確認 tabs 可切換且畫面顏色符合 Day 主題
 
+### 工作階段：首頁載入動畫與版面優化（2026-03-19）
+- 狀態：已完成
+- 完成時間：2026-03-19
+- 完成內容：
+  - 載入頁動畫（1→2→3→4）：light 蜥蜴 → dark 疊加 → logo，僅圖片淡入淡出、頁面固定
+  - 動畫邏輯：light 不淡出、dark 疊加淡入；轉 logo 時 light+dark 同時淡出；圖層 zIndex 確保 dark 在上
+  - 動畫規格：1→2 延遲 800ms、400ms Ease out；2→3 延遲 800ms、1600ms Ease in-out；3→4 延遲 800ms、800ms Ease in-out
+  - 版面：內容/頁面邊距改為 W8 H8（`PANEL_CONTENT_MARGIN`、`CONTENT_PAGE_MARGIN`）
+  - AppLoadContext：依實際載入完成時間調整動畫，載入快則加速至 logo，載入慢則完整播放
+  - 新增 `src/contexts/AppLoadContext.tsx`、`layoutSettings` 動畫常數
+- 驗證方式：`npx expo start` 於首頁確認載入動畫流程與版面邊距
+
 ### Phase 9：文件與測試驗證流程落地（確保可穩定迭代）
 - 狀態：未開始
 - 完成時間：--

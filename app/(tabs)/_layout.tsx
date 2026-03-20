@@ -1,9 +1,12 @@
 import React from 'react';
-import { Image } from 'react-native';
+import { Image, StyleSheet } from 'react-native';
 import { Tabs } from 'expo-router';
 import { getThemeTokens } from '../../src/theme/themeSettings';
 import { useTheme } from '../../src/theme/ThemeContext';
 import { TAB_BAR_HEIGHT } from '../../src/theme/layoutSettings';
+
+/** 頁籤按鈕尺寸 W50 H50 */
+const TAB_ICON_SIZE = 50;
 
 /** 頁籤圖示：default 預設、active 當前頁（有陰影） */
 const tabIcons = {
@@ -35,6 +38,7 @@ function TabsLayoutInner() {
 
   return (
     <Tabs
+      initialRouteName="index"
       screenOptions={{
         headerShown: false,
         tabBarShowLabel: false,
@@ -45,18 +49,23 @@ function TabsLayoutInner() {
           height: TAB_BAR_HEIGHT,
         },
         tabBarItemStyle: {
-          paddingVertical: 8,
+          paddingTop: (TAB_BAR_HEIGHT - TAB_ICON_SIZE) / 2 + 5,
+          paddingBottom: (TAB_BAR_HEIGHT - TAB_ICON_SIZE) / 2 - 5,
+        },
+        sceneStyle: {
+          backgroundColor: "transparent",
+          flex: 1,
         },
       }}
     >
       <Tabs.Screen
-        name="index"
+        name="analytics"
         options={{
-          title: '首頁',
+          title: '分析',
           tabBarIcon: ({ focused }) => (
             <Image
-              source={focused ? tabIcons.index.active : tabIcons.index.default}
-              style={{ width: 36, height: 36 }}
+              source={focused ? tabIcons.analytics.active : tabIcons.analytics.default}
+              style={{ width: TAB_ICON_SIZE, height: TAB_ICON_SIZE }}
               resizeMode="contain"
             />
           ),
@@ -69,20 +78,20 @@ function TabsLayoutInner() {
           tabBarIcon: ({ focused }) => (
             <Image
               source={focused ? tabIcons.records.active : tabIcons.records.default}
-              style={{ width: 36, height: 36 }}
+              style={{ width: TAB_ICON_SIZE, height: TAB_ICON_SIZE }}
               resizeMode="contain"
             />
           ),
         }}
       />
       <Tabs.Screen
-        name="analytics"
+        name="index"
         options={{
-          title: '分析',
+          title: '首頁',
           tabBarIcon: ({ focused }) => (
             <Image
-              source={focused ? tabIcons.analytics.active : tabIcons.analytics.default}
-              style={{ width: 36, height: 36 }}
+              source={focused ? tabIcons.index.active : tabIcons.index.default}
+              style={{ width: TAB_ICON_SIZE, height: TAB_ICON_SIZE }}
               resizeMode="contain"
             />
           ),
@@ -95,7 +104,7 @@ function TabsLayoutInner() {
           tabBarIcon: ({ focused }) => (
             <Image
               source={focused ? tabIcons.pets.active : tabIcons.pets.default}
-              style={{ width: 36, height: 36 }}
+              style={{ width: TAB_ICON_SIZE, height: TAB_ICON_SIZE }}
               resizeMode="contain"
             />
           ),
@@ -108,7 +117,7 @@ function TabsLayoutInner() {
           tabBarIcon: ({ focused }) => (
             <Image
               source={focused ? tabIcons.settings.active : tabIcons.settings.default}
-              style={{ width: 36, height: 36 }}
+              style={{ width: TAB_ICON_SIZE, height: TAB_ICON_SIZE }}
               resizeMode="contain"
             />
           ),

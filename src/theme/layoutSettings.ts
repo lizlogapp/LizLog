@@ -28,6 +28,16 @@ export const FLOATING_BAR_GAP = 16;
 export const FLOATING_SPACE =
   FLOATING_BAR_HEIGHT + FLOATING_BAR_MARGIN_BOTTOM;
 
+/** 內容與面板邊距 W8 H8 */
+export const PANEL_CONTENT_MARGIN = 8;
+/** 頁面與內容邊距 W8 H8 */
+export const CONTENT_PAGE_MARGIN = 8;
+/** 內容區內邊距（其他元件用） */
+export const CONTENT_PADDING = 16;
+
+/** 載入動畫：當 app 提早載入完成時，加速至 logo 的動畫時長 */
+export const LOAD_ANIMATION_ACCELERATE_MS = 300;
+
 export const borderRadius = {
   // 小圓角
   sm: 4,
