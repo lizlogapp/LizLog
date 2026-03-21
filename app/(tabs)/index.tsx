@@ -10,6 +10,7 @@ import {
   ScrollView,
   Pressable,
 } from 'react-native';
+import { useRouter } from 'expo-router';
 import { paletteColors } from '../../src/theme/themeColorSettings';
 import {
   STATUS_BAR_HEIGHT,
@@ -36,8 +37,29 @@ export default function HomeScreen() {
   const { isReady } = useAppLoad();
   const { themeId, fontFamilyName } = useTheme();
   const theme = getThemeTokens(themeId);
+  const router = useRouter();
 
   const [loadingComplete, setLoadingComplete] = useState(false);
+  const [availablePets, setAvailablePets] = useState<string[]>(['ENTER', 'ALT']); // 模擬數量較少的情況
+  const [currentPetName, setCurrentPetName] = useState<string>('ALT'); // 預設選中 ALT 供預覽
+  const [isDropdownVisible, setIsDropdownVisible] = useState<boolean>(false); // 控制下拉選單顯示
+  const [isConnected, setIsConnected] = useState<boolean>(true); // 預設呈現連線成功的 UI 狀態供預覽
+
+  // 模擬未來從資料庫撈取的「最新一筆日記」物件
+  interface DiaryRecord {
+    id: string;
+    day: string;
+    month: string;
+    weatherIcon: any;
+    imageUrl: any;
+  }
+  const [latestDiary, setLatestDiary] = useState<DiaryRecord | null>({
+    id: 'db-record-001',
+    day: '7',
+    month: 'MON',
+    weatherIcon: require('../../assets/icons/category-basking-active.png'),
+    imageUrl: require('../../assets/user-uploads/lizard-001.jpg')
+  });
 
   // 動畫相關
   const img1Opacity = useRef(new Animated.Value(0)).current;
@@ -181,15 +203,84 @@ export default function HomeScreen() {
         contentContainerStyle={{ paddingVertical: 16, flexGrow: 1 }}
         showsVerticalScrollIndicator={false}
       >
-        {/* 卡片 1：當前顯示 / 未設定 */}
-        <View style={styles.cardHeader}>
+        {/* 卡片 1：當前顯示 / 寵物切換下拉選單 */}
+        <View style={[styles.cardHeader, isDropdownVisible ? { zIndex: 100, elevation: 10 } : { zIndex: 1 }]}>
           <Text style={[styles.headerLabel, { color: theme.primary, fontFamily: fontFamilyName }]}>當前顯示</Text>
-          <Text style={[styles.headerValue, { color: theme.text, fontFamily: fontFamilyName }]}>未設定</Text>
+          <Pressable 
+            onPress={() => {
+              if (availablePets.length === 0) {
+                router.push('/pet/add');
+              } else {
+                setIsDropdownVisible(!isDropdownVisible);
+              }
+            }}
+          >
+            <Text style={[styles.headerValue, { color: theme.text, fontFamily: fontFamilyName }]}>
+              {currentPetName || '未設定'}
+            </Text>
+          </Pressable>
+
+          {/* 懸浮下拉選單 (Dropdown) */}
+          {isDropdownVisible && availablePets.length > 0 && (
+            <View style={styles.dropdownModal}>
+              <View style={styles.dropdownTail} />
+              <ScrollView 
+                style={styles.dropdownScroll} 
+                showsVerticalScrollIndicator={false}
+                bounces={false}
+                overScrollMode="never"
+              >
+                {availablePets.map((pet, idx) => (
+                  <View key={pet}>
+                    <Pressable 
+                      style={styles.dropdownItem} 
+                      onPress={() => {
+                        setCurrentPetName(pet);
+                        setIsDropdownVisible(false);
+                      }}
+                    >
+                      <Text style={[styles.dropdownItemText, { color: theme.primary, fontFamily: fontFamilyName }]}>
+                        {pet}
+                      </Text>
+                    </Pressable>
+                    {idx < availablePets.length - 1 && <View style={styles.dropdownDivider} />}
+                  </View>
+                ))}
+              </ScrollView>
+            </View>
+          )}
         </View>
 
         {/* 卡片 2：未連接感測器 & 快速紀錄 (四功能) */}
         <View style={styles.sensorCardBlock}>
-          <Text style={[styles.sensorText, { color: theme.text, fontFamily: fontFamilyName }]}>未連接感測器</Text>
+          <View style={styles.sensorTopHalf}>
+            {!isConnected ? (
+              <Pressable onPress={() => router.push('/settings')}>
+                <Text style={[styles.sensorText, { color: theme.text, fontFamily: fontFamilyName }]}>未連接感測器</Text>
+              </Pressable>
+            ) : (
+              <View style={styles.sensorDataRow}>
+                {/* 溫度區塊 */}
+                <View style={styles.sensorDataItem}>
+                  <View style={styles.sensorDataVerticalText}>
+                    <Text style={[styles.sensorDataChar, { color: theme.primary, fontFamily: fontFamilyName }]}>溫</Text>
+                    <Text style={[styles.sensorDataChar, { color: theme.primary, fontFamily: fontFamilyName }]}>度</Text>
+                  </View>
+                  <Text style={[styles.sensorDataValue, { color: '#666666', fontFamily: fontFamilyName }]}>31°C</Text>
+                </View>
+
+                {/* 濕度區塊 */}
+                <View style={styles.sensorDataItem}>
+                  <View style={styles.sensorDataVerticalText}>
+                    <Text style={[styles.sensorDataChar, { color: theme.primary, fontFamily: fontFamilyName }]}>濕</Text>
+                    <Text style={[styles.sensorDataChar, { color: theme.primary, fontFamily: fontFamilyName }]}>度</Text>
+                  </View>
+                  <Text style={[styles.sensorDataValue, { color: '#666666', fontFamily: fontFamilyName }]}>30%</Text>
+                </View>
+              </View>
+            )}
+          </View>
+
           <View style={styles.actionIconsRow}>
             <Pressable onPress={() => toggleIcon('basking')}>
               <Image source={activeIcons.basking ? require('../../assets/icons/category-basking-active.png') : require('../../assets/icons/category-basking-default.png')} style={styles.actionIcon} />
@@ -249,13 +340,31 @@ export default function HomeScreen() {
           ))}
         </View>
 
-        {/* 卡片 4：新增日記 */}
-        <View style={styles.diaryBlock}>
-          <Text style={[styles.diaryText, { color: theme.primary, fontFamily: fontFamilyName }]}>
-            新增第一篇日記
-          </Text>
-          <Image source={require('../../assets/illustrations/lizard-head-light.png')} style={styles.diaryImage} resizeMode="contain" />
-        </View>
+        {/* 卡片 4：新增/顯示最近一篇日記 */}
+        {!latestDiary ? (
+          <Pressable 
+            style={styles.diaryBlock}
+            onPress={() => router.push('/diary/empty')}
+          >
+            <Text style={[styles.diaryText, { color: theme.primary, fontFamily: fontFamilyName }]}>
+              新增第一篇日記
+            </Text>
+            <Image source={require('../../assets/illustrations/lizard-head-light.png')} style={styles.diaryImage} resizeMode="contain" />
+          </Pressable>
+        ) : (
+          <View style={styles.diaryBlockActive}>
+            {/* 左側：精緻雜誌風資訊區塊 (資料綁定) */}
+            <View style={styles.diaryActiveLeft}>
+              <Text style={[styles.diaryDateDay, { color: theme.primary, fontFamily: fontFamilyName }]}>{latestDiary.day}</Text>
+              <Text style={[styles.diaryDateMonth, { color: theme.primary, fontFamily: fontFamilyName }]}>{latestDiary.month}</Text>
+              <Image source={latestDiary.weatherIcon} style={styles.diaryWeatherIcon} />
+            </View>
+            {/* 右側：滿版使用者設定的圖片 (資料綁定) */}
+            <View style={styles.diaryActiveRight}>
+              <Image source={latestDiary.imageUrl} style={styles.diaryActiveImage} />
+            </View>
+          </View>
+        )}
 
       </ScrollView>
 
@@ -353,44 +462,104 @@ const styles = StyleSheet.create({
     fontSize: getFontSize(18, 'medium'),
     // 移除 fontWeight，統一樣式跟未連接感測器一致
   },
-  bubbleTail: {
+  
+  // 下拉選單樣式
+  dropdownModal: {
     position: 'absolute',
-    bottom: -8,
-    right: 48,
-    width: 16,
-    height: 16,
-    backgroundColor: paletteColors.RI_CHU,
+    top: 65, // 放置於 header 下方
+    right: 20, // 靠右側
+    width: 180,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    paddingVertical: 8,
+    shadowColor: '#000000',
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.15,
+    shadowRadius: 10,
+    elevation: 10, // 確保在 Android 也浮於表面
+  },
+  dropdownScroll: {
+    maxHeight: 240, // 設定最大高度，超過自動變成滾動清單，以防未來資料過多破版
+  },
+  dropdownTail: {
+    position: 'absolute',
+    top: -6,
+    right: 32, // 對齊上方的名字中心
+    width: 20,
+    height: 20,
+    backgroundColor: '#FFFFFF',
     transform: [{ rotate: '45deg' }],
-    borderBottomWidth: 1,
-    borderRightWidth: 1,
-    borderColor: '#FCFAF4',
-    borderBottomRightRadius: 4,
+    borderRadius: 2, // 柔和箭頭尖端
+    shadowColor: '#000000',
+    shadowOffset: { width: -2, height: -2 }, // 給尾巴特定陰影以融合主卡片
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
+  },
+  dropdownItem: {
+    paddingVertical: 12,
+    alignItems: 'center',
+  },
+  dropdownItemText: {
+    fontSize: getFontSize(20, 'medium'), // 大一點的點選字級
+  },
+  dropdownDivider: {
+    height: 1,
+    backgroundColor: '#F2F2F2',
+    marginHorizontal: 16,
   },
 
   // Sensor 卡片
   sensorCardBlock: {
     backgroundColor: paletteColors.RI_CHU,
     borderRadius: 16,
-    height: 160, // 應要求恢復至 160
-    marginBottom: 16, // 統一間距為 16
-    justifyContent: 'center',
-    alignItems: 'center',
-    gap: 32, // 配合 160 的高度加大圖文距離
+    height: 160, // 必須加回固定高度，才能讓內部的 flex: 1 完美撐開上下距
+    marginBottom: 16, 
+    paddingVertical: 16, 
     // React Native 0.74+ 支援 boxShadow inset
     boxShadow: 'inset 2px 2px 7px rgba(0, 0, 0, 0.25)',
     // Fallback: 針對尚未支援的舊環境，加個內縮邊框擬合內陰影感
     borderWidth: 1,
     borderColor: 'rgba(0,0,0,0.03)',
   },
+  sensorTopHalf: {
+    flex: 1, // 獨佔上方所有可用空間
+    width: '100%',
+    justifyContent: 'center', // 將內容（未設定或數據）完美居中
+    alignItems: 'center',
+  },
   sensorText: {
     fontSize: getFontSize(18, 'medium'),
     textAlign: 'center',
+  },
+  sensorDataRow: {
+    flexDirection: 'row',
+    width: '100%',
+    justifyContent: 'space-around',
+    paddingHorizontal: 16,
+  },
+  sensorDataItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  sensorDataVerticalText: {
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  sensorDataChar: {
+    fontSize: getFontSize(18, 'medium'),
+    lineHeight: 22,
+  },
+  sensorDataValue: {
+    fontSize: getFontSize(48, 'medium'), // 超大字型展示溫度濕度
+    marginLeft: 4,
   },
   actionIconsRow: {
     flexDirection: 'row',
     justifyContent: 'space-around',
     width: '100%',
     paddingHorizontal: 20,
+    marginTop: 8, // 保證上方數據塊不論多大，都會維持這個最小緩衝
   },
   actionIcon: {
     width: 44,
@@ -473,15 +642,14 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFFFFF',
     borderRadius: 16,
     flex: 1, 
-    minHeight: 160, 
+    minHeight: 200, 
     width: '98%',
     alignSelf: 'center',
-    padding: 12, 
+    padding: 20, 
     marginBottom: 0, // 設為 0，讓底部距離僅吃 ScrollView 的 16 padding，保持等距
     flexDirection: 'column',
     alignItems: 'center',
-    justifyContent: 'center', 
-    gap: 12, 
+    justifyContent: 'space-evenly', 
     boxShadow: '0px 4px 7px rgba(0, 0, 0, 0.25)',
   },
   diaryText: {
@@ -490,9 +658,47 @@ const styles = StyleSheet.create({
     zIndex: 2,
   },
   diaryImage: {
-    width: 150,
-    height: 150, // 必須要有明確高度或比例，否則圖片會塌縮導致文字位置跑掉
+    flex: 1,
+    width: '100%',
+    maxHeight: 150, // 避免圖片超過這個高度
     resizeMode: 'contain',
     zIndex: 1,
+  },
+  diaryBlockActive: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    flex: 1,
+    minHeight: 200, // 使用要求最小高度 200
+    width: '98%',
+    alignSelf: 'center',
+    marginBottom: 0,
+    flexDirection: 'row',
+    overflow: 'hidden', // 關鍵：讓滿版圖片服貼在這個元件的圓角內
+    boxShadow: '0px 4px 7px rgba(0, 0, 0, 0.25)',
+  },
+  diaryActiveLeft: {
+    width: 140, // 左側日期資訊固定寬度
+    justifyContent: 'space-evenly', // 改為 space-evenly 以隨機改變空間距應依高度變化
+    alignItems: 'center',
+    paddingVertical: 24,
+  },
+  diaryActiveRight: {
+    flex: 1, // 讓右側影像完全吞噬剩下的全部空間
+  },
+  diaryActiveImage: {
+    width: '100%',
+    height: '100%',
+    resizeMode: 'cover', // 完美覆蓋
+  },
+  diaryDateDay: {
+    fontSize: getFontSize(48, 'medium'), // 大字 7
+  },
+  diaryDateMonth: {
+    fontSize: getFontSize(22, 'medium'), // 小字 MON
+  },
+  diaryWeatherIcon: {
+    width: 32,
+    height: 32,
+    resizeMode: 'contain',
   },
 });
