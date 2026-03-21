@@ -1,26 +1,23 @@
 import React from 'react';
-import { Image, StyleSheet } from 'react-native';
+import { Image, StyleSheet, View } from 'react-native';
 import { Tabs } from 'expo-router';
 import { getThemeTokens } from '../../src/theme/themeSettings';
 import { useTheme } from '../../src/theme/ThemeContext';
 import { TAB_BAR_HEIGHT } from '../../src/theme/layoutSettings';
 
-/** 頁籤按鈕尺寸 W50 H50 */
-const TAB_ICON_SIZE = 50;
-
 /** 頁籤圖示：default 預設、active 當前頁（有陰影） */
 const tabIcons = {
-  index: {
-    default: require('../../assets/tab-bar/home-default.png'),
-    active: require('../../assets/tab-bar/home-active.png'),
-  },
-  records: {
-    default: require('../../assets/tab-bar/records-default.png'),
-    active: require('../../assets/tab-bar/records-active.png'),
-  },
   analytics: {
     default: require('../../assets/tab-bar/analytics-default.png'),
     active: require('../../assets/tab-bar/analytics-active.png'),
+  },
+  diary: {
+    default: require('../../assets/tab-bar/records-default.png'),
+    active: require('../../assets/tab-bar/records-active.png'),
+  },
+  index: {
+    default: require('../../assets/tab-bar/home-default.png'),
+    active: require('../../assets/tab-bar/home-active.png'),
   },
   pets: {
     default: require('../../assets/tab-bar/pets-default.png'),
@@ -38,7 +35,6 @@ function TabsLayoutInner() {
 
   return (
     <Tabs
-      initialRouteName="index"
       screenOptions={{
         headerShown: false,
         tabBarShowLabel: false,
@@ -49,12 +45,7 @@ function TabsLayoutInner() {
           height: TAB_BAR_HEIGHT,
         },
         tabBarItemStyle: {
-          paddingTop: (TAB_BAR_HEIGHT - TAB_ICON_SIZE) / 2 + 5,
-          paddingBottom: (TAB_BAR_HEIGHT - TAB_ICON_SIZE) / 2 - 5,
-        },
-        sceneStyle: {
-          backgroundColor: "transparent",
-          flex: 1,
+          paddingVertical: 8,
         },
       }}
     >
@@ -65,20 +56,20 @@ function TabsLayoutInner() {
           tabBarIcon: ({ focused }) => (
             <Image
               source={focused ? tabIcons.analytics.active : tabIcons.analytics.default}
-              style={{ width: TAB_ICON_SIZE, height: TAB_ICON_SIZE }}
+              style={{ width: 36, height: 36 }}
               resizeMode="contain"
             />
           ),
         }}
       />
       <Tabs.Screen
-        name="records"
+        name="diary"
         options={{
-          title: '紀錄',
+          title: '日記',
           tabBarIcon: ({ focused }) => (
             <Image
-              source={focused ? tabIcons.records.active : tabIcons.records.default}
-              style={{ width: TAB_ICON_SIZE, height: TAB_ICON_SIZE }}
+              source={focused ? tabIcons.diary.active : tabIcons.diary.default}
+              style={{ width: 36, height: 36 }}
               resizeMode="contain"
             />
           ),
@@ -91,7 +82,7 @@ function TabsLayoutInner() {
           tabBarIcon: ({ focused }) => (
             <Image
               source={focused ? tabIcons.index.active : tabIcons.index.default}
-              style={{ width: TAB_ICON_SIZE, height: TAB_ICON_SIZE }}
+              style={{ width: 36, height: 36 }}
               resizeMode="contain"
             />
           ),
@@ -104,7 +95,7 @@ function TabsLayoutInner() {
           tabBarIcon: ({ focused }) => (
             <Image
               source={focused ? tabIcons.pets.active : tabIcons.pets.default}
-              style={{ width: TAB_ICON_SIZE, height: TAB_ICON_SIZE }}
+              style={{ width: 36, height: 36 }}
               resizeMode="contain"
             />
           ),
@@ -117,12 +108,14 @@ function TabsLayoutInner() {
           tabBarIcon: ({ focused }) => (
             <Image
               source={focused ? tabIcons.settings.active : tabIcons.settings.default}
-              style={{ width: TAB_ICON_SIZE, height: TAB_ICON_SIZE }}
+              style={{ width: 36, height: 36 }}
               resizeMode="contain"
             />
           ),
         }}
       />
+      {/* 隱藏 records 畫面，避免 Expo Router 自動生成第 6 個未配置的無效頁籤 */}
+      <Tabs.Screen name="records" options={{ href: null }} />
     </Tabs>
   );
 }
@@ -130,4 +123,3 @@ function TabsLayoutInner() {
 export default function TabsLayout() {
   return <TabsLayoutInner />;
 }
-

@@ -40,8 +40,8 @@ export default function HomeScreen() {
   const router = useRouter();
 
   const [loadingComplete, setLoadingComplete] = useState(false);
-  const [availablePets, setAvailablePets] = useState<string[]>(['ENTER', 'ALT']); // 模擬數量較少的情況
-  const [currentPetName, setCurrentPetName] = useState<string>('ALT'); // 預設選中 ALT 供預覽
+  const [availablePets, setAvailablePets] = useState<string[]>(['DELETE', 'CTRL', 'ENTER', 'ALT']); // 模擬寵物名單
+  const [currentPetName, setCurrentPetName] = useState<string>('DELETE'); // 預設選中 DELETE 供預覽
   const [isDropdownVisible, setIsDropdownVisible] = useState<boolean>(false); // 控制下拉選單顯示
   const [isConnected, setIsConnected] = useState<boolean>(true); // 預設呈現連線成功的 UI 狀態供預覽
 
@@ -197,7 +197,6 @@ export default function HomeScreen() {
 
   return (
     <View style={styles.container}>
-      {/* ===== 真實首頁內容 ===== */}
       <ScrollView
         style={[styles.homeContainer, { left: PAGE_LEFT, top: PAGE_TOP, width: PAGE_WIDTH, height: PAGE_HEIGHT }]}
         contentContainerStyle={{ paddingVertical: 16, flexGrow: 1 }}
@@ -231,20 +230,21 @@ export default function HomeScreen() {
                 overScrollMode="never"
               >
                 {availablePets.map((pet, idx) => (
-                  <View key={pet}>
-                    <Pressable 
-                      style={styles.dropdownItem} 
-                      onPress={() => {
-                        setCurrentPetName(pet);
-                        setIsDropdownVisible(false);
-                      }}
-                    >
-                      <Text style={[styles.dropdownItemText, { color: theme.primary, fontFamily: fontFamilyName }]}>
-                        {pet}
-                      </Text>
-                    </Pressable>
-                    {idx < availablePets.length - 1 && <View style={styles.dropdownDivider} />}
-                  </View>
+                  <Pressable 
+                    key={pet}
+                    style={[
+                      styles.dropdownItem,
+                      idx === availablePets.length - 1 && { marginBottom: 0 }
+                    ]} 
+                    onPress={() => {
+                      setCurrentPetName(pet);
+                      setIsDropdownVisible(false);
+                    }}
+                  >
+                    <Text style={[styles.dropdownItemText, { color: theme.primary, fontFamily: fontFamilyName }]}>
+                      {pet}
+                    </Text>
+                  </Pressable>
                 ))}
               </ScrollView>
             </View>
@@ -344,7 +344,7 @@ export default function HomeScreen() {
         {!latestDiary ? (
           <Pressable 
             style={styles.diaryBlock}
-            onPress={() => router.push('/diary/empty')}
+            onPress={() => router.push('/diary')}
           >
             <Text style={[styles.diaryText, { color: theme.primary, fontFamily: fontFamilyName }]}>
               新增第一篇日記
@@ -352,7 +352,10 @@ export default function HomeScreen() {
             <Image source={require('../../assets/illustrations/lizard-head-light.png')} style={styles.diaryImage} resizeMode="contain" />
           </Pressable>
         ) : (
-          <View style={styles.diaryBlockActive}>
+          <Pressable 
+            style={styles.diaryBlockActive}
+            onPress={() => router.push('/diary/view')}
+          >
             {/* 左側：精緻雜誌風資訊區塊 (資料綁定) */}
             <View style={styles.diaryActiveLeft}>
               <Text style={[styles.diaryDateDay, { color: theme.primary, fontFamily: fontFamilyName }]}>{latestDiary.day}</Text>
@@ -363,7 +366,7 @@ export default function HomeScreen() {
             <View style={styles.diaryActiveRight}>
               <Image source={latestDiary.imageUrl} style={styles.diaryActiveImage} />
             </View>
-          </View>
+          </Pressable>
         )}
 
       </ScrollView>
@@ -468,44 +471,37 @@ const styles = StyleSheet.create({
     position: 'absolute',
     top: 65, // 放置於 header 下方
     right: 20, // 靠右側
-    width: 180,
+    width: 150, // 調整寬度
     backgroundColor: '#FFFFFF',
-    borderRadius: 16,
-    paddingVertical: 8,
+    borderRadius: 8,
+    padding: 12,
     shadowColor: '#000000',
-    shadowOffset: { width: 0, height: 6 },
+    shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.15,
-    shadowRadius: 10,
-    elevation: 10, // 確保在 Android 也浮於表面
+    shadowRadius: 8,
+    elevation: 8, 
   },
   dropdownScroll: {
-    maxHeight: 240, // 設定最大高度，超過自動變成滾動清單，以防未來資料過多破版
+    maxHeight: 280, 
   },
   dropdownTail: {
-    position: 'absolute',
-    top: -6,
-    right: 32, // 對齊上方的名字中心
-    width: 20,
-    height: 20,
-    backgroundColor: '#FFFFFF',
-    transform: [{ rotate: '45deg' }],
-    borderRadius: 2, // 柔和箭頭尖端
-    shadowColor: '#000000',
-    shadowOffset: { width: -2, height: -2 }, // 給尾巴特定陰影以融合主卡片
-    shadowOpacity: 0.05,
-    shadowRadius: 4,
+    display: 'none', // 依照設計圖隱藏尾巴
   },
   dropdownItem: {
-    paddingVertical: 12,
+    paddingVertical: 10,
     alignItems: 'center',
+    backgroundColor: 'rgba(255, 237, 204, 0.6)', // 淡黃色背景
+    borderTopLeftRadius: 4,
+    borderBottomLeftRadius: 4,
+    borderTopRightRadius: 16,
+    borderBottomRightRadius: 16,
+    marginBottom: 8, // 拉開按鈕間隔
   },
   dropdownItemText: {
-    fontSize: getFontSize(20, 'medium'), // 大一點的點選字級
+    fontSize: getFontSize(22, 'medium'), // 大一點的點選字級
   },
   dropdownDivider: {
-    height: 1,
-    backgroundColor: '#F2F2F2',
-    marginHorizontal: 16,
+    display: 'none',
   },
 
   // Sensor 卡片

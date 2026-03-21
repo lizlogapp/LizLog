@@ -45,9 +45,16 @@ function RootLayoutInner() {
 
   return (
     <View style={[styles.root, { minHeight: SCREEN_HEIGHT, minWidth: SCREEN_WIDTH }]}>
+        {/* 全域背景圖 (手機畫面 130% 置中) */}
         <ImageBackground
           source={bg}
-          style={StyleSheet.absoluteFill}
+          style={{
+            position: 'absolute',
+            width: SCREEN_WIDTH * 1.3,
+            height: SCREEN_HEIGHT * 1.3,
+            left: -(SCREEN_WIDTH * 0.3) / 2,
+            top: -(SCREEN_HEIGHT * 0.3) / 2,
+          }}
           resizeMode="cover"
         />
         <StatusBar style="dark" translucent backgroundColor="transparent" />
@@ -93,6 +100,9 @@ export default function RootLayout() {
 const styles = StyleSheet.create({
   root: {
     flex: 1,
+  },
+  backgroundImage: {
+    position: 'absolute',
   },
   panel: {
     position: "absolute",
