@@ -2,6 +2,7 @@ import React, { useEffect } from 'react';
 import * as NavigationBar from 'expo-navigation-bar';
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
+import { ThemeProvider as NavigationThemeProvider } from '@react-navigation/native';
 import {
   ImageBackground,
   Platform,
@@ -81,19 +82,40 @@ function RootLayoutInner() {
   );
 }
 
+/** React Navigation 主題：強制所有 Navigator 場景背景透明 */
+const transparentNavTheme = {
+  dark: false,
+  colors: {
+    primary: '#FF7300',
+    background: 'transparent',
+    card: 'transparent',
+    text: '#5F5F5F',
+    border: 'transparent',
+    notification: '#FF7300',
+  },
+  fonts: {
+    regular: { fontFamily: 'System', fontWeight: '400' as const },
+    medium:  { fontFamily: 'System', fontWeight: '500' as const },
+    bold:    { fontFamily: 'System', fontWeight: '700' as const },
+    heavy:   { fontFamily: 'System', fontWeight: '800' as const },
+  },
+};
+
 export default function RootLayout() {
   return (
-    <ThemeProvider>
-      <AppLoadProvider
-        init={
-          // 可在此加入字型、Firebase 等初始化，例：
-          // async () => { await Font.loadAsync(...); await initFirebase(); }
-          undefined
-        }
-      >
-        <RootLayoutInner />
-      </AppLoadProvider>
-    </ThemeProvider>
+    <NavigationThemeProvider value={transparentNavTheme}>
+      <ThemeProvider>
+        <AppLoadProvider
+          init={
+            // 可在此加入字型、Firebase 等初始化，例：
+            // async () => { await Font.loadAsync(...); await initFirebase(); }
+            undefined
+          }
+        >
+          <RootLayoutInner />
+        </AppLoadProvider>
+      </ThemeProvider>
+    </NavigationThemeProvider>
   );
 }
 

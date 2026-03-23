@@ -53,13 +53,7 @@ export default function HomeScreen() {
     weatherIcon: any;
     imageUrl: any;
   }
-  const [latestDiary, setLatestDiary] = useState<DiaryRecord | null>({
-    id: 'db-record-001',
-    day: '7',
-    month: 'MON',
-    weatherIcon: require('../../assets/icons/category-basking-active.png'),
-    imageUrl: require('../../assets/user-uploads/lizard-001.jpg')
-  });
+  const [latestDiary, setLatestDiary] = useState<DiaryRecord | null>(null); // 初次開啟 APP 尚無資料
 
   // 動畫相關
   const img1Opacity = useRef(new Animated.Value(0)).current;
@@ -394,9 +388,11 @@ export default function HomeScreen() {
 const styles = StyleSheet.create({
   container: {
     ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'transparent',
   },
   homeContainer: {
     position: 'absolute',
+    backgroundColor: 'transparent',
   },
   page: {
     position: 'absolute',
