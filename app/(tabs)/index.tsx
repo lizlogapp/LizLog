@@ -194,11 +194,8 @@ export default function HomeScreen() {
   return (
     <View style={styles.container}>
       <BaseScreen
-        floatingAction={
-          <View style={{ width: '100%', alignItems: 'flex-end', justifyContent: 'center' }}>
-            {/* 未來放浮動按鈕 */}
-          </View>
-        }
+        scrollable={false}
+        floatingAction={null}
       >
         {/* 卡片 1：當前顯示 / 寵物切換下拉選單 */}
         <View style={[styles.cardHeader, isDropdownVisible ? { zIndex: 100, elevation: 10 } : { zIndex: 1 }]}>

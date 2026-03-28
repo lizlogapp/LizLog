@@ -33,12 +33,12 @@ export type FloatingActionId =
   | 'diary';
 
 const actionImages: Record<FloatingActionId, ReturnType<typeof require>> = {
-  add: require('../../assets/floating-actions/add.png'),
-  calendar: require('../../assets/floating-actions/calendar.png'),
-  confirm: require('../../assets/floating-actions/confirm.png'),
-  edit: require('../../assets/floating-actions/edit.png'),
-  back: require('../../assets/floating-actions/back.png'),
-  diary: require('../../assets/floating-actions/diary.png'),
+  add: require('../../assets/floating-actions/add-new.png'),
+  calendar: require('../../assets/floating-actions/calendar-new.png'),
+  confirm: require('../../assets/floating-actions/confirm-new.png'),
+  edit: require('../../assets/floating-actions/edit-new.png'),
+  back: require('../../assets/floating-actions/back-new.png'),
+  diary: require('../../assets/floating-actions/diary-new.png'),
 };
 
 export type FloatingActionItem = {
@@ -53,7 +53,7 @@ type Props = {
   style?: ViewStyle;
 };
 
-const BUTTON_SIZE = 50;
+const BUTTON_SIZE = 48;
 
 export function FloatingActionBar({ actions, style }: Props) {
   if (actions.length === 0) return null;
@@ -93,6 +93,13 @@ const styles = StyleSheet.create({
     borderRadius: 16, // Figma: Corner radius 16
     justifyContent: 'center',
     alignItems: 'center',
+    // Figma 陰影設定：對齊頁籤
+    backgroundColor: '#FFE17B', // 若圖檔沒有內建背景色則用這層色票。如果有則透明亦可，暫留以策安全且增加陰影發色
+    elevation: 6,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 6,
   },
   icon: {
     width: '100%',

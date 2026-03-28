@@ -63,7 +63,7 @@ function RootLayoutInner() {
           styles.panel,
           {
             top: 70,
-            bottom: 90,
+            bottom: 70,
             backgroundColor: overlayColor,
           },
         ]}

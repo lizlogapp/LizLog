@@ -51,8 +51,8 @@ function TabsLayoutInner() {
           borderTopWidth: 0,
           zIndex: 100,
           height: TAB_BAR_HEIGHT,
-          paddingTop: 21,    // (90 - 48) / 2 = 21 -> 強制置中
-          paddingBottom: 21, // 覆蓋手機預設的安全距離推擠，強制置中
+          paddingTop: 11,    // (70 - 48) / 2 = 11 -> 強制置中
+          paddingBottom: 11, // 覆蓋手機預設的安全距離推擠，強制置中
           paddingHorizontal: 28,
         },
         tabBarItemStyle: {

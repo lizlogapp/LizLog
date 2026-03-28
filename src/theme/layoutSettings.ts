@@ -13,7 +13,7 @@
 /** 頂部狀態列（時間、訊號、電量）高度 */
 export const STATUS_BAR_HEIGHT = 70;
 /** 頁籤列的高度 */
-export const TAB_BAR_HEIGHT = 90;
+export const TAB_BAR_HEIGHT = 70;
 
 /** 浮動按鈕區塊：頁籤上方的按鈕空間 */
 export const FLOATING_BAR_HEIGHT = 114;

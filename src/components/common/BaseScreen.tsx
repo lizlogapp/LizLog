@@ -67,7 +67,14 @@ export function BaseScreen({
               {children}
             </ScrollView>
           ) : (
-            <View style={[{ flex: 1, backgroundColor: 'transparent' }, style]}>
+            <View style={[
+              { 
+                flex: 1, 
+                backgroundColor: 'transparent',
+                paddingBottom: floatingAction ? 114 : 0 
+              }, 
+              style
+            ]}>
               {children}
             </View>
           )}
