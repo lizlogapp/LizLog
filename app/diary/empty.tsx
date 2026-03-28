@@ -18,75 +18,70 @@ export default function EmptyDiaryScreen() {
   const theme = getThemeTokens(themeId);
   const colorOrange = theme.primary;
 
-  // 狀態管理：目前選中的日期與選單顯示狀態
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [isDropdownVisible, setIsDropdownVisible] = useState(false);
+  const isDropdownVisibleRef = useRef(isDropdownVisible);
+
+  // 確保全域手勢隨時能讀取到最新的開啟狀態
+  useEffect(() => {
+    isDropdownVisibleRef.current = isDropdownVisible;
+  }, [isDropdownVisible]);
+
   const scrollRef = useRef<ScrollView>(null);
 
   // 用於跟蹤手勢捲動的起始位置
   const startScrollY = useRef(0);
+  // 本地嚴格追蹤 Y 軸數值，避免 scrollTo 與 Native onScroll 之間的非同步衝突
   const currentScrollY = useRef(0);
-
-  /**
-   * 處理滾動事件以記錄目前的滾動位置
-   */
-  const handleScroll = (event: any) => {
-    currentScrollY.current = event.nativeEvent.contentOffset.y;
-  };
 
   /**
    * 建立全螢幕手勢傳感器
    */
   const panResponder = useRef(
     PanResponder.create({
-      onStartShouldSetPanResponder: () => true,
-      onMoveShouldSetPanResponder: () => true,
+      // 放棄初次點擊觸發，讓底下的項目可以被點選
+      onStartShouldSetPanResponder: () => false,
+      // 僅在選單打開且手指滑動超過 5px 時攔截手勢權限
+      onMoveShouldSetPanResponder: (_, gestureState) => {
+        return isDropdownVisibleRef.current && Math.abs(gestureState.dy) > 5;
+      },
+      // 當成功攔截手勢時，同步最新的滾軸位置
       onPanResponderGrant: () => {
-        // 紀錄手勢開始時的捲動位置
         startScrollY.current = currentScrollY.current;
       },
       onPanResponderMove: (evt, gestureState) => {
-        if (isDropdownVisible && scrollRef.current) {
-          // 根據垂直位移量的相反方向捲動 (向上滑則列表向下捲)
-          const newY = startScrollY.current - gestureState.dy;
+        if (isDropdownVisibleRef.current && scrollRef.current) {
+          // 向下滑動 = DY為正 = scrollY變小 = 往上滾
+          let newY = startScrollY.current - gestureState.dy;
+          
+          const maxScroll = (12 * 40) - 200; // = 280
+          if (newY < 0) newY = 0;
+          if (newY > maxScroll) newY = maxScroll;
+          
+          currentScrollY.current = newY;
           scrollRef.current.scrollTo({ y: newY, animated: false });
         }
       },
-      onPanResponderRelease: (evt, gestureState) => {
-        // 如果幾乎沒有移動 (位移 < 10)，視為點擊事件，關閉選單
-        if (Math.abs(gestureState.dy) < 10 && Math.abs(gestureState.dx) < 10) {
-          setIsDropdownVisible(false);
-        }
-      },
-      onPanResponderTerminate: () => {
-        // 處理手勢中斷
-      },
+      onPanResponderRelease: () => {},
+      onPanResponderTerminate: () => {},
     })
   ).current;
 
-  /**
-   * 當選單開啟時，自動捲動到選中月份的位置
-   * 前後各兩月，所以將目標月份置中於視窗 (40px * (index - 2))
-   */
+  const currentMonth = selectedDate.getMonth() + 1;
+  const currentYear = selectedDate.getFullYear();
+
   useEffect(() => {
     if (isDropdownVisible && scrollRef.current) {
       const monthIndex = selectedDate.getMonth();
       const scrollY = Math.max(0, (monthIndex - 2) * 40);
 
-      // 使用小延遲確保 ScrollView 已經佈局完成
+      currentScrollY.current = scrollY;
       setTimeout(() => {
         scrollRef.current?.scrollTo({ y: scrollY, animated: false });
       }, 50);
     }
   }, [isDropdownVisible]);
 
-  // 獲取目前選中的月份 (1-12)
-  const currentMonth = selectedDate.getMonth() + 1;
-  const currentYear = selectedDate.getFullYear();
-
-  /**
-   * 產生月份列表 (1月至 12月)
-   */
   const generateMonths = () => {
     const months = [];
     for (let i = 0; i < 12; i++) {
@@ -99,10 +94,6 @@ export default function EmptyDiaryScreen() {
     return months;
   };
 
-  /**
-   * 處理月份選擇點擊事件
-   * @param date 選中的日期物件
-   */
   const handleMonthSelect = (date: Date) => {
     setSelectedDate(date);
     setIsDropdownVisible(false);
@@ -120,13 +111,15 @@ export default function EmptyDiaryScreen() {
         />
       }
     >
-      {/* 全螢幕手勢擷取層 (僅在選單開啟時顯示) */}
-      {isDropdownVisible && (
-        <View
-          {...panResponder.panHandlers}
-          style={[StyleSheet.absoluteFill, { zIndex: 900, backgroundColor: 'transparent' }]}
-        />
-      )}
+      {/* 頂層 PanResponder 容器包覆全域，以捕獲滑動 */}
+      <View style={{ flex: 1 }} {...panResponder.panHandlers}>
+        {/* 背景點擊攔截，用來關閉選單 */}
+        {isDropdownVisible && (
+          <Pressable
+            style={[StyleSheet.absoluteFill, { zIndex: 900, backgroundColor: 'transparent' }]}
+            onPress={() => setIsDropdownVisible(false)}
+          />
+        )}
 
       {/* 頂部標題列 (Header) */}
       <View style={[styles.header, { zIndex: 1000 }]}>
@@ -149,10 +142,9 @@ export default function EmptyDiaryScreen() {
                 ref={scrollRef}
                 style={styles.dropdownScroll}
                 contentContainerStyle={{ flexGrow: 1 }}
-                onScroll={handleScroll}
-                scrollEventThrottle={16}
-                showsVerticalScrollIndicator={true}
-                bounces={true}
+                scrollEnabled={false} // 完全關閉原生滾動，徹底交由 PanResponder 掌控，避免衝突及卡頓
+                showsVerticalScrollIndicator={false}
+                bounces={false}
                 nestedScrollEnabled={true}
               >
                 {generateMonths().map((item, index) => (
@@ -186,7 +178,9 @@ export default function EmptyDiaryScreen() {
           source={require('../../assets/illustrations/illustration-lizard-02.png')}
           style={styles.illustration}
           resizeMode="contain"
+          fadeDuration={0}
         />
+      </View>
       </View>
     </BaseScreen>
   );
@@ -274,6 +268,7 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
+    marginTop: 50,
     paddingBottom: 20,
   },
   title: {

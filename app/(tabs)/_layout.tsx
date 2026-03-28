@@ -1,37 +1,38 @@
 import React from 'react';
-import { Image, StyleSheet, View } from 'react-native';
+import { View, StyleSheet } from 'react-native';
 import { Tabs } from 'expo-router';
 import { getThemeTokens } from '../../src/theme/themeSettings';
 import { useTheme } from '../../src/theme/ThemeContext';
 import { TAB_BAR_HEIGHT } from '../../src/theme/layoutSettings';
+import { NeumorphicButton } from '../../src/components/common/NeumorphicButton';
 
-/** 頁籤圖示：default 預設、active 當前頁（有陰影） */
-const tabIcons = {
-  analytics: {
-    default: require('../../assets/tab-bar/analytics-default.png'),
-    active: require('../../assets/tab-bar/analytics-active.png'),
-  },
-  diary: {
-    default: require('../../assets/tab-bar/records-default.png'),
-    active: require('../../assets/tab-bar/records-active.png'),
-  },
-  index: {
-    default: require('../../assets/tab-bar/home-default.png'),
-    active: require('../../assets/tab-bar/home-active.png'),
-  },
-  pets: {
-    default: require('../../assets/tab-bar/pets-default.png'),
-    active: require('../../assets/tab-bar/pets-active.png'),
-  },
-  settings: {
-    default: require('../../assets/tab-bar/settings-default.png'),
-    active: require('../../assets/tab-bar/settings-active.png'),
-  },
-} as const;
+import AnalyticsIcon from '../../assets/tab-bar/analytics-default.svg';
+import DiaryIcon from '../../assets/tab-bar/records-default.svg';
+import HomeIcon from '../../assets/tab-bar/home-default.svg';
+import PetsIcon from '../../assets/tab-bar/pets-default.svg';
+import SettingsIcon from '../../assets/tab-bar/settings-default.svg';
 
 function TabsLayoutInner() {
   const { themeId } = useTheme();
   const theme = getThemeTokens(themeId);
+
+  // Helper renderer to encapsulate active logic
+  const renderIcon = (IconComponent: React.FC<any>, focused: boolean) => {
+    if (focused) {
+      return (
+        <View style={{ width: 50, height: 50, justifyContent: 'center', alignItems: 'center' }}>
+          <NeumorphicButton variant="tab-active" style={{ width: 50, height: 50, padding: 12 }}>
+            <IconComponent width="100%" height="100%" preserveAspectRatio="xMidYMid meet" color={theme.primary} />
+          </NeumorphicButton>
+        </View>
+      );
+    }
+    return (
+      <View style={{ width: 50, height: 50, padding: 12, justifyContent: 'center', alignItems: 'center' }}>
+        <IconComponent width="100%" height="100%" preserveAspectRatio="xMidYMid meet" color={theme.text} />
+      </View>
+    );
+  };
 
   return (
     <Tabs
@@ -51,12 +52,12 @@ function TabsLayoutInner() {
           borderTopWidth: 0,
           zIndex: 100,
           height: TAB_BAR_HEIGHT,
-          paddingTop: 11,    // (70 - 48) / 2 = 11 -> 強制置中
-          paddingBottom: 11, // 覆蓋手機預設的安全距離推擠，強制置中
+          paddingTop: 11,
+          paddingBottom: 11,
           paddingHorizontal: 28,
         },
         tabBarItemStyle: {
-          height: 48, // 限縮單一按鈕可點擊高度與 icon 一致
+          height: 48,
           justifyContent: 'center',
           alignItems: 'center',
         },
@@ -66,65 +67,35 @@ function TabsLayoutInner() {
         name="analytics"
         options={{
           title: '分析',
-          tabBarIcon: ({ focused }) => (
-            <Image
-              source={focused ? tabIcons.analytics.active : tabIcons.analytics.default}
-              style={{ width: 48, height: 48 }}
-              resizeMode="contain"
-            />
-          ),
+          tabBarIcon: ({ focused }) => renderIcon(AnalyticsIcon, focused),
         }}
       />
       <Tabs.Screen
         name="diary"
         options={{
           title: '日記',
-          tabBarIcon: ({ focused }) => (
-            <Image
-              source={focused ? tabIcons.diary.active : tabIcons.diary.default}
-              style={{ width: 48, height: 48 }}
-              resizeMode="contain"
-            />
-          ),
+          tabBarIcon: ({ focused }) => renderIcon(DiaryIcon, focused),
         }}
       />
       <Tabs.Screen
         name="index"
         options={{
           title: '首頁',
-          tabBarIcon: ({ focused }) => (
-            <Image
-              source={focused ? tabIcons.index.active : tabIcons.index.default}
-              style={{ width: 48, height: 48 }}
-              resizeMode="contain"
-            />
-          ),
+          tabBarIcon: ({ focused }) => renderIcon(HomeIcon, focused),
         }}
       />
       <Tabs.Screen
         name="pets"
         options={{
           title: '寵物',
-          tabBarIcon: ({ focused }) => (
-            <Image
-              source={focused ? tabIcons.pets.active : tabIcons.pets.default}
-              style={{ width: 48, height: 48 }}
-              resizeMode="contain"
-            />
-          ),
+          tabBarIcon: ({ focused }) => renderIcon(PetsIcon, focused),
         }}
       />
       <Tabs.Screen
         name="settings"
         options={{
           title: '設定',
-          tabBarIcon: ({ focused }) => (
-            <Image
-              source={focused ? tabIcons.settings.active : tabIcons.settings.default}
-              style={{ width: 48, height: 48 }}
-              resizeMode="contain"
-            />
-          ),
+          tabBarIcon: ({ focused }) => renderIcon(SettingsIcon, focused),
         }}
       />
       {/* 隱藏 records 畫面，避免 Expo Router 自動生成第 6 個未配置的無效頁籤 */}

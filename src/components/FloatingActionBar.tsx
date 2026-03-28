@@ -24,6 +24,13 @@ import {
   TAB_BAR_HEIGHT,
 } from '../theme/layoutSettings';
 
+import AddIcon from '../../assets/floating-actions/add.svg';
+import CalendarIcon from '../../assets/floating-actions/calendar.svg';
+import ConfirmIcon from '../../assets/floating-actions/confirm.svg';
+import EditIcon from '../../assets/floating-actions/edit.svg';
+import BackIcon from '../../assets/floating-actions/back.svg';
+import DiaryIcon from '../../assets/floating-actions/diary.svg';
+import { NeumorphicButton } from './common/NeumorphicButton';
 export type FloatingActionId =
   | 'add'
   | 'calendar'
@@ -32,13 +39,13 @@ export type FloatingActionId =
   | 'back'
   | 'diary';
 
-const actionImages: Record<FloatingActionId, ReturnType<typeof require>> = {
-  add: require('../../assets/floating-actions/add-new.png'),
-  calendar: require('../../assets/floating-actions/calendar-new.png'),
-  confirm: require('../../assets/floating-actions/confirm-new.png'),
-  edit: require('../../assets/floating-actions/edit-new.png'),
-  back: require('../../assets/floating-actions/back-new.png'),
-  diary: require('../../assets/floating-actions/diary-new.png'),
+const ActionIcons: Record<FloatingActionId, React.FC<any>> = {
+  add: AddIcon,
+  calendar: CalendarIcon,
+  confirm: ConfirmIcon,
+  edit: EditIcon,
+  back: BackIcon,
+  diary: DiaryIcon,
 };
 
 export type FloatingActionItem = {
@@ -53,8 +60,6 @@ type Props = {
   style?: ViewStyle;
 };
 
-const BUTTON_SIZE = 48;
-
 export function FloatingActionBar({ actions, style }: Props) {
   if (actions.length === 0) return null;
 
@@ -62,20 +67,19 @@ export function FloatingActionBar({ actions, style }: Props) {
 
   return (
     <View style={[styles.actionGroup, style]} pointerEvents="box-none">
-      {limitedActions.map(({ id, onPress }) => (
-        <TouchableOpacity
-          key={id}
-          onPress={onPress}
-          activeOpacity={0.7}
-          style={styles.button}
-        >
-          <Image
-            source={actionImages[id]}
-            style={styles.icon}
-            resizeMode="contain"
-          />
-        </TouchableOpacity>
-      ))}
+      {limitedActions.map(({ id, onPress }) => {
+        const IconComponent = ActionIcons[id];
+        return (
+          <NeumorphicButton
+            key={id}
+            variant="floating"
+            onPress={onPress}
+            style={{ width: 50, height: 50, padding: 12 }}
+          >
+            <IconComponent width="100%" height="100%" preserveAspectRatio="xMidYMid meet" />
+          </NeumorphicButton>
+        );
+      })}
     </View>
   );
 }
@@ -86,23 +90,5 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'flex-end',
     gap: 16, // Figma: Gap 16
-  },
-  button: {
-    width: BUTTON_SIZE,
-    height: BUTTON_SIZE,
-    borderRadius: 16, // Figma: Corner radius 16
-    justifyContent: 'center',
-    alignItems: 'center',
-    // Figma 陰影設定：對齊頁籤
-    backgroundColor: '#FFE17B', // 若圖檔沒有內建背景色則用這層色票。如果有則透明亦可，暫留以策安全且增加陰影發色
-    elevation: 6,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.15,
-    shadowRadius: 6,
-  },
-  icon: {
-    width: '100%',
-    height: '100%',
   },
 });
