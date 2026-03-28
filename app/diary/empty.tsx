@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { View, Text, StyleSheet, Pressable, Image, Dimensions, ScrollView, PanResponder } from 'react-native';
+import { View, Text, StyleSheet, Pressable, Image, Dimensions, ScrollView, PanResponder, TextInput } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useTheme } from '../../src/theme/ThemeContext';
 import { getThemeTokens } from '../../src/theme/themeSettings';
@@ -20,6 +20,9 @@ export default function EmptyDiaryScreen() {
 
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [isDropdownVisible, setIsDropdownVisible] = useState(false);
+  const [isSearchVisible, setIsSearchVisible] = useState(false);
+  const [isPetDropdownVisible, setIsPetDropdownVisible] = useState(false);
+  const [availablePets, setAvailablePets] = useState<string[]>(['ALL']);
   const isDropdownVisibleRef = useRef(isDropdownVisible);
 
   // 確保全域手勢隨時能讀取到最新的開啟狀態
@@ -114,59 +117,106 @@ export default function EmptyDiaryScreen() {
       {/* 頂層 PanResponder 容器包覆全域，以捕獲滑動 */}
       <View style={{ flex: 1 }} {...panResponder.panHandlers}>
         {/* 背景點擊攔截，用來關閉選單 */}
-        {isDropdownVisible && (
+        {(isDropdownVisible || isPetDropdownVisible) && (
           <Pressable
             style={[StyleSheet.absoluteFill, { zIndex: 900, backgroundColor: 'transparent' }]}
-            onPress={() => setIsDropdownVisible(false)}
+            onPress={() => {
+              setIsDropdownVisible(false);
+              setIsPetDropdownVisible(false);
+            }}
           />
         )}
 
       {/* 頂部標題列 (Header) */}
       <View style={[styles.header, { zIndex: 1000 }]}>
-        <Pressable onPress={() => { }}>
-          <Image source={require('../../assets/icons/icon-menu.png')} style={[styles.headerIcon, { tintColor: theme.panelBackground }]} />
-        </Pressable>
+        {!isSearchVisible && (
+          <View style={{ position: 'relative', zIndex: 1500 }}>
+            <Pressable onPress={() => setIsPetDropdownVisible(!isPetDropdownVisible)}>
+              <Image source={require('../../assets/icons/icon-menu.png')} style={[styles.headerIcon, { tintColor: theme.panelBackground }]} />
+            </Pressable>
+            
+            {/* 寵物切換下拉選單 (與首頁設計一致) */}
+            {isPetDropdownVisible && (
+              <View style={styles.petDropdownModal}>
+                <ScrollView
+                  style={styles.petDropdownScroll}
+                  showsVerticalScrollIndicator={false}
+                  bounces={false}
+                  overScrollMode="never"
+                >
+                  {availablePets.map((pet, idx) => (
+                    <Pressable
+                      key={pet}
+                      style={[
+                        styles.petDropdownItem,
+                        idx === availablePets.length - 1 && { marginBottom: 0 }
+                      ]}
+                      onPress={() => {
+                        setIsPetDropdownVisible(false);
+                      }}
+                    >
+                      <Text style={[styles.petDropdownItemText, { color: theme.primary, fontFamily: fontFamilyName }]}>
+                        {pet}
+                      </Text>
+                    </Pressable>
+                  ))}
+                </ScrollView>
+              </View>
+            )}
+          </View>
+        )}
 
-        <View style={[styles.selectorContainer, { zIndex: 1100 }]}>
-          <Pressable
-            style={[styles.monthSelector, { backgroundColor: theme.panelBackground, zIndex: 1200 }]}
-            onPress={() => setIsDropdownVisible(!isDropdownVisible)}
-          >
-            <Text style={[styles.monthText, { fontFamily: fontFamilyName }]}>{currentMonth}月</Text>
-          </Pressable>
+        {isSearchVisible ? (
+          <View style={[styles.searchContainer, { backgroundColor: theme.background }]}>
+            <TextInput
+              style={[styles.searchInput, { color: theme.text, fontFamily: fontFamilyName }]}
+              placeholder="搜尋"
+              placeholderTextColor={theme.text + '80'}
+              autoFocus
+            />
+          </View>
+        ) : (
+          <View style={[styles.selectorContainer, { zIndex: 1100 }]}>
+            <Pressable
+              style={[styles.monthSelector, { backgroundColor: theme.panelBackground, zIndex: 1200 }]}
+              onPress={() => setIsDropdownVisible(!isDropdownVisible)}
+            >
+              <Text style={[styles.monthText, { fontFamily: fontFamilyName }]}>{currentMonth}月</Text>
+            </Pressable>
 
-          {/* 下拉選單：顯示前後各兩月，且支援全域滑動 */}
-          {isDropdownVisible && (
-            <View style={[styles.dropdownContainer, { backgroundColor: theme.panelBackground, zIndex: 1100 }]}>
-              <ScrollView
-                ref={scrollRef}
-                style={styles.dropdownScroll}
-                contentContainerStyle={{ flexGrow: 1 }}
-                scrollEnabled={false} // 完全關閉原生滾動，徹底交由 PanResponder 掌控，避免衝突及卡頓
-                showsVerticalScrollIndicator={false}
-                bounces={false}
-                nestedScrollEnabled={true}
-              >
-                {generateMonths().map((item, index) => (
-                  <Pressable
-                    key={index}
-                    style={[
-                      styles.dropdownItem,
-                      item.date.getMonth() === selectedDate.getMonth() && styles.activeItem
-                    ]}
-                    onPress={() => handleMonthSelect(item.date)}
-                  >
-                    <Text style={[styles.dropdownItemText, { fontFamily: fontFamilyName }]}>
-                      {item.label}
-                    </Text>
-                  </Pressable>
-                ))}
-              </ScrollView>
-            </View>
-          )}
-        </View>
+            {/* 下拉選單：顯示前後各兩月，且支援全域滑動 */}
+            {isDropdownVisible && (
+              <View style={[styles.dropdownContainer, { backgroundColor: theme.panelBackground, zIndex: 1100 }]}>
+                <ScrollView
+                  ref={scrollRef}
+                  style={styles.dropdownScroll}
+                  contentContainerStyle={{ flexGrow: 1 }}
+                  scrollEnabled={false} // 完全關閉原生滾動，徹底交由 PanResponder 掌控，避免衝突及卡頓
+                  showsVerticalScrollIndicator={false}
+                  bounces={false}
+                  nestedScrollEnabled={true}
+                >
+                  {generateMonths().map((item, index) => (
+                    <Pressable
+                      key={index}
+                      style={[
+                        styles.dropdownItem,
+                        item.date.getMonth() === selectedDate.getMonth() && styles.activeItem
+                      ]}
+                      onPress={() => handleMonthSelect(item.date)}
+                    >
+                      <Text style={[styles.dropdownItemText, { fontFamily: fontFamilyName }]}>
+                        {item.label}
+                      </Text>
+                    </Pressable>
+                  ))}
+                </ScrollView>
+              </View>
+            )}
+          </View>
+        )}
 
-        <Pressable onPress={() => { }}>
+        <Pressable onPress={() => setIsSearchVisible(!isSearchVisible)} style={{ zIndex: 1300 }}>
           <Image source={require('../../assets/icons/icon-search.png')} style={[styles.headerIcon, { tintColor: theme.panelBackground }]} />
         </Pressable>
       </View>
@@ -279,6 +329,52 @@ const styles = StyleSheet.create({
   illustration: {
     width: Dimensions.get('window').width * 0.85,
     height: Dimensions.get('window').width * 0.85,
+  },
+  searchContainer: {
+    width: 250,
+    height: 40,
+    borderRadius: 16,
+    borderTopWidth: 2,
+    borderLeftWidth: 2,
+    borderColor: 'rgba(0,0,0,0.25)',
+    justifyContent: 'center',
+    paddingHorizontal: 16,
+    zIndex: 1200,
+  },
+  searchInput: {
+    flex: 1,
+    fontSize: getFontSize(16, 'medium'),
+    padding: 0,
+  },
+  petDropdownModal: {
+    position: 'absolute',
+    top: 36,
+    left: -8, // 稍微左移以視覺平衡
+    width: 150,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 8,
+    padding: 12,
+    shadowColor: '#000000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 8,
+    elevation: 8,
+  },
+  petDropdownScroll: {
+    maxHeight: 280,
+  },
+  petDropdownItem: {
+    paddingVertical: 10,
+    alignItems: 'center',
+    backgroundColor: 'rgba(255, 237, 204, 0.6)', // 淡黃色背景，與首頁一致
+    borderTopLeftRadius: 4,
+    borderBottomLeftRadius: 4,
+    borderTopRightRadius: 16,
+    borderBottomRightRadius: 16,
+    marginBottom: 8,
+  },
+  petDropdownItemText: {
+    fontSize: getFontSize(18, 'medium'),
   }
 });
 

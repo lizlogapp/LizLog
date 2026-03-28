@@ -430,14 +430,19 @@ const styles = StyleSheet.create({
   },
 
   // ===== 首頁卡片共用樣式 =====
-  cardBlock: {
+  cardBlock: { // Might not be used, but good to update
     backgroundColor: paletteColors.RI_CHU,
     borderRadius: 16,
     padding: 20,
     marginBottom: 16,
-    boxShadow: 'inset 2px 2px 7px rgba(0, 0, 0, 0.25)',
-    borderWidth: 1,
-    borderColor: 'rgba(0,0,0,0.03)',
+    borderTopWidth: 2,
+    borderLeftWidth: 2,
+    borderBottomWidth: 1,
+    borderRightWidth: 1,
+    borderTopColor: 'rgba(0,0,0,0.15)',
+    borderLeftColor: 'rgba(0,0,0,0.15)',
+    borderBottomColor: 'rgba(255,255,255,0.5)',
+    borderRightColor: 'rgba(255,255,255,0.5)',
   },
 
   // Header 專用 (對話框)
@@ -451,9 +456,14 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    boxShadow: 'inset 2px 2px 7px rgba(0, 0, 0, 0.25)',
-    borderWidth: 1,
-    borderColor: 'rgba(0,0,0,0.03)',
+    borderTopWidth: 2,
+    borderLeftWidth: 2,
+    borderBottomWidth: 1,
+    borderRightWidth: 1,
+    borderTopColor: 'rgba(0,0,0,0.15)',
+    borderLeftColor: 'rgba(0,0,0,0.15)',
+    borderBottomColor: 'rgba(255,255,255,0.5)',
+    borderRightColor: 'rgba(255,255,255,0.5)',
   },
   headerLabel: {
     fontSize: getFontSize(18, 'medium'),
@@ -495,7 +505,7 @@ const styles = StyleSheet.create({
     marginBottom: 8, // 拉開按鈕間隔
   },
   dropdownItemText: {
-    fontSize: getFontSize(22, 'medium'), // 大一點的點選字級
+    fontSize: getFontSize(18, 'medium'), // 與 headerValue 保持一致
   },
   dropdownDivider: {
     display: 'none',
@@ -508,11 +518,14 @@ const styles = StyleSheet.create({
     height: 160, // 必須加回固定高度，才能讓內部的 flex: 1 完美撐開上下距
     marginBottom: 16,
     paddingVertical: 16,
-    // React Native 0.74+ 支援 boxShadow inset
-    boxShadow: 'inset 2px 2px 7px rgba(0, 0, 0, 0.25)',
-    // Fallback: 針對尚未支援的舊環境，加個內縮邊框擬合內陰影感
-    borderWidth: 1,
-    borderColor: 'rgba(0,0,0,0.03)',
+    borderTopWidth: 2,
+    borderLeftWidth: 2,
+    borderBottomWidth: 1,
+    borderRightWidth: 1,
+    borderTopColor: 'rgba(0,0,0,0.15)',
+    borderLeftColor: 'rgba(0,0,0,0.15)',
+    borderBottomColor: 'rgba(255,255,255,0.5)',
+    borderRightColor: 'rgba(255,255,255,0.5)',
   },
   sensorTopHalf: {
     flex: 1, // 獨佔上方所有可用空間
@@ -568,9 +581,14 @@ const styles = StyleSheet.create({
     paddingHorizontal: 5,
     marginBottom: 16, // 統一間距為 16
     gap: 8,
-    boxShadow: 'inset 2px 2px 7px rgba(0, 0, 0, 0.25)',
-    borderWidth: 1,
-    borderColor: 'rgba(0,0,0,0.03)',
+    borderTopWidth: 2,
+    borderLeftWidth: 2,
+    borderBottomWidth: 1,
+    borderRightWidth: 1,
+    borderTopColor: 'rgba(0,0,0,0.15)',
+    borderLeftColor: 'rgba(0,0,0,0.15)',
+    borderBottomColor: 'rgba(255,255,255,0.5)',
+    borderRightColor: 'rgba(255,255,255,0.5)',
   },
   // Reminder 單一項目
   reminderItem: {
