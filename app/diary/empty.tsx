@@ -5,6 +5,7 @@ import { useTheme } from '../../src/theme/ThemeContext';
 import { getThemeTokens } from '../../src/theme/themeSettings';
 import { getFontSize } from '../../src/theme/typographySettings';
 import { FloatingActionBar } from '../../src/components/FloatingActionBar';
+import { BaseScreen } from '../../src/components/common/BaseScreen';
 import { STATUS_BAR_HEIGHT } from '../../src/theme/layoutSettings';
 
 /**
@@ -15,13 +16,13 @@ export default function EmptyDiaryScreen() {
   const router = useRouter();
   const { themeId, fontFamilyName } = useTheme();
   const theme = getThemeTokens(themeId);
-  const colorOrange = theme.primary; 
-  
+  const colorOrange = theme.primary;
+
   // 狀態管理：目前選中的日期與選單顯示狀態
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [isDropdownVisible, setIsDropdownVisible] = useState(false);
   const scrollRef = useRef<ScrollView>(null);
-  
+
   // 用於跟蹤手勢捲動的起始位置
   const startScrollY = useRef(0);
   const currentScrollY = useRef(0);
@@ -71,14 +72,14 @@ export default function EmptyDiaryScreen() {
     if (isDropdownVisible && scrollRef.current) {
       const monthIndex = selectedDate.getMonth();
       const scrollY = Math.max(0, (monthIndex - 2) * 40);
-      
+
       // 使用小延遲確保 ScrollView 已經佈局完成
       setTimeout(() => {
         scrollRef.current?.scrollTo({ y: scrollY, animated: false });
       }, 50);
     }
   }, [isDropdownVisible]);
-  
+
   // 獲取目前選中的月份 (1-12)
   const currentMonth = selectedDate.getMonth() + 1;
   const currentYear = selectedDate.getFullYear();
@@ -89,11 +90,11 @@ export default function EmptyDiaryScreen() {
   const generateMonths = () => {
     const months = [];
     for (let i = 0; i < 12; i++) {
-        const date = new Date(currentYear, i, 1);
-        months.push({
-            label: `${i + 1}月`,
-            date: date
-        });
+      const date = new Date(currentYear, i, 1);
+      months.push({
+        label: `${i + 1}月`,
+        date: date
+      });
     }
     return months;
   };
@@ -108,84 +109,86 @@ export default function EmptyDiaryScreen() {
   };
 
   return (
-    <View style={[styles.container, { backgroundColor: theme.background }]}>
+    <BaseScreen
+      scrollable={false}
+      floatingAction={
+        <FloatingActionBar
+          actions={[
+            { id: 'calendar', onPress: () => { } },
+            { id: 'add', onPress: () => { } }
+          ]}
+        />
+      }
+    >
       {/* 全螢幕手勢擷取層 (僅在選單開啟時顯示) */}
       {isDropdownVisible && (
-        <View 
+        <View
           {...panResponder.panHandlers}
-          style={[StyleSheet.absoluteFill, { zIndex: 900, backgroundColor: 'transparent' }]} 
+          style={[StyleSheet.absoluteFill, { zIndex: 900, backgroundColor: 'transparent' }]}
         />
       )}
 
       {/* 頂部標題列 (Header) */}
-      <View style={[styles.header, { paddingTop: STATUS_BAR_HEIGHT + 16, zIndex: 1000 }]}>
-        <Pressable onPress={() => {}}>
+      <View style={[styles.header, { zIndex: 1000 }]}>
+        <Pressable onPress={() => { }}>
           <Image source={require('../../assets/icons/icon-menu.png')} style={[styles.headerIcon, { tintColor: theme.panelBackground }]} />
         </Pressable>
-        
+
         <View style={[styles.selectorContainer, { zIndex: 1100 }]}>
-          <Pressable 
+          <Pressable
             style={[styles.monthSelector, { backgroundColor: theme.panelBackground, zIndex: 1200 }]}
             onPress={() => setIsDropdownVisible(!isDropdownVisible)}
           >
             <Text style={[styles.monthText, { fontFamily: fontFamilyName }]}>{currentMonth}月</Text>
           </Pressable>
 
-            {/* 下拉選單：顯示前後各兩月，且支援全域滑動 */}
-            {isDropdownVisible && (
-              <View style={[styles.dropdownContainer, { backgroundColor: theme.panelBackground, zIndex: 1100 }]}>
-                <ScrollView 
-                  ref={scrollRef}
-                  style={styles.dropdownScroll}
-                  contentContainerStyle={{ flexGrow: 1 }}
-                  onScroll={handleScroll}
-                  scrollEventThrottle={16}
-                  showsVerticalScrollIndicator={true}
-                  bounces={true}
-                  nestedScrollEnabled={true} 
-                >
-                  {generateMonths().map((item, index) => (
-                    <Pressable 
-                      key={index}
-                      style={[
-                        styles.dropdownItem, 
-                        item.date.getMonth() === selectedDate.getMonth() && styles.activeItem
-                      ]}
-                      onPress={() => handleMonthSelect(item.date)}
-                    >
-                      <Text style={[styles.dropdownItemText, { fontFamily: fontFamilyName }]}>
-                        {item.label}
-                      </Text>
-                    </Pressable>
-                  ))}
-                </ScrollView>
-              </View>
-            )}
+          {/* 下拉選單：顯示前後各兩月，且支援全域滑動 */}
+          {isDropdownVisible && (
+            <View style={[styles.dropdownContainer, { backgroundColor: theme.panelBackground, zIndex: 1100 }]}>
+              <ScrollView
+                ref={scrollRef}
+                style={styles.dropdownScroll}
+                contentContainerStyle={{ flexGrow: 1 }}
+                onScroll={handleScroll}
+                scrollEventThrottle={16}
+                showsVerticalScrollIndicator={true}
+                bounces={true}
+                nestedScrollEnabled={true}
+              >
+                {generateMonths().map((item, index) => (
+                  <Pressable
+                    key={index}
+                    style={[
+                      styles.dropdownItem,
+                      item.date.getMonth() === selectedDate.getMonth() && styles.activeItem
+                    ]}
+                    onPress={() => handleMonthSelect(item.date)}
+                  >
+                    <Text style={[styles.dropdownItemText, { fontFamily: fontFamilyName }]}>
+                      {item.label}
+                    </Text>
+                  </Pressable>
+                ))}
+              </ScrollView>
+            </View>
+          )}
         </View>
-        
-        <Pressable onPress={() => {}}>
+
+        <Pressable onPress={() => { }}>
           <Image source={require('../../assets/icons/icon-search.png')} style={[styles.headerIcon, { tintColor: theme.panelBackground }]} />
         </Pressable>
       </View>
 
-        {/* 主要內容區塊：居中顯示「尚無日記」插圖與標題 */}
-        <View style={styles.centerContent}>
-          <Text style={[styles.title, { color: colorOrange, fontFamily: fontFamilyName }]}>尚無日記</Text>
-          <Image 
-            source={require('../../assets/illustrations/illustration-lizard-02.png')} 
-            style={styles.illustration}
-            resizeMode="contain"
-          />
-        </View>
-
-      {/* 底部浮動操作列 (Floating Action Bar) */}
-      <FloatingActionBar
-        actions={[
-          { id: 'calendar', onPress: () => {} },
-          { id: 'add', onPress: () => {} }
-        ]}
-      />
-    </View>
+      {/* 主要內容區塊：居中顯示「尚無日記」插圖與標題 */}
+      <View style={styles.centerContent}>
+        <Text style={[styles.title, { color: colorOrange, fontFamily: fontFamilyName }]}>尚無日記</Text>
+        <Image
+          source={require('../../assets/illustrations/illustration-lizard-02.png')}
+          style={styles.illustration}
+          resizeMode="contain"
+        />
+      </View>
+    </BaseScreen>
   );
 }
 

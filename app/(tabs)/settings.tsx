@@ -2,26 +2,22 @@ import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { useTheme } from '../../src/theme/ThemeContext';
 import { getThemeTokens } from '../../src/theme/themeSettings';
-import { FLOATING_SPACE } from '../../src/theme/layoutSettings';
+import { BaseScreen } from '../../src/components/common/BaseScreen';
 
 export default function SettingsScreen() {
   const { themeId } = useTheme();
   const theme = getThemeTokens(themeId);
 
   return (
-    <View style={[styles.container, { backgroundColor: 'transparent' }]}>
-      <Text style={[styles.title, { color: theme.text }]}>設定（待實作）</Text>
-    </View>
+    <BaseScreen>
+      <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
+        <Text style={[styles.title, { color: theme.text }]}>設定（待實作）</Text>
+      </View>
+    </BaseScreen>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingBottom: FLOATING_SPACE,
-  },
   title: {
     fontSize: 18,
     fontWeight: '600',

@@ -67,7 +67,7 @@ export default function DiaryViewScreen() {
   const [showWeatherMenu, setShowWeatherMenu] = useState(false);
   const [selectedWeather, setSelectedWeather] = useState(require('../../assets/icons/weather-sunny.png'));
   const carouselRef = useRef<ScrollView>(null);
-  
+
   const [petName, setPetName] = useState(mockDiaryData.petName);
   const [showPetDropdown, setShowPetDropdown] = useState(false);
   const availablePets = ['ALL', 'DELETE', 'CTRL', 'ENTER', 'ALT'];
@@ -155,8 +155,8 @@ export default function DiaryViewScreen() {
                 </Pressable>
               ))}
             </ScrollView>
-            <Pressable 
-              style={styles.petNameTag} 
+            <Pressable
+              style={styles.petNameTag}
               onPress={() => setShowPetDropdown(!showPetDropdown)}
             >
               <Text style={[styles.petNameText, { fontFamily: fontFamilyName }]}>{petName}</Text>
@@ -206,8 +206,8 @@ export default function DiaryViewScreen() {
             {showWeatherMenu && (
               <View style={styles.weatherMenuContainer}>
                 {weatherIconsList.map((icon, idx) => (
-                  <Pressable 
-                    key={idx} 
+                  <Pressable
+                    key={idx}
                     style={styles.weatherOption}
                     onPress={() => {
                       setSelectedWeather(icon);
@@ -220,7 +220,7 @@ export default function DiaryViewScreen() {
               </View>
             )}
 
-            <TextInput 
+            <TextInput
               style={[styles.heroTitle, { fontFamily: fontFamilyName, color: paletteColors.MU_CHENG, padding: 0 }]}
               value={diaryTitle}
               onChangeText={setDiaryTitle}
@@ -239,13 +239,13 @@ export default function DiaryViewScreen() {
 
         {/* 卡片 2: 日記內文 */}
         <View style={styles.cardBlock}>
-          <TextInput 
+          <TextInput
             style={[styles.contentTitle, { fontFamily: fontFamilyName, color: paletteColors.MU_CHENG, padding: 0 }]}
             value={diaryTitle}
             onChangeText={setDiaryTitle}
             multiline
           />
-          <TextInput 
+          <TextInput
             style={[styles.contentText, { fontFamily: fontFamilyName, color: theme.text, padding: 0 }]}
             value={diaryContent}
             onChangeText={setDiaryContent}
@@ -274,7 +274,7 @@ export default function DiaryViewScreen() {
             <Image key={idx} source={img} style={styles.thumbnail} />
           ))}
         </View>
-        
+
         {/* Fill empty space at bottom so floating buttons don't block content */}
         <View style={{ height: 100 }} />
       </ScrollView>
@@ -308,7 +308,7 @@ function SensorListItem({ icon, label, value, fontFamilyName, onChangeText }: { 
     <View style={styles.sensorListItem}>
       <Image source={icon} style={[styles.sensorListIcon, { tintColor: paletteColors.MU_CHENG }]} />
       <Text style={[styles.sensorListLabel, { fontFamily: fontFamilyName }]}>{label}：</Text>
-      <TextInput 
+      <TextInput
         style={[styles.sensorListValue, { fontFamily: fontFamilyName }]}
         value={value}
         onChangeText={onChangeText}
@@ -344,7 +344,7 @@ const styles = StyleSheet.create({
     alignSelf: 'center',
     width: '98%',
   },
-  
+
   // Hero Image
   heroImageContainer: {
     margin: -16,       // negate padding to make image full-width inside card

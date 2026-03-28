@@ -11,7 +11,7 @@
 import { ThemeId } from "./themeColorSettings";
 
 export const backgroundImages: Record<ThemeId, number> = {
-  [ThemeId.RI_CHU_THEME]: require("../../assets/branding/backgrounds/background-ri-chu.png"),
-  [ThemeId.CHENG_RI_THEME]: require("../../assets/branding/backgrounds/background-cheng-ri.png"),
+  [ThemeId.RI_CHU_THEME]: require("../../assets/branding/backgrounds/背景圖-日初.png"),
+  [ThemeId.CHENG_RI_THEME]: require("../../assets/branding/backgrounds/背景圖-澄日.png"),
 };
 

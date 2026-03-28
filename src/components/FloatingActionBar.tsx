@@ -56,53 +56,36 @@ type Props = {
 const BUTTON_SIZE = 50;
 
 export function FloatingActionBar({ actions, style }: Props) {
-  const { themeId } = useTheme();
-  const theme = getThemeTokens(themeId);
-
   if (actions.length === 0) return null;
 
   const limitedActions = actions.slice(0, 4);
 
   return (
-    <View
-      style={[styles.container, style]}
-      pointerEvents="box-none"
-    >
-      <View style={styles.actionGroup} pointerEvents="box-none">
-        {limitedActions.map(({ id, onPress }) => (
-          <TouchableOpacity
-            key={id}
-            onPress={onPress}
-            activeOpacity={0.7}
-            style={styles.button}
-          >
-            <Image
-              source={actionImages[id]}
-              style={styles.icon}
-              resizeMode="contain"
-            />
-          </TouchableOpacity>
-        ))}
-      </View>
+    <View style={[styles.actionGroup, style]} pointerEvents="box-none">
+      {limitedActions.map(({ id, onPress }) => (
+        <TouchableOpacity
+          key={id}
+          onPress={onPress}
+          activeOpacity={0.7}
+          style={styles.button}
+        >
+          <Image
+            source={actionImages[id]}
+            style={styles.icon}
+            resizeMode="contain"
+          />
+        </TouchableOpacity>
+      ))}
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    position: 'absolute',
-    left: 0,
-    right: 0,
-    bottom: 0, // 緊貼頁籤
-    height: 115, // h115的容器
-    paddingHorizontal: 16,
-    justifyContent: 'center', // 垂直置中按鈕群
-  },
   actionGroup: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'flex-end',
-    gap: 10, // Figma: Gap 10
+    gap: 16, // Figma: Gap 16
   },
   button: {
     width: BUTTON_SIZE,

@@ -11,6 +11,7 @@ import {
   Pressable,
 } from 'react-native';
 import { useRouter } from 'expo-router';
+import { BaseScreen } from '../../src/components/common/BaseScreen';
 import { paletteColors } from '../../src/theme/themeColorSettings';
 import {
   STATUS_BAR_HEIGHT,
@@ -137,10 +138,11 @@ export default function HomeScreen() {
 
   const pageStyle = {
     backgroundColor: paletteColors.RI_CHU,
-    left: PAGE_LEFT,
-    top: PAGE_TOP,
-    width: PAGE_WIDTH,
-    height: PAGE_HEIGHT,
+    position: 'absolute' as const,
+    top: STATUS_BAR_HEIGHT + PANEL_CONTENT_MARGIN + CONTENT_PAGE_MARGIN,
+    bottom: TAB_BAR_HEIGHT + PANEL_CONTENT_MARGIN + CONTENT_PAGE_MARGIN,
+    left: PANEL_CONTENT_MARGIN + CONTENT_PAGE_MARGIN,
+    right: PANEL_CONTENT_MARGIN + CONTENT_PAGE_MARGIN,
   };
 
   // State：首頁打卡項目列表
@@ -191,15 +193,17 @@ export default function HomeScreen() {
 
   return (
     <View style={styles.container}>
-      <ScrollView
-        style={[styles.homeContainer, { left: PAGE_LEFT, top: PAGE_TOP, width: PAGE_WIDTH, height: PAGE_HEIGHT }]}
-        contentContainerStyle={{ paddingVertical: 16, flexGrow: 1 }}
-        showsVerticalScrollIndicator={false}
+      <BaseScreen
+        floatingAction={
+          <View style={{ width: '100%', alignItems: 'flex-end', justifyContent: 'center' }}>
+            {/* 未來放浮動按鈕 */}
+          </View>
+        }
       >
         {/* 卡片 1：當前顯示 / 寵物切換下拉選單 */}
         <View style={[styles.cardHeader, isDropdownVisible ? { zIndex: 100, elevation: 10 } : { zIndex: 1 }]}>
           <Text style={[styles.headerLabel, { color: theme.primary, fontFamily: fontFamilyName }]}>當前顯示</Text>
-          <Pressable 
+          <Pressable
             onPress={() => {
               if (availablePets.length === 0) {
                 router.push('/pet/add');
@@ -217,19 +221,19 @@ export default function HomeScreen() {
           {isDropdownVisible && availablePets.length > 0 && (
             <View style={styles.dropdownModal}>
               <View style={styles.dropdownTail} />
-              <ScrollView 
-                style={styles.dropdownScroll} 
+              <ScrollView
+                style={styles.dropdownScroll}
                 showsVerticalScrollIndicator={false}
                 bounces={false}
                 overScrollMode="never"
               >
                 {availablePets.map((pet, idx) => (
-                  <Pressable 
+                  <Pressable
                     key={pet}
                     style={[
                       styles.dropdownItem,
                       idx === availablePets.length - 1 && { marginBottom: 0 }
-                    ]} 
+                    ]}
                     onPress={() => {
                       setCurrentPetName(pet);
                       setIsDropdownVisible(false);
@@ -324,9 +328,9 @@ export default function HomeScreen() {
 
               {/* 右側顏色標籤 */}
               <Pressable onPress={() => handleTagPress(reminder.id)} style={styles.tagContainer}>
-                <Image 
-                  source={require('../../assets/icons/tag-base.png')} 
-                  style={[styles.reminderBarImage, { tintColor: reminder.tagColor === '#FFCA29' ? undefined : reminder.tagColor }]} 
+                <Image
+                  source={require('../../assets/icons/tag-base.png')}
+                  style={[styles.reminderBarImage, { tintColor: reminder.tagColor === '#FFCA29' ? undefined : reminder.tagColor }]}
                   resizeMode="contain"
                 />
               </Pressable>
@@ -336,7 +340,7 @@ export default function HomeScreen() {
 
         {/* 卡片 4：新增/顯示最近一篇日記 */}
         {!latestDiary ? (
-          <Pressable 
+          <Pressable
             style={styles.diaryBlock}
             onPress={() => router.push('/diary')}
           >
@@ -346,7 +350,7 @@ export default function HomeScreen() {
             <Image source={require('../../assets/illustrations/lizard-head-light.png')} style={styles.diaryImage} resizeMode="contain" />
           </Pressable>
         ) : (
-          <Pressable 
+          <Pressable
             style={styles.diaryBlockActive}
             onPress={() => router.push('/diary/view')}
           >
@@ -363,7 +367,7 @@ export default function HomeScreen() {
           </Pressable>
         )}
 
-      </ScrollView>
+      </BaseScreen>
 
       {/* ===== 載入過場動畫覆蓋層 ===== */}
       {!loadingComplete && (
@@ -438,7 +442,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: 'rgba(0,0,0,0.03)',
   },
-  
+
   // Header 專用 (對話框)
   cardHeader: {
     backgroundColor: paletteColors.RI_CHU,
@@ -446,7 +450,7 @@ const styles = StyleSheet.create({
     height: 55, // 保持小一點，讓日記有更多空間
     paddingHorizontal: 24,
     marginBottom: 16, // 統一所有間距為 16
-    marginTop: 0, 
+    marginTop: 0,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
@@ -461,7 +465,7 @@ const styles = StyleSheet.create({
     fontSize: getFontSize(18, 'medium'),
     // 移除 fontWeight，統一樣式跟未連接感測器一致
   },
-  
+
   // 下拉選單樣式
   dropdownModal: {
     position: 'absolute',
@@ -475,10 +479,10 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.15,
     shadowRadius: 8,
-    elevation: 8, 
+    elevation: 8,
   },
   dropdownScroll: {
-    maxHeight: 280, 
+    maxHeight: 280,
   },
   dropdownTail: {
     display: 'none', // 依照設計圖隱藏尾巴
@@ -505,8 +509,8 @@ const styles = StyleSheet.create({
     backgroundColor: paletteColors.RI_CHU,
     borderRadius: 16,
     height: 160, // 必須加回固定高度，才能讓內部的 flex: 1 完美撐開上下距
-    marginBottom: 16, 
-    paddingVertical: 16, 
+    marginBottom: 16,
+    paddingVertical: 16,
     // React Native 0.74+ 支援 boxShadow inset
     boxShadow: 'inset 2px 2px 7px rgba(0, 0, 0, 0.25)',
     // Fallback: 針對尚未支援的舊環境，加個內縮邊框擬合內陰影感
@@ -563,10 +567,10 @@ const styles = StyleSheet.create({
   reminderCardBlock: {
     backgroundColor: paletteColors.RI_CHU,
     borderRadius: 16,
-    paddingVertical: 8, 
+    paddingVertical: 8,
     paddingHorizontal: 5,
     marginBottom: 16, // 統一間距為 16
-    gap: 8, 
+    gap: 8,
     boxShadow: 'inset 2px 2px 7px rgba(0, 0, 0, 0.25)',
     borderWidth: 1,
     borderColor: 'rgba(0,0,0,0.03)',
@@ -633,15 +637,15 @@ const styles = StyleSheet.create({
   diaryBlock: {
     backgroundColor: '#FFFFFF',
     borderRadius: 16,
-    flex: 1, 
-    minHeight: 200, 
+    flex: 1,
+    minHeight: 200,
     width: '98%',
     alignSelf: 'center',
-    padding: 20, 
+    padding: 20,
     marginBottom: 0, // 設為 0，讓底部距離僅吃 ScrollView 的 16 padding，保持等距
     flexDirection: 'column',
     alignItems: 'center',
-    justifyContent: 'space-evenly', 
+    justifyContent: 'space-evenly',
     boxShadow: '0px 4px 7px rgba(0, 0, 0, 0.25)',
   },
   diaryText: {

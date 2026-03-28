@@ -38,14 +38,27 @@ function TabsLayoutInner() {
       screenOptions={{
         headerShown: false,
         tabBarShowLabel: false,
+        sceneStyle: { backgroundColor: 'transparent' },
         tabBarActiveTintColor: theme.primary,
         tabBarInactiveTintColor: theme.text,
         tabBarStyle: {
-          backgroundColor: theme.panelBackground,
+          backgroundColor: 'transparent',
+          position: 'absolute',
+          bottom: 0,
+          left: 0,
+          right: 0,
+          elevation: 0,
+          borderTopWidth: 0,
+          zIndex: 100,
           height: TAB_BAR_HEIGHT,
+          paddingTop: 21,    // (90 - 48) / 2 = 21 -> 強制置中
+          paddingBottom: 21, // 覆蓋手機預設的安全距離推擠，強制置中
+          paddingHorizontal: 28,
         },
         tabBarItemStyle: {
-          paddingVertical: 8,
+          height: 48, // 限縮單一按鈕可點擊高度與 icon 一致
+          justifyContent: 'center',
+          alignItems: 'center',
         },
       }}
     >
@@ -56,7 +69,7 @@ function TabsLayoutInner() {
           tabBarIcon: ({ focused }) => (
             <Image
               source={focused ? tabIcons.analytics.active : tabIcons.analytics.default}
-              style={{ width: 36, height: 36 }}
+              style={{ width: 48, height: 48 }}
               resizeMode="contain"
             />
           ),
@@ -69,7 +82,7 @@ function TabsLayoutInner() {
           tabBarIcon: ({ focused }) => (
             <Image
               source={focused ? tabIcons.diary.active : tabIcons.diary.default}
-              style={{ width: 36, height: 36 }}
+              style={{ width: 48, height: 48 }}
               resizeMode="contain"
             />
           ),
@@ -82,7 +95,7 @@ function TabsLayoutInner() {
           tabBarIcon: ({ focused }) => (
             <Image
               source={focused ? tabIcons.index.active : tabIcons.index.default}
-              style={{ width: 36, height: 36 }}
+              style={{ width: 48, height: 48 }}
               resizeMode="contain"
             />
           ),
@@ -95,7 +108,7 @@ function TabsLayoutInner() {
           tabBarIcon: ({ focused }) => (
             <Image
               source={focused ? tabIcons.pets.active : tabIcons.pets.default}
-              style={{ width: 36, height: 36 }}
+              style={{ width: 48, height: 48 }}
               resizeMode="contain"
             />
           ),
@@ -108,7 +121,7 @@ function TabsLayoutInner() {
           tabBarIcon: ({ focused }) => (
             <Image
               source={focused ? tabIcons.settings.active : tabIcons.settings.default}
-              style={{ width: 36, height: 36 }}
+              style={{ width: 48, height: 48 }}
               resizeMode="contain"
             />
           ),

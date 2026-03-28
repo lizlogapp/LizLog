@@ -56,7 +56,7 @@ export default function LoginScreen() {
       style={styles.container}
     >
       <View style={[styles.page, pageStyle]}>
-        
+
         {/* Logo 區塊 */}
         <View style={styles.logoContainer}>
           <Image
@@ -170,7 +170,7 @@ const styles = StyleSheet.create({
   },
   logoContainer: {
     width: '100%',
-    height: 80, 
+    height: 80,
     justifyContent: 'center',
     alignItems: 'center',
     marginTop: 24,    // 明確增加 Logo 頂部到螢幕的呼吸空間

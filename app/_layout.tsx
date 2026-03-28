@@ -46,39 +46,38 @@ function RootLayoutInner() {
 
   return (
     <View style={[styles.root, { minHeight: SCREEN_HEIGHT, minWidth: SCREEN_WIDTH }]}>
-        {/* 全域背景圖 (手機畫面 130% 置中) */}
-        <ImageBackground
-          source={bg}
-          style={{
-            position: 'absolute',
-            width: SCREEN_WIDTH * 1.3,
-            height: SCREEN_HEIGHT * 1.3,
-            left: -(SCREEN_WIDTH * 0.3) / 2,
-            top: -(SCREEN_HEIGHT * 0.3) / 2,
+      <ImageBackground
+        source={bg}
+        style={{
+          position: 'absolute',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: -90,
+        }}
+        resizeMode="cover"
+      />
+      <StatusBar style="dark" translucent backgroundColor="transparent" />
+      <View
+        style={[
+          styles.panel,
+          {
+            top: 70,
+            bottom: 90,
+            backgroundColor: overlayColor,
+          },
+        ]}
+        pointerEvents="box-none"
+      />
+      <View style={[styles.stackWrapper, { flex: 1 }]}>
+        <Stack
+          screenOptions={{
+            headerShown: false,
+            contentStyle: { backgroundColor: "transparent", flex: 1 },
           }}
-          resizeMode="cover"
         />
-        <StatusBar style="dark" translucent backgroundColor="transparent" />
-        <View
-          style={[
-            styles.panel,
-            {
-              top: STATUS_BAR_HEIGHT,
-              bottom: TAB_BAR_HEIGHT,
-              backgroundColor: overlayColor,
-            },
-          ]}
-          pointerEvents="box-none"
-        />
-        <View style={styles.stackWrapper}>
-          <Stack
-            screenOptions={{
-              headerShown: false,
-              contentStyle: { backgroundColor: "transparent", flex: 1 },
-            }}
-          />
-        </View>
       </View>
+    </View>
   );
 }
 
@@ -95,9 +94,9 @@ const transparentNavTheme = {
   },
   fonts: {
     regular: { fontFamily: 'System', fontWeight: '400' as const },
-    medium:  { fontFamily: 'System', fontWeight: '500' as const },
-    bold:    { fontFamily: 'System', fontWeight: '700' as const },
-    heavy:   { fontFamily: 'System', fontWeight: '800' as const },
+    medium: { fontFamily: 'System', fontWeight: '500' as const },
+    bold: { fontFamily: 'System', fontWeight: '700' as const },
+    heavy: { fontFamily: 'System', fontWeight: '800' as const },
   },
 };
 

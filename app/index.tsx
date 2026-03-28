@@ -48,7 +48,7 @@ export default function OnboardingScreen() {
   const { themeId, fontFamilyName } = useTheme();
   const theme = getThemeTokens(themeId);
   const router = useRouter();
-  
+
   const [stepIndex, setStepIndex] = useState(0);
 
   const handleNext = () => {
@@ -72,7 +72,7 @@ export default function OnboardingScreen() {
   return (
     <Pressable style={styles.container} onPress={handleNext}>
       <View style={[styles.page, pageStyle]}>
-        
+
         {/* 標題區 */}
         <View style={styles.header}>
           <Text style={[styles.title, { color: theme.primary, fontFamily: fontFamilyName }]}>
@@ -99,8 +99,8 @@ export default function OnboardingScreen() {
               key={index}
               style={[
                 styles.dot,
-                { 
-                  backgroundColor: index === stepIndex ? theme.primary : theme.accentNoon 
+                {
+                  backgroundColor: index === stepIndex ? theme.primary : theme.accentNoon
                 }
               ]}
             />
