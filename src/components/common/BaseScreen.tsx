@@ -55,7 +55,6 @@ export function BaseScreen({
               style={[{ flex: 1, backgroundColor: 'transparent' }, style]}
               contentContainerStyle={[
                 { 
-                  // 預留浮動按鈕的空間，確保滑動至底部時不被按鈕遮擋
                   paddingBottom: floatingAction ? 114 : 0, 
                   flexGrow: 1 
                 }, 
@@ -71,7 +70,6 @@ export function BaseScreen({
               { 
                 flex: 1, 
                 backgroundColor: 'transparent',
-                paddingBottom: floatingAction ? 114 : 0 
               }, 
               style
             ]}>
@@ -96,8 +94,8 @@ export function BaseScreen({
               padding: 32,
               gap: 16,
               flexDirection: 'row',
-              justifyContent: 'flex-end', // 浮動按鈕預設靠右，可依設計客製
-              pointerEvents: 'box-none',  // 確保沒按鈕的地方可穿透點擊背後內容
+              justifyContent: 'flex-end',
+              pointerEvents: 'box-none',
             }}
           >
             {floatingAction}
