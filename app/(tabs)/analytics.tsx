@@ -50,13 +50,8 @@ export default function AnalyticsScreen() {
   return (
     <View style={styles.container}>
       {/* 開啟 scrollable，因為按鈕數量已經超過畫面高度 */}
-      <BaseScreen 
-        scrollable={true} 
-        floatingAction={null}
-        contentStyle={{ overflow: 'visible' }}
-        style={{ overflow: 'visible' }}
-      >
-        
+      <BaseScreen scrollable={true} floatingAction={null}>
+
         {/* 第一個卡片容器：當前顯示 (包含寵物選單) */}
         <View style={[styles.cardHeader, isDropdownVisible ? { zIndex: 100, elevation: 10 } : { zIndex: 1 }]}>
           <Text style={[styles.headerLabel, { color: theme.primary, fontFamily: fontFamilyName }]}>當前顯示</Text>
@@ -98,7 +93,7 @@ export default function AnalyticsScreen() {
         </View>
 
         {/* 第二個卡片：最新狀態紀錄 (點擊可展開詳細卡片，常保外陰影) */}
-        <Pressable 
+        <Pressable
           style={styles.actionButton}
           onPress={() => setIsRecordsExpanded(!isRecordsExpanded)}
         >
@@ -222,7 +217,7 @@ export default function AnalyticsScreen() {
         {chartButtons.map((btn, index) => {
           const IconComponent = btn.Icon;
           return (
-            <Pressable 
+            <Pressable
               key={index}
               style={styles.actionButton}
               onPress={() => { /* TODO: 導航或動作实作 */ }}
@@ -279,7 +274,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     shadowColor: '#000000',
-    shadowOffset: { width: 2, height: 4 },
+    shadowOffset: { width: 2, height: 2 },
     shadowOpacity: 0.25,
     shadowRadius: 4,
     elevation: 4,
@@ -329,7 +324,6 @@ const styles = StyleSheet.create({
   recordsContainer: {
     width: '100%',
     paddingBottom: 8,
-    overflow: 'visible',
   },
   recordCard: {
     width: '100%',
@@ -339,7 +333,7 @@ const styles = StyleSheet.create({
     padding: 16,
     marginBottom: 16,
     shadowColor: '#000000',
-    shadowOffset: { width: 2, height: 4 },
+    shadowOffset: { width: 2, height: 2 },
     shadowOpacity: 0.25,
     shadowRadius: 4,
     elevation: 4,
