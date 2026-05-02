@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+﻿import React, { useEffect, useRef, useState } from 'react';
 import {
   View,
   Text,
@@ -198,12 +198,12 @@ export default function HomeScreen() {
         floatingAction={null}
       >
         {/* 卡片 1：當前顯示 / 寵物切換下拉選單 */}
-        <View style={[styles.cardHeader, isDropdownVisible ? { zIndex: 100, elevation: 10 } : { zIndex: 1 }]}>
+        <View style={[styles.cardHeader, isDropdownVisible ? { zIndex: 100 } : { zIndex: 1 }]}>
           <Text style={[styles.headerLabel, { color: theme.primary, fontFamily: fontFamilyName }]}>當前顯示</Text>
           <Pressable
             onPress={() => {
               if (availablePets.length === 0) {
-                router.push('/pet/add');
+                router.push('/pets/add');
               } else {
                 setIsDropdownVisible(!isDropdownVisible);
               }
@@ -456,14 +456,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    borderTopWidth: 2,
-    borderLeftWidth: 2,
-    borderBottomWidth: 1,
-    borderRightWidth: 1,
-    borderTopColor: 'rgba(0,0,0,0.15)',
-    borderLeftColor: 'rgba(0,0,0,0.15)',
-    borderBottomColor: 'rgba(255,255,255,0.5)',
-    borderRightColor: 'rgba(255,255,255,0.5)',
+    boxShadow: 'inset 2px 2px 7px rgba(0, 0, 0, 0.25)',
   },
   headerLabel: {
     fontSize: getFontSize(18, 'medium'),
@@ -476,36 +469,38 @@ const styles = StyleSheet.create({
   // 下拉選單樣式
   dropdownModal: {
     position: 'absolute',
-    top: 65, // 放置於 header 下方
-    right: 20, // 靠右側
-    width: 150, // 調整寬度
+    top: 55, // 放置於 header 下方，貼合卡片底部
+    right: 0, // 切齊卡片最右側外框
+    width: 150, 
     backgroundColor: '#FFFFFF',
-    borderRadius: 8,
-    padding: 12,
+    borderRadius: 16,
+    paddingVertical: 8,
     shadowColor: '#000000',
-    shadowOffset: { width: 0, height: 4 },
+    shadowOffset: { width: 0, height: 6 },
     shadowOpacity: 0.15,
-    shadowRadius: 8,
-    elevation: 8,
+    shadowRadius: 16,
+    elevation: 10,
+    borderWidth: 1,
+    borderColor: 'rgba(0,0,0,0.05)',
   },
   dropdownScroll: {
     maxHeight: 280,
   },
   dropdownTail: {
-    display: 'none', // 依照設計圖隱藏尾巴
+    display: 'none', 
   },
   dropdownItem: {
-    paddingVertical: 10,
+    paddingVertical: 14,
     alignItems: 'center',
-    backgroundColor: 'rgba(255, 237, 204, 0.6)', // 淡黃色背景
-    borderTopLeftRadius: 4,
-    borderBottomLeftRadius: 4,
-    borderTopRightRadius: 16,
-    borderBottomRightRadius: 16,
-    marginBottom: 8, // 拉開按鈕間隔
+    backgroundColor: 'transparent',
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(0,0,0,0.04)',
+    marginHorizontal: 16,
   },
   dropdownItemText: {
-    fontSize: getFontSize(18, 'medium'), // 與 headerValue 保持一致
+    fontSize: getFontSize(18, 'medium'),
+    fontWeight: '600',
+    letterSpacing: 1,
   },
   dropdownDivider: {
     display: 'none',
@@ -518,14 +513,7 @@ const styles = StyleSheet.create({
     height: 160, // 必須加回固定高度，才能讓內部的 flex: 1 完美撐開上下距
     marginBottom: 16,
     paddingVertical: 16,
-    borderTopWidth: 2,
-    borderLeftWidth: 2,
-    borderBottomWidth: 1,
-    borderRightWidth: 1,
-    borderTopColor: 'rgba(0,0,0,0.15)',
-    borderLeftColor: 'rgba(0,0,0,0.15)',
-    borderBottomColor: 'rgba(255,255,255,0.5)',
-    borderRightColor: 'rgba(255,255,255,0.5)',
+    boxShadow: 'inset 2px 2px 7px rgba(0, 0, 0, 0.25)',
   },
   sensorTopHalf: {
     flex: 1, // 獨佔上方所有可用空間
@@ -581,14 +569,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 5,
     marginBottom: 16, // 統一間距為 16
     gap: 8,
-    borderTopWidth: 2,
-    borderLeftWidth: 2,
-    borderBottomWidth: 1,
-    borderRightWidth: 1,
-    borderTopColor: 'rgba(0,0,0,0.15)',
-    borderLeftColor: 'rgba(0,0,0,0.15)',
-    borderBottomColor: 'rgba(255,255,255,0.5)',
-    borderRightColor: 'rgba(255,255,255,0.5)',
+    boxShadow: 'inset 2px 2px 7px rgba(0, 0, 0, 0.25)',
   },
   // Reminder 單一項目
   reminderItem: {

@@ -66,21 +66,21 @@ function TabsLayoutInner() {
       <Tabs.Screen
         name="analytics"
         options={{
-          title: '分析',
+          title: '?��?',
           tabBarIcon: ({ focused }) => renderIcon(AnalyticsIcon, focused),
         }}
       />
       <Tabs.Screen
         name="diary"
         options={{
-          title: '日記',
+          title: '?��?',
           tabBarIcon: ({ focused }) => renderIcon(DiaryIcon, focused),
         }}
       />
       <Tabs.Screen
         name="index"
         options={{
-          title: '首頁',
+          title: '首�?',
           tabBarIcon: ({ focused }) => renderIcon(HomeIcon, focused),
         }}
       />
@@ -91,15 +91,9 @@ function TabsLayoutInner() {
           tabBarIcon: ({ focused }) => renderIcon(PetsIcon, focused),
         }}
       />
-      <Tabs.Screen
-        name="settings"
-        options={{
-          title: '設定',
-          tabBarIcon: ({ focused }) => renderIcon(SettingsIcon, focused),
-        }}
-      />
-      {/* 隱藏 records 畫面，避免 Expo Router 自動生成第 6 個未配置的無效頁籤 */}
+      {/* ?��? records ?�面，避??Expo Router ?��??��?�?6 ?�未?�置?�無?��?�?*/}
       <Tabs.Screen name="records" options={{ href: null }} />
+      {/* ?��??��??�面（�??��??��?籤可見�? */}
     </Tabs>
   );
 }
@@ -107,3 +101,4 @@ function TabsLayoutInner() {
 export default function TabsLayout() {
   return <TabsLayoutInner />;
 }
+

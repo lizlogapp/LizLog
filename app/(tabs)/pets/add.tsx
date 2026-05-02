@@ -1,9 +1,9 @@
 import React from 'react';
 import { View, Text, StyleSheet, Pressable } from 'react-native';
 import { useRouter } from 'expo-router';
-import { useTheme } from '../../src/theme/ThemeContext';
-import { getThemeTokens } from '../../src/theme/themeSettings';
-import { getFontSize } from '../../src/theme/typographySettings';
+import { useTheme } from '../../../src/theme/ThemeContext';
+import { getThemeTokens } from '../../../src/theme/themeSettings';
+import { getFontSize } from '../../../src/theme/typographySettings';
 
 export default function AddPetScreen() {
   const router = useRouter();

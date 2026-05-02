@@ -1,19 +1,20 @@
+import { useRouter } from 'expo-router';
 import React, { useState, useRef, useEffect } from 'react';
 import { View, Text, StyleSheet, Pressable, ScrollView, TextInput, Image } from 'react-native';
-import { useTheme } from '../../src/theme/ThemeContext';
-import { getThemeTokens } from '../../src/theme/themeSettings';
-import { getFontSize } from '../../src/theme/typographySettings';
-import { FloatingActionBar } from '../../src/components/FloatingActionBar';
-import { BaseScreen } from '../../src/components/common/BaseScreen';
-import { paletteColors } from '../../src/theme/themeColorSettings';
-import type { DiarySubView } from '../(tabs)/diary';
+import { useTheme } from '../../../src/theme/ThemeContext';
+import { getThemeTokens } from '../../../src/theme/themeSettings';
+import { getFontSize } from '../../../src/theme/typographySettings';
+import { FloatingActionBar } from '../../../src/components/FloatingActionBar';
+import { BaseScreen } from '../../../src/components/common/BaseScreen';
+import { paletteColors } from '../../../src/theme/themeColorSettings';
 
 /**
  * 年份篩選月曆頁面
  * 點擊日記浮動按鈕 calendar 後進入
  * 包含年份選擇器（類似月份篩選器）與搜尋欄
  */
-export default function CalendarFilterScreen({ onNavigate }: { onNavigate: (view: DiarySubView, diaryId?: number) => void }) {
+export default function CalendarFilterScreen() {
+  const router = useRouter();
   const { themeId, fontFamilyName } = useTheme();
   const theme = getThemeTokens(themeId);
   const colorOrange = theme.primary;
@@ -64,7 +65,7 @@ export default function CalendarFilterScreen({ onNavigate }: { onNavigate: (view
       floatingAction={
         <FloatingActionBar
           actions={[
-            { id: 'back', onPress: () => onNavigate('list') },
+            { id: 'back', onPress: () => router.back() },
           ]}
         />
       }
@@ -133,7 +134,7 @@ export default function CalendarFilterScreen({ onNavigate }: { onNavigate: (view
           )}
 
           <Pressable onPress={() => setIsSearchVisible(!isSearchVisible)} style={{ zIndex: 1300 }}>
-            <Image source={require('../../assets/icons/icon-search.png')} style={[styles.headerIcon, { tintColor: theme.panelBackground }]} />
+            <Image source={require('../../../assets/icons/icon-search.png')} style={[styles.headerIcon, { tintColor: theme.panelBackground }]} />
           </Pressable>
         </View>
 

@@ -1,17 +1,17 @@
-import React from 'react';
+﻿import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
-import { useTheme } from '../../src/theme/ThemeContext';
-import { getThemeTokens } from '../../src/theme/themeSettings';
-import { BaseScreen } from '../../src/components/common/BaseScreen';
+import { useTheme } from '../../../src/theme/ThemeContext';
+import { getThemeTokens } from '../../../src/theme/themeSettings';
+import { BaseScreen } from '../../../src/components/common/BaseScreen';
 
-export default function SettingsScreen() {
+export default function PetsScreen() {
   const { themeId } = useTheme();
   const theme = getThemeTokens(themeId);
 
   return (
     <BaseScreen>
       <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
-        <Text style={[styles.title, { color: theme.text }]}>設定（待實作）</Text>
+        <Text style={[styles.title, { color: theme.text }]}>寵物（待實作）</Text>
       </View>
     </BaseScreen>
   );
@@ -23,4 +23,3 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
 });
-

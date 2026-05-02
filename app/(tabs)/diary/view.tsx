@@ -1,3 +1,4 @@
+import { useRouter, useLocalSearchParams } from 'expo-router';
 import React, { useState, useRef } from 'react';
 import {
   View,
@@ -9,31 +10,30 @@ import {
   Pressable,
   Modal,
 } from 'react-native';
-import { useTheme } from '../../src/theme/ThemeContext';
-import { getThemeTokens } from '../../src/theme/themeSettings';
-import { getFontSize } from '../../src/theme/typographySettings';
-import { FloatingActionBar } from '../../src/components/FloatingActionBar';
-import { BaseScreen } from '../../src/components/common/BaseScreen';
-import { paletteColors } from '../../src/theme/themeColorSettings';
-import type { DiarySubView } from '../(tabs)/diary';
+import { useTheme } from '../../../src/theme/ThemeContext';
+import { getThemeTokens } from '../../../src/theme/themeSettings';
+import { getFontSize } from '../../../src/theme/typographySettings';
+import { FloatingActionBar } from '../../../src/components/FloatingActionBar';
+import { BaseScreen } from '../../../src/components/common/BaseScreen';
+import { paletteColors } from '../../../src/theme/themeColorSettings';
 
 // SVG Icons
 // @ts-ignore
-import IconTemp from '../../assets/icons/icon-temp.svg';
+import IconTemp from '../../../assets/icons/icon-temp.svg';
 // @ts-ignore
-import IconHumid from '../../assets/icons/icon-humid.svg';
+import IconHumid from '../../../assets/icons/icon-humid.svg';
 // @ts-ignore
-import IconBask from '../../assets/icons/icon-bask.svg';
+import IconBask from '../../../assets/icons/icon-bask.svg';
 // @ts-ignore
-import IconFeed from '../../assets/icons/icon-feed.svg';
+import IconFeed from '../../../assets/icons/icon-feed.svg';
 // @ts-ignore
-import IconBath from '../../assets/icons/icon-bath.svg';
+import IconBath from '../../../assets/icons/icon-bath.svg';
 // @ts-ignore
-import IconPoop from '../../assets/icons/icon-poop.svg';
+import IconPoop from '../../../assets/icons/icon-poop.svg';
 // @ts-ignore
-import IconWeight from '../../assets/icons/icon-weight.svg';
+import IconWeight from '../../../assets/icons/icon-weight.svg';
 // @ts-ignore
-import IconLength from '../../assets/icons/icon-length.svg';
+import IconLength from '../../../assets/icons/icon-length.svg';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
@@ -42,13 +42,10 @@ const { width: SCREEN_WIDTH } = Dimensions.get('window');
  * 從日記列表點擊卡片後進入
  * 包含：照片輪播、寵物標籤、日期資訊、日記全文、狀態紀錄、附件照片
  */
-export default function DiaryViewScreen({
-  onNavigate,
-  diaryId,
-}: {
-  onNavigate: (view: DiarySubView, diaryId?: number) => void;
-  diaryId: number | null;
-}) {
+export default function DiaryViewScreen() {
+  const router = useRouter();
+  const { id } = useLocalSearchParams<{ id: string }>();
+  const diaryId = id ? parseInt(id, 10) : null;
   const { themeId, fontFamilyName } = useTheme();
   const theme = getThemeTokens(themeId);
   const labelColor = theme.primary;
@@ -58,14 +55,14 @@ export default function DiaryViewScreen({
   const mockDiary = {
     id: 1,
     dateStr: 'THU  7/17/2025',
-    weatherIcon: require('../../assets/icons/weather-sunny.png'),
+    weatherIcon: require('../../../assets/icons/weather-sunny.png'),
     title: '初次探索！家旁邊的新公園草地',
     content: `今天天氣真的太棒了，萬里無雲！看著窗外的陽光，突然有個念頭，想帶Delete 去體驗一下真正的草地是什麼感覺，而不是總待在飼養箱裡。\n\n我們去了家旁邊剛落成的小公園，找了一塊乾淨的草坪。剛把他放下來的時候，他還有些小緊張，小心翼翼地，那個小表情真的太可愛了！\n大概過了五分鐘，他就完全放開了，開始好奇地四處聞聞、到處探索。看著他在陽光下，鱗片閃閃發光的樣子，滿足地樣子，真的太可愛了！\n\n回家後，他的食慾也變得特別好，看來今天的探險消耗了不少體力。這會成為我們最珍貴的回憶！`,
     petName: 'DELETE',
     carouselImages: [
-      require('../../assets/user-uploads/lizard-001.jpg'),
-      require('../../assets/user-uploads/lizard-002.jpg'),
-      require('../../assets/user-uploads/lizard-003.jpg'),
+      require('../../../assets/user-uploads/lizard-001.jpg'),
+      require('../../../assets/user-uploads/lizard-002.jpg'),
+      require('../../../assets/user-uploads/lizard-003.jpg'),
     ],
     sensorData: {
       temp: '31℃',
@@ -84,9 +81,9 @@ export default function DiaryViewScreen({
       poop: true,
     },
     attachments: [
-      require('../../assets/user-uploads/lizard-004.jpg'),
-      require('../../assets/user-uploads/lizard-005.jpg'),
-      require('../../assets/user-uploads/lizard-006.jpg'),
+      require('../../../assets/user-uploads/lizard-004.jpg'),
+      require('../../../assets/user-uploads/lizard-005.jpg'),
+      require('../../../assets/user-uploads/lizard-006.jpg'),
     ],
   };
 
@@ -125,7 +122,7 @@ export default function DiaryViewScreen({
       floatingAction={
         <FloatingActionBar
           actions={[
-            { id: 'back', onPress: () => onNavigate('list') },
+            { id: 'back', onPress: () => router.back() },
             { id: 'edit', onPress: () => { /* TODO: 進入編輯模式 */ } },
           ]}
         />
@@ -186,10 +183,10 @@ export default function DiaryViewScreen({
                 <Text style={[styles.metricText, { color: valueColor, fontFamily: fontFamilyName }]}>{mockDiary.sensorData.temp}</Text>
                 <Text style={[styles.metricText, { color: valueColor, fontFamily: fontFamilyName }]}>{mockDiary.sensorData.humid}</Text>
                 <View style={styles.metricIconsBlock}>
-                  <Image source={mockDiary.statusIcons.bask ? require('../../assets/icons/category-basking-active.png') : require('../../assets/icons/category-basking-default.png')} style={styles.stateIcon} />
-                  <Image source={mockDiary.statusIcons.feed ? require('../../assets/icons/category-food-active.png') : require('../../assets/icons/category-food-default.png')} style={styles.stateIcon} />
-                  <Image source={mockDiary.statusIcons.bath ? require('../../assets/icons/category-bath-active.png') : require('../../assets/icons/category-bath-default.png')} style={styles.stateIcon} />
-                  <Image source={mockDiary.statusIcons.poop ? require('../../assets/icons/category-poop-active.png') : require('../../assets/icons/category-poop-default.png')} style={styles.stateIcon} />
+                  <Image source={mockDiary.statusIcons.bask ? require('../../../assets/icons/category-basking-active.png') : require('../../../assets/icons/category-basking-default.png')} style={styles.stateIcon} />
+                  <Image source={mockDiary.statusIcons.feed ? require('../../../assets/icons/category-food-active.png') : require('../../../assets/icons/category-food-default.png')} style={styles.stateIcon} />
+                  <Image source={mockDiary.statusIcons.bath ? require('../../../assets/icons/category-bath-active.png') : require('../../../assets/icons/category-bath-default.png')} style={styles.stateIcon} />
+                  <Image source={mockDiary.statusIcons.poop ? require('../../../assets/icons/category-poop-active.png') : require('../../../assets/icons/category-poop-default.png')} style={styles.stateIcon} />
                 </View>
               </View>
             </View>

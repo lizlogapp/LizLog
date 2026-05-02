@@ -1,34 +1,34 @@
+import { useRouter } from 'expo-router';
 import React, { useState } from 'react';
 import { View, Text, StyleSheet, Pressable, ScrollView, Image, TextInput } from 'react-native';
-import { useTheme } from '../../src/theme/ThemeContext';
-import { getThemeTokens } from '../../src/theme/themeSettings';
-import { getFontSize } from '../../src/theme/typographySettings';
-import { FloatingActionBar } from '../../src/components/FloatingActionBar';
-import { BaseScreen } from '../../src/components/common/BaseScreen';
-import { paletteColors } from '../../src/theme/themeColorSettings';
-import type { DiarySubView } from '../(tabs)/diary';
+import { useTheme } from '../../../src/theme/ThemeContext';
+import { getThemeTokens } from '../../../src/theme/themeSettings';
+import { getFontSize } from '../../../src/theme/typographySettings';
+import { FloatingActionBar } from '../../../src/components/FloatingActionBar';
+import { BaseScreen } from '../../../src/components/common/BaseScreen';
+import { paletteColors } from '../../../src/theme/themeColorSettings';
 
 // SVG Icons
 // @ts-ignore
-import IconTemp from '../../assets/icons/icon-temp.svg';
+import IconTemp from '../../../assets/icons/icon-temp.svg';
 // @ts-ignore
-import IconHumid from '../../assets/icons/icon-humid.svg';
+import IconHumid from '../../../assets/icons/icon-humid.svg';
 // @ts-ignore
-import IconBask from '../../assets/icons/icon-bask.svg';
+import IconBask from '../../../assets/icons/icon-bask.svg';
 // @ts-ignore
-import IconFeed from '../../assets/icons/icon-feed.svg';
+import IconFeed from '../../../assets/icons/icon-feed.svg';
 // @ts-ignore
-import IconBath from '../../assets/icons/icon-bath.svg';
+import IconBath from '../../../assets/icons/icon-bath.svg';
 // @ts-ignore
-import IconPoop from '../../assets/icons/icon-poop.svg';
+import IconPoop from '../../../assets/icons/icon-poop.svg';
 // @ts-ignore
-import IconWeight from '../../assets/icons/icon-weight.svg';
+import IconWeight from '../../../assets/icons/icon-weight.svg';
 // @ts-ignore
-import IconLength from '../../assets/icons/icon-length.svg';
+import IconLength from '../../../assets/icons/icon-length.svg';
 // @ts-ignore
-import IconDiaryWrite from '../../assets/icons/icon-diary-write.svg';
+import IconDiaryWrite from '../../../assets/icons/icon-diary-write.svg';
 // @ts-ignore
-import IconUploadSvg from '../../assets/icons/icon-upload.svg';
+import IconUploadSvg from '../../../assets/icons/icon-upload.svg';
 
 // 取得當日日期格式化字串
 const getTodayString = () => {
@@ -45,7 +45,8 @@ const getTodayString = () => {
  * 新增日記頁面
  * 包含：照片區域、寵物標籤選擇、日期/天氣、標題編輯、數據紀錄、寫日記與上傳按鈕
  */
-export default function AddDiaryScreen({ onNavigate }: { onNavigate: (view: DiarySubView, diaryId?: number) => void }) {
+export default function AddDiaryScreen() {
+  const router = useRouter();
   const { themeId, fontFamilyName } = useTheme();
   const theme = getThemeTokens(themeId);
 
@@ -107,8 +108,8 @@ export default function AddDiaryScreen({ onNavigate }: { onNavigate: (view: Diar
       floatingAction={
         <FloatingActionBar
           actions={[
-            { id: 'back', onPress: () => onNavigate('list') },
-            { id: 'confirm', onPress: () => { /* TODO: 儲存日記 */ onNavigate('list'); } },
+            { id: 'back', onPress: () => router.back() },
+            { id: 'confirm', onPress: () => { /* TODO: 儲存日記 */ router.back(); } },
           ]}
         />
       }
@@ -133,7 +134,7 @@ export default function AddDiaryScreen({ onNavigate }: { onNavigate: (view: Diar
               {/* 新增照片按鈕 */}
               <Pressable style={styles.addPhotoButton} onPress={() => { /* TODO: 開啟相簿 */ }}>
                 <Image
-                  source={require('../../assets/icons/icon-image.png')}
+                  source={require('../../../assets/icons/icon-image.png')}
                   style={[styles.addPhotoIcon, { tintColor: '#FFFFFF' }]}
                 />
               </Pressable>
@@ -183,7 +184,7 @@ export default function AddDiaryScreen({ onNavigate }: { onNavigate: (view: Diar
               <View style={styles.dateRow}>
                 <Text style={[styles.dateText, { color: valueColor, fontFamily: fontFamilyName }]}>{currentDate}</Text>
                 <Image
-                  source={require('../../assets/icons/weather-sunny.png')}
+                  source={require('../../../assets/icons/weather-sunny.png')}
                   style={[styles.weatherIcon, { tintColor: valueColor }]}
                 />
               </View>
@@ -209,10 +210,10 @@ export default function AddDiaryScreen({ onNavigate }: { onNavigate: (view: Diar
                 <Text style={[styles.metricText, { color: valueColor, fontFamily: fontFamilyName }]}>{sensorData.temp}</Text>
                 <Text style={[styles.metricText, { color: valueColor, fontFamily: fontFamilyName }]}>{sensorData.humid}</Text>
                 <View style={styles.metricIconsBlock}>
-                  <Image source={require('../../assets/icons/category-basking-default.png')} style={[styles.stateIcon, { tintColor: valueColor + '60' }]} />
-                  <Image source={require('../../assets/icons/category-food-default.png')} style={[styles.stateIcon, { tintColor: valueColor + '60' }]} />
-                  <Image source={require('../../assets/icons/category-bath-default.png')} style={[styles.stateIcon, { tintColor: valueColor + '60' }]} />
-                  <Image source={require('../../assets/icons/category-poop-default.png')} style={[styles.stateIcon, { tintColor: valueColor + '60' }]} />
+                  <Image source={require('../../../assets/icons/category-basking-default.png')} style={[styles.stateIcon, { tintColor: valueColor + '60' }]} />
+                  <Image source={require('../../../assets/icons/category-food-default.png')} style={[styles.stateIcon, { tintColor: valueColor + '60' }]} />
+                  <Image source={require('../../../assets/icons/category-bath-default.png')} style={[styles.stateIcon, { tintColor: valueColor + '60' }]} />
+                  <Image source={require('../../../assets/icons/category-poop-default.png')} style={[styles.stateIcon, { tintColor: valueColor + '60' }]} />
                 </View>
               </View>
             </View>
@@ -279,7 +280,7 @@ export default function AddDiaryScreen({ onNavigate }: { onNavigate: (view: Diar
             <View style={styles.uploadExpandedCard}>
               <Pressable style={styles.uploadAddButton} onPress={() => { /* TODO: 開啟檔案選擇器 */ }}>
                 <Image
-                  source={require('../../assets/icons/icon-image.png')}
+                  source={require('../../../assets/icons/icon-image.png')}
                   style={[styles.uploadAddIcon, { tintColor: theme.primary }]}
                 />
                 <Text style={[styles.uploadAddText, { color: theme.primary, fontFamily: fontFamilyName }]}>

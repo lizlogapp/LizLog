@@ -1,18 +1,19 @@
+import { useRouter } from 'expo-router';
 import React, { useState, useRef, useEffect } from 'react';
 import { View, Text, StyleSheet, Pressable, Image, Dimensions, ScrollView, PanResponder, TextInput } from 'react-native';
-import { useTheme } from '../../src/theme/ThemeContext';
-import { getThemeTokens } from '../../src/theme/themeSettings';
-import { getFontSize } from '../../src/theme/typographySettings';
-import { FloatingActionBar } from '../../src/components/FloatingActionBar';
-import { BaseScreen } from '../../src/components/common/BaseScreen';
-import { STATUS_BAR_HEIGHT } from '../../src/theme/layoutSettings';
-import type { DiarySubView } from '../(tabs)/diary';
+import { useTheme } from '../../../src/theme/ThemeContext';
+import { getThemeTokens } from '../../../src/theme/themeSettings';
+import { getFontSize } from '../../../src/theme/typographySettings';
+import { FloatingActionBar } from '../../../src/components/FloatingActionBar';
+import { BaseScreen } from '../../../src/components/common/BaseScreen';
+import { STATUS_BAR_HEIGHT } from '../../../src/theme/layoutSettings';
 
 /**
  * 有資料時的日記首頁
  * 包含月份選擇器與動態生成的日記卡片
  */
-export default function DiaryScreen({ onNavigate }: { onNavigate: (view: DiarySubView, diaryId?: number) => void }) {
+export default function DiaryScreen() {
+  const router = useRouter();
   const { themeId, fontFamilyName } = useTheme();
   const theme = getThemeTokens(themeId);
   const colorOrange = theme.primary;
@@ -29,9 +30,9 @@ export default function DiaryScreen({ onNavigate }: { onNavigate: (view: DiarySu
     {
       id: 1,
       dateStr: 'THU  7/17/2025',
-      weatherIcon: require('../../assets/icons/weather-sunny.png'),
+      weatherIcon: require('../../../assets/icons/weather-sunny.png'),
       title: '初次探索！家旁邊的新公園草地',
-      image: require('../../assets/user-uploads/lizard-001.jpg'),
+      image: require('../../../assets/user-uploads/lizard-001.jpg'),
       pets: [
         { name: 'DELETE', temp: '31℃', humid: '30%', states: { bask: true, feed: true, bath: true, poop: false } }
       ]
@@ -39,9 +40,9 @@ export default function DiaryScreen({ onNavigate }: { onNavigate: (view: DiarySu
     {
       id: 2,
       dateStr: 'WED  7/13/2025',
-      weatherIcon: require('../../assets/icons/weather-cloudy.png'),
+      weatherIcon: require('../../../assets/icons/weather-cloudy.png'),
       title: '出門散散步',
-      image: require('../../assets/user-uploads/lizard-001.jpg'),
+      image: require('../../../assets/user-uploads/lizard-001.jpg'),
       pets: [
         { name: 'DELETE', temp: '30℃', humid: '35%', states: { bask: true, feed: false, bath: false, poop: true } },
         { name: 'CTRL', temp: '31℃', humid: '30%', states: { bask: true, feed: true, bath: false, poop: true } },
@@ -51,7 +52,7 @@ export default function DiaryScreen({ onNavigate }: { onNavigate: (view: DiarySu
     {
       id: 3,
       dateStr: 'THU  7/17/2025',
-      weatherIcon: require('../../assets/icons/weather-sunny.png'),
+      weatherIcon: require('../../../assets/icons/weather-sunny.png'),
       title: '喜歡泡澡的CTRL',
       image: null,
       pets: [
@@ -61,7 +62,7 @@ export default function DiaryScreen({ onNavigate }: { onNavigate: (view: DiarySu
     {
       id: 4,
       dateStr: 'THU  7/17/2025',
-      weatherIcon: require('../../assets/icons/weather-sunny.png'),
+      weatherIcon: require('../../../assets/icons/weather-sunny.png'),
       title: '',
       image: null,
       pets: [
@@ -153,8 +154,8 @@ export default function DiaryScreen({ onNavigate }: { onNavigate: (view: DiarySu
       floatingAction={
         <FloatingActionBar
           actions={[
-            { id: 'calendar', onPress: () => onNavigate('calendar') },
-            { id: 'add', onPress: () => onNavigate('add') }
+            { id: 'calendar', onPress: () => router.push('/diary/calendar') },
+            { id: 'add', onPress: () => router.push('/diary/add') }
           ]}
         />
       }
@@ -177,7 +178,7 @@ export default function DiaryScreen({ onNavigate }: { onNavigate: (view: DiarySu
         {!isSearchVisible && (
           <View style={{ position: 'relative', zIndex: 1500 }}>
             <Pressable onPress={() => setIsPetDropdownVisible(!isPetDropdownVisible)}>
-              <Image source={require('../../assets/icons/icon-menu.png')} style={[styles.headerIcon, { tintColor: theme.panelBackground }]} />
+              <Image source={require('../../../assets/icons/icon-menu.png')} style={[styles.headerIcon, { tintColor: theme.panelBackground }]} />
             </Pressable>
             
             {/* 寵物切換下拉選單 (與首頁設計一致) */}
@@ -262,7 +263,7 @@ export default function DiaryScreen({ onNavigate }: { onNavigate: (view: DiarySu
         )}
 
         <Pressable onPress={() => setIsSearchVisible(!isSearchVisible)} style={{ zIndex: 1300 }}>
-          <Image source={require('../../assets/icons/icon-search.png')} style={[styles.headerIcon, { tintColor: theme.panelBackground }]} />
+          <Image source={require('../../../assets/icons/icon-search.png')} style={[styles.headerIcon, { tintColor: theme.panelBackground }]} />
         </Pressable>
       </View>
 
@@ -272,7 +273,7 @@ export default function DiaryScreen({ onNavigate }: { onNavigate: (view: DiarySu
         showsVerticalScrollIndicator={false}
       >
         {mockDiaries.map((diary) => (
-          <Pressable key={diary.id} onPress={() => onNavigate('view', diary.id)} style={styles.diaryCard}>
+          <Pressable key={diary.id} onPress={() => router.push({ pathname: '/diary/view', params: { id: diary.id } } as any)} style={styles.diaryCard}>
             
             {/* 照片區與重疊的寵物標籤 / 無照片時的頂部標籤 */}
             {diary.image ? (
@@ -312,10 +313,10 @@ export default function DiaryScreen({ onNavigate }: { onNavigate: (view: DiarySu
                     <Text style={[styles.metricText, { color: colorOrange, fontFamily: fontFamilyName }]}>{pet.humid}</Text>
                     
                     <View style={styles.metricIconsBlock}>
-                      <Image source={pet.states.bask ? require('../../assets/icons/category-basking-active.png') : require('../../assets/icons/category-basking-default.png')} style={styles.stateIcon} />
-                      <Image source={pet.states.feed ? require('../../assets/icons/category-food-active.png') : require('../../assets/icons/category-food-default.png')} style={styles.stateIcon} />
-                      <Image source={pet.states.bath ? require('../../assets/icons/category-bath-active.png') : require('../../assets/icons/category-bath-default.png')} style={styles.stateIcon} />
-                      <Image source={pet.states.poop ? require('../../assets/icons/category-poop-active.png') : require('../../assets/icons/category-poop-default.png')} style={styles.stateIcon} />
+                      <Image source={pet.states.bask ? require('../../../assets/icons/category-basking-active.png') : require('../../../assets/icons/category-basking-default.png')} style={styles.stateIcon} />
+                      <Image source={pet.states.feed ? require('../../../assets/icons/category-food-active.png') : require('../../../assets/icons/category-food-default.png')} style={styles.stateIcon} />
+                      <Image source={pet.states.bath ? require('../../../assets/icons/category-bath-active.png') : require('../../../assets/icons/category-bath-default.png')} style={styles.stateIcon} />
+                      <Image source={pet.states.poop ? require('../../../assets/icons/category-poop-active.png') : require('../../../assets/icons/category-poop-default.png')} style={styles.stateIcon} />
                     </View>
                   </View>
                 ))}
