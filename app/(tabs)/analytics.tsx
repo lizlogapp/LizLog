@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { View, Text, StyleSheet, Pressable, ScrollView } from 'react-native';
+import { useRouter } from 'expo-router';
 import { useTheme } from '../../src/theme/ThemeContext';
 import { getThemeTokens } from '../../src/theme/themeSettings';
 import { paletteColors } from '../../src/theme/themeColorSettings';
@@ -30,6 +31,7 @@ import IconFeed from '../../assets/icons/icon-feed.svg';
 export default function AnalyticsScreen() {
   const { themeId, fontFamilyName } = useTheme();
   const theme = getThemeTokens(themeId);
+  const router = useRouter();
 
   // 延用與首頁相同的寵物切換狀態
   const [availablePets, setAvailablePets] = useState<string[]>(['DELETE', 'CTRL', 'ENTER', 'ALT']);
@@ -55,7 +57,15 @@ export default function AnalyticsScreen() {
         {/* 第一個卡片容器：當前顯示 (包含寵物選單) */}
         <View style={[styles.cardHeader, isDropdownVisible ? { zIndex: 100, elevation: 10 } : { zIndex: 1 }]}>
           <Text style={[styles.headerLabel, { color: theme.primary, fontFamily: fontFamilyName }]}>當前顯示</Text>
-          <Pressable onPress={() => setIsDropdownVisible(!isDropdownVisible)}>
+          <Pressable 
+            onPress={() => {
+              if (availablePets.length === 0) {
+                router.push('/pets/add');
+              } else {
+                setIsDropdownVisible(!isDropdownVisible);
+              }
+            }}
+          >
             <Text style={[styles.headerValue, { color: theme.text, fontFamily: fontFamilyName }]}>
               {currentPetName || '未設定'}
             </Text>
@@ -64,6 +74,7 @@ export default function AnalyticsScreen() {
           {/* 懸浮下拉選單 */}
           {isDropdownVisible && availablePets.length > 0 && (
             <View style={styles.dropdownModal}>
+              <View style={styles.dropdownTail} />
               <ScrollView
                 style={styles.dropdownScroll}
                 showsVerticalScrollIndicator={false}
@@ -253,14 +264,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    borderTopWidth: 2,
-    borderLeftWidth: 2,
-    borderBottomWidth: 1,
-    borderRightWidth: 1,
-    borderTopColor: 'rgba(0,0,0,0.15)',
-    borderLeftColor: 'rgba(0,0,0,0.15)',
-    borderBottomColor: 'rgba(255,255,255,0.5)',
-    borderRightColor: 'rgba(255,255,255,0.5)',
+    boxShadow: 'inset 2px 2px 7px rgba(0, 0, 0, 0.25)',
   },
   actionButton: {
     width: '100%',
@@ -292,28 +296,31 @@ const styles = StyleSheet.create({
     width: 150,
     backgroundColor: '#FFFFFF',
     borderRadius: 8,
-    padding: 12,
+    paddingVertical: 12,
     shadowColor: '#000000',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.15,
     shadowRadius: 8,
     elevation: 8,
   },
+  dropdownTail: {
+    display: 'none',
+  },
   dropdownScroll: {
     maxHeight: 280,
   },
   dropdownItem: {
-    paddingVertical: 10,
+    paddingVertical: 14,
     alignItems: 'center',
-    backgroundColor: 'rgba(255, 237, 204, 0.6)',
-    borderTopLeftRadius: 4,
-    borderBottomLeftRadius: 4,
-    borderTopRightRadius: 16,
-    borderBottomRightRadius: 16,
-    marginBottom: 8,
+    backgroundColor: 'transparent',
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(0,0,0,0.04)',
+    marginHorizontal: 16,
   },
   dropdownItemText: {
     fontSize: getFontSize(18, 'medium'),
+    fontWeight: '600',
+    letterSpacing: 1,
   },
   buttonContent: {
     flexDirection: 'row',
