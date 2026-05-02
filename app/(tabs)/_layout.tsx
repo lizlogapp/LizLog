@@ -91,6 +91,14 @@ function TabsLayoutInner() {
           tabBarIcon: ({ focused }) => renderIcon(PetsIcon, focused),
         }}
       />
+      <Tabs.Screen
+        name="settings"
+        options={{
+          title: '設定',
+          tabBarIcon: ({ focused }) => renderIcon(SettingsIcon, focused),
+        }}
+      />
+
       {/* ?��? records ?�面，避??Expo Router ?��??��?�?6 ?�未?�置?�無?��?�?*/}
       <Tabs.Screen name="records" options={{ href: null }} />
       {/* ?��??��??�面（�??��??��?籤可見�? */}
