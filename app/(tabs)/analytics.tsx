@@ -50,7 +50,11 @@ export default function AnalyticsScreen() {
   return (
     <View style={styles.container}>
       {/* 開啟 scrollable，因為按鈕數量已經超過畫面高度 */}
-      <BaseScreen scrollable={true} floatingAction={null} contentStyle={{ overflow: 'visible' }}
+      <BaseScreen 
+        scrollable={true} 
+        floatingAction={null}
+        contentStyle={{ overflow: 'visible' }}
+        style={{ overflow: 'visible' }}
       >
         
         {/* 第一個卡片容器：當前顯示 (包含寵物選單) */}
@@ -325,6 +329,7 @@ const styles = StyleSheet.create({
   recordsContainer: {
     width: '100%',
     paddingBottom: 8,
+    overflow: 'visible',
   },
   recordCard: {
     width: '100%',
