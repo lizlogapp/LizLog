@@ -50,7 +50,8 @@ export default function AnalyticsScreen() {
   return (
     <View style={styles.container}>
       {/* 開啟 scrollable，因為按鈕數量已經超過畫面高度 */}
-      <BaseScreen scrollable={true} floatingAction={null}>
+      <BaseScreen scrollable={true} floatingAction={null} contentStyle={{ overflow: 'visible' }}
+      >
         
         {/* 第一個卡片容器：當前顯示 (包含寵物選單) */}
         <View style={[styles.cardHeader, isDropdownVisible ? { zIndex: 100, elevation: 10 } : { zIndex: 1 }]}>
