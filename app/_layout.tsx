@@ -73,6 +73,7 @@ function RootLayoutInner() {
         <Stack
           screenOptions={{
             headerShown: false,
+            animation: 'none',
             contentStyle: { backgroundColor: "transparent", flex: 1 },
           }}
         />
