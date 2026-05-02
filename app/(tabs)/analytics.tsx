@@ -1,4 +1,4 @@
-﻿import React, { useState } from 'react';
+import React, { useState } from 'react';
 import { View, Text, StyleSheet, Pressable, ScrollView } from 'react-native';
 import { useTheme } from '../../src/theme/ThemeContext';
 import { getThemeTokens } from '../../src/theme/themeSettings';
@@ -263,7 +263,7 @@ const styles = StyleSheet.create({
     borderRightColor: 'rgba(255,255,255,0.5)',
   },
   actionButton: {
-    width: '90%',
+    width: '100%',
     alignSelf: 'center',
     backgroundColor: paletteColors.RI_CHU,
     borderRadius: 16,
@@ -326,7 +326,7 @@ const styles = StyleSheet.create({
     paddingBottom: 8,
   },
   recordCard: {
-    width: '90%',
+    width: '100%',
     alignSelf: 'center',
     backgroundColor: paletteColors.RI_CHU,
     borderRadius: 8,
