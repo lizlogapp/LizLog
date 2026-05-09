@@ -5,6 +5,12 @@ export default function PetsLayout() {
     <Stack screenOptions={{ headerShown: false, animation: 'none', contentStyle: { backgroundColor: 'transparent' } }}>
       <Stack.Screen name="index" />
       <Stack.Screen name="add" />
+      <Stack.Screen name="view" />
+      <Stack.Screen name="reminder" />
+      <Stack.Screen name="add-reminder" />
+      <Stack.Screen name="medical" />
+      <Stack.Screen name="medical-detail" />
+      <Stack.Screen name="add-medical" />
     </Stack>
   );
 }

@@ -200,7 +200,7 @@ export default function CalendarFilterScreen() {
                                 styles.dayText,
                                 { fontFamily: fontFamilyName },
                                 hasDiary
-                                  ? { color: '#FFFFFF' }
+                                  ? { color: colorOrange }
                                   : { color: colorOrange + '60' }, // 淡色表示無日記
                               ]}>
                                 {dayNum}
@@ -256,7 +256,7 @@ const styles = StyleSheet.create({
     shadowRadius: 5,
   },
   yearText: {
-    color: '#FFFFFF',
+    color: '#FF9600',
     fontSize: getFontSize(16, 'medium'),
     fontWeight: '600',
     textAlign: 'center',
@@ -290,7 +290,7 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(255, 255, 255, 0.2)',
   },
   dropdownItemText: {
-    color: '#FFFFFF',
+    color: '#FF9600',
     fontSize: getFontSize(16, 'medium'),
     fontWeight: '500',
   },
@@ -365,7 +365,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   dayButtonActive: {
-    backgroundColor: '#F5A623',
+    backgroundColor: 'rgba(255, 150, 0, 0.15)',
   },
   dayText: {
     fontSize: getFontSize(13, 'small'),

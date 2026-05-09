@@ -409,13 +409,13 @@ const styles = StyleSheet.create({
     fontWeight: '500',
   },
   centerContent: {
-    paddingHorizontal: 16,
     paddingTop: 16,
     paddingBottom: 120, // 避開底部按鈕
     gap: 20, // 卡片之間的距離
   },
   diaryCard: {
-    width: '100%',
+    width: '96%',
+    alignSelf: 'center',
     backgroundColor: '#FFFFFF',
     borderRadius: 16,
     shadowColor: '#000000',

@@ -26,7 +26,7 @@ import IconWeight from '../../../assets/icons/icon-weight.svg';
 // @ts-ignore
 import IconLength from '../../../assets/icons/icon-length.svg';
 // @ts-ignore
-import IconDiaryWrite from '../../../assets/icons/icon-diary-write.svg';
+import IconDiaryWrite from '../../../assets/icons/icon-diary.svg';
 // @ts-ignore
 import IconUploadSvg from '../../../assets/icons/icon-upload.svg';
 
@@ -301,7 +301,6 @@ export default function AddDiaryScreen() {
 
 const styles = StyleSheet.create({
   scrollContent: {
-    paddingHorizontal: 16,
     paddingTop: 8,
     paddingBottom: 120,
     gap: 16,
@@ -309,15 +308,16 @@ const styles = StyleSheet.create({
 
   // ===== 主卡片（照片 + 資訊） =====
   mainCard: {
-    width: '100%',
+    width: '96%',
+    alignSelf: 'center',
     backgroundColor: '#FFFFFF',
     borderRadius: 16,
     overflow: 'visible',
     shadowColor: '#000000',
-    shadowOffset: { width: 4, height: 4 },
-    shadowOpacity: 0.25,
-    shadowRadius: 7,
-    elevation: 6,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 8,
+    elevation: 4,
   },
   photoArea: {
     width: '100%',
@@ -336,11 +336,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: 'rgba(255,255,255,0.18)',
-    shadowColor: '#000000',
-    shadowOffset: { width: 2, height: 4 },
-    shadowOpacity: 0.25,
-    shadowRadius: 4,
-    elevation: 4,
   },
   addPhotoIcon: {
     width: 32,
@@ -459,16 +454,17 @@ const styles = StyleSheet.create({
 
   // ===== 詳細紀錄卡片 =====
   detailCard: {
-    width: '100%',
+    width: '96%',
+    alignSelf: 'center',
     backgroundColor: paletteColors.RI_CHU,
     borderRadius: 16,
     padding: 20,
     gap: 14,
     shadowColor: '#000000',
-    shadowOffset: { width: 4, height: 4 },
-    shadowOpacity: 0.25,
-    shadowRadius: 7,
-    elevation: 6,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 8,
+    elevation: 4,
   },
   recordRow: {
     flexDirection: 'row',
@@ -484,31 +480,33 @@ const styles = StyleSheet.create({
 
   // ===== 操作按鈕卡片 =====
   actionCard: {
-    width: '100%',
+    width: '96%',
+    alignSelf: 'center',
     backgroundColor: paletteColors.RI_CHU,
     borderRadius: 16,
     paddingVertical: 16,
     alignItems: 'center',
     justifyContent: 'center',
     shadowColor: '#000000',
-    shadowOffset: { width: 4, height: 4 },
-    shadowOpacity: 0.25,
-    shadowRadius: 7,
-    elevation: 6,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 8,
+    elevation: 4,
   },
 
   // ===== 寫日記展開卡片 =====
   diaryEditCard: {
-    width: '100%',
+    width: '96%',
+    alignSelf: 'center',
     backgroundColor: '#FFFFFF',
     borderRadius: 16,
     padding: 20,
     minHeight: 280,
     shadowColor: '#000000',
-    shadowOffset: { width: 4, height: 4 },
-    shadowOpacity: 0.25,
-    shadowRadius: 7,
-    elevation: 6,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 8,
+    elevation: 4,
   },
   diaryTitleInput: {
     fontSize: getFontSize(20, 'medium'),
@@ -525,17 +523,18 @@ const styles = StyleSheet.create({
 
   // ===== 上傳展開卡片 =====
   uploadExpandedCard: {
-    width: '100%',
+    width: '96%',
+    alignSelf: 'center',
     backgroundColor: paletteColors.RI_CHU,
     borderRadius: 16,
     padding: 24,
     alignItems: 'center',
     gap: 16,
     shadowColor: '#000000',
-    shadowOffset: { width: 4, height: 4 },
-    shadowOpacity: 0.25,
-    shadowRadius: 7,
-    elevation: 6,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 8,
+    elevation: 4,
   },
   uploadAddButton: {
     flexDirection: 'row',

@@ -328,7 +328,10 @@ export default function HomeScreen() {
               </View>
 
               {/* 寵物名與標題 */}
-              <View style={styles.reminderContent}>
+              <Pressable 
+                style={styles.reminderContent}
+                onPress={() => router.push('/(tabs)/pets/reminder')}
+              >
                 {!!reminder.pet && (
                   <Text style={[styles.reminderPet, { color: theme.primary, fontFamily: fontFamilyName }]}>
                     {reminder.pet}
@@ -337,7 +340,7 @@ export default function HomeScreen() {
                 <Text style={[styles.reminderTitle, { color: theme.text, fontFamily: fontFamilyName }]} numberOfLines={1}>
                   {reminder.title}
                 </Text>
-              </View>
+              </Pressable>
 
               {/* 右側顏色標籤 */}
               <Pressable onPress={() => handleTagPress(reminder.id)} style={styles.tagContainer}>
