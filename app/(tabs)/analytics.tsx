@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, Pressable, ScrollView } from 'react-native';
+import { View, Text, StyleSheet, Pressable, ScrollView, Alert } from 'react-native';
+import Svg, { Polyline } from 'react-native-svg';
 import { useRouter } from 'expo-router';
 import { useTheme } from '../../src/theme/ThemeContext';
 import { getThemeTokens } from '../../src/theme/themeSettings';
@@ -38,6 +39,195 @@ export default function AnalyticsScreen() {
   const [currentPetName, setCurrentPetName] = useState<string>('DELETE');
   const [isDropdownVisible, setIsDropdownVisible] = useState<boolean>(false);
   const [isRecordsExpanded, setIsRecordsExpanded] = useState<boolean>(false);
+  const [expandedChart, setExpandedChart] = useState<string | null>(null);
+  const [activeChartTab, setActiveChartTab] = useState<string>('週');
+  const [calendarDate, setCalendarDate] = useState<Date>(new Date());
+
+  // 1. 溫度資料 (單位：度C，合理範圍 25-35，Y軸範圍 10-40)
+  const mockTempDataMap = {
+    '日': [
+      { label: '00', val: 26 },
+      { label: '04', val: 25 },
+      { label: '08', val: 28 },
+      { label: '12', val: 38, isAbnormal: 'high' }, // 中午異常高溫
+      { label: '16', val: 32 },
+      { label: '20', val: 29 },
+      { label: '24', val: 18, isAbnormal: 'low' }, // 寒流半夜異常低溫
+    ],
+    '週': [
+      { label: '一', val: 30 },
+      { label: '二', val: 31 },
+      { label: '三', val: 22, isAbnormal: 'low' },
+      { label: '四', val: 30 },
+      { label: '五', val: 36, isAbnormal: 'high' },
+      { label: '六', val: 32 },
+      { label: '日', val: 31 },
+    ],
+    '月': [
+      { label: '1', val: 30 },
+      { label: '5', val: 31 },
+      { label: '10', val: 32 },
+      { label: '15', val: 28 },
+      { label: '20', val: 29 },
+      { label: '25', val: 30 },
+      { label: '30', val: 33 },
+    ],
+    '年': [
+      { label: '1月', val: 22, isAbnormal: 'low' }, // 冬天寒冷
+      { label: '3月', val: 25 },
+      { label: '5月', val: 30 },
+      { label: '7月', val: 36, isAbnormal: 'high' }, // 夏天極熱
+      { label: '9月', val: 32 },
+      { label: '11月', val: 26 },
+    ],
+  };
+
+  // 2. 濕度資料 (單位：%，合理範圍 40-70)
+  const mockHumidDataMap = {
+    '日': [
+      { label: '00', val: 65 },
+      { label: '04', val: 70 },
+      { label: '08', val: 60 },
+      { label: '12', val: 45 },
+      { label: '16', val: 40 },
+      { label: '20', val: 55 },
+      { label: '24', val: 65 },
+    ],
+    '週': [
+      { label: '一', val: 55 },
+      { label: '二', val: 50 },
+      { label: '三', val: 90, isAbnormal: 'high' }, // 下大雨異常高濕
+      { label: '四', val: 60 },
+      { label: '五', val: 55 },
+      { label: '六', val: 45 },
+      { label: '日', val: 25, isAbnormal: 'low' }, // 異常乾燥
+    ],
+    '月': [
+      { label: '1', val: 50 },
+      { label: '5', val: 55 },
+      { label: '10', val: 60 },
+      { label: '15', val: 55 },
+      { label: '20', val: 50 },
+      { label: '25', val: 45 },
+      { label: '30', val: 50 },
+    ],
+    '年': [
+      { label: '1月', val: 45 },
+      { label: '3月', val: 55 },
+      { label: '5月', val: 80, isAbnormal: 'high' }, // 梅雨季
+      { label: '7月', val: 65 },
+      { label: '9月', val: 55 },
+      { label: '11月', val: 50 },
+    ],
+  };
+
+  // 3. 日照資料 (單位：小時，每日合理範圍 2-8小時)
+  const mockBaskDataMap = {
+    '日': [
+      { label: '00', val: 0 },
+      { label: '04', val: 0 },
+      { label: '08', val: 1.5 },
+      { label: '12', val: 2.5 },
+      { label: '16', val: 2 },
+      { label: '20', val: 0 },
+      { label: '24', val: 0 },
+    ],
+    '週': [
+      { label: '一', val: 4 },
+      { label: '二', val: 3.5 },
+      { label: '三', val: 1, isAbnormal: 'low' }, // 陰天沒出來曬
+      { label: '四', val: 5 },
+      { label: '五', val: 4.5 },
+      { label: '六', val: 6 },
+      { label: '日', val: 5.5 },
+    ],
+    '月': [
+      { label: '1', val: 4 },
+      { label: '5', val: 4.5 },
+      { label: '10', val: 3 },
+      { label: '15', val: 5 },
+      { label: '20', val: 4 },
+      { label: '25', val: 5.5 },
+      { label: '30', val: 4 },
+    ],
+    '年': [
+      { label: '1月', val: 2.5 },
+      { label: '3月', val: 4 },
+      { label: '5月', val: 3 },
+      { label: '7月', val: 6 },
+      { label: '9月', val: 5 },
+      { label: '11月', val: 3 },
+    ],
+  };
+
+  // 4. 體重資料 (單位：克，合理範圍 300-500)
+  const mockWeightDataMap = {
+    '日': [
+      { label: '00', val: 410 },
+      { label: '04', val: 410 },
+      { label: '08', val: 412 },
+      { label: '12', val: 415 },
+      { label: '16', val: 418 },
+      { label: '20', val: 415 },
+      { label: '24', val: 412 },
+    ],
+    '週': [
+      { label: '一', val: 410 },
+      { label: '二', val: 412 },
+      { label: '三', val: 415 },
+      { label: '四', val: 416 },
+      { label: '五', val: 414 },
+      { label: '六', val: 415 },
+      { label: '日', val: 418 },
+    ],
+    '月': [
+      { label: '1', val: 405 },
+      { label: '5', val: 408 },
+      { label: '10', val: 410 },
+      { label: '15', val: 412 },
+      { label: '20', val: 415 },
+      { label: '25', val: 418 },
+      { label: '30', val: 420 },
+    ],
+    '年': [
+      { label: '1月', val: 350 },
+      { label: '3月', val: 370 },
+      { label: '5月', val: 390 },
+      { label: '7月', val: 410 },
+      { label: '9月', val: 425 },
+      { label: '11月', val: 440 },
+    ],
+  };
+
+  // 5. 身長資料 (單位：公分，合理範圍 0-50cm)
+  const mockLengthDataMap = {
+    '週': [
+      { label: '一', val: 45.0 },
+      { label: '二', val: 45.0 },
+      { label: '三', val: 45.1 },
+      { label: '四', val: 45.1 },
+      { label: '五', val: 45.1 },
+      { label: '六', val: 45.2 },
+      { label: '日', val: 45.2 },
+    ],
+    '月': [
+      { label: '1', val: 44.5 },
+      { label: '5', val: 44.6 },
+      { label: '10', val: 44.8 },
+      { label: '15', val: 45.0 },
+      { label: '20', val: 45.1 },
+      { label: '25', val: 45.2 },
+      { label: '30', val: 45.5 },
+    ],
+    '年': [
+      { label: '1月', val: 30 },
+      { label: '3月', val: 35 },
+      { label: '5月', val: 40 },
+      { label: '7月', val: 43 },
+      { label: '9月', val: 45 },
+      { label: '11月', val: 48 },
+    ],
+  };
 
   const chartButtons = [
     { text: '溫度變化圖', Icon: IconTemp },
@@ -45,8 +235,8 @@ export default function AnalyticsScreen() {
     { text: '日照變化圖', Icon: IconBask },
     { text: '體重變化圖', Icon: IconWeight },
     { text: '身長變化圖', Icon: IconLength },
-    { text: '排便頻率變化圖', Icon: IconPoop },
-    { text: '蛻皮頻率變化圖', Icon: IconMolt },
+    { text: '排便日曆', Icon: IconPoop },
+    { text: '蛻皮日曆', Icon: IconMolt },
   ];
 
   return (
@@ -54,8 +244,24 @@ export default function AnalyticsScreen() {
       {/* 開啟 scrollable，因為按鈕數量已經超過畫面高度 */}
       <BaseScreen scrollable={true} floatingAction={null}>
 
+        {/* 透明遮罩，點擊關閉選單 */}
+        {isDropdownVisible && (
+          <Pressable
+            style={{
+              position: 'absolute',
+              top: 0,
+              bottom: 0,
+              left: 0,
+              right: 0,
+              zIndex: 90,
+              elevation: 9,
+            }}
+            onPress={() => setIsDropdownVisible(false)}
+          />
+        )}
+
         {/* 第一個卡片容器：當前顯示 (包含寵物選單) */}
-        <View style={[styles.cardHeader, isDropdownVisible ? { zIndex: 100, elevation: 10 } : { zIndex: 1 }]}>
+        <View style={[styles.cardHeader, isDropdownVisible ? { zIndex: 100 } : { zIndex: 1 }]}>
           <Text style={[styles.headerLabel, { color: theme.primary, fontFamily: fontFamilyName }]}>當前顯示</Text>
           <Pressable 
             onPress={() => {
@@ -227,19 +433,303 @@ export default function AnalyticsScreen() {
         {/* 新增的 7 個按鈕，使用新的帶外陰影卡片設計 */}
         {chartButtons.map((btn, index) => {
           const IconComponent = btn.Icon;
+          const isExpanded = expandedChart === btn.text;
+          
+          let yAxisLabels = ['100', '80', '60', '40', '20', '0'];
+          let availableTabs = ['日', '週', '月', '年'];
+          
+          if (btn.text === '溫度變化圖') {
+            yAxisLabels = ['40', '35', '30', '25', '20', '15', '10'];
+          } else if (btn.text === '濕度變化圖') {
+            yAxisLabels = ['100%', '80%', '60%', '40%', '20%', '0%'];
+          } else if (btn.text === '日照變化圖') {
+            yAxisLabels = ['12h', '10h', '8h', '6h', '4h', '2h', '0h'];
+          } else if (btn.text === '體重變化圖') {
+            yAxisLabels = ['500g', '400g', '300g', '200g', '100g', '0g'];
+            availableTabs = ['週', '月', '年']; // 拿掉日
+          } else if (btn.text === '身長變化圖') {
+            yAxisLabels = ['50cm', '40cm', '30cm', '20cm', '10cm', '0cm'];
+            availableTabs = ['週', '月', '年']; // 拿掉日
+          }
+
+          // 如果當前的 tab 不在可用的 tabs 內，退回 '週'
+          const displayTab = availableTabs.includes(activeChartTab) ? activeChartTab : '週';
+          
+          let currentMockData: any[];
+          if (btn.text === '溫度變化圖') {
+            currentMockData = mockTempDataMap[displayTab as keyof typeof mockTempDataMap] || mockTempDataMap['週'];
+          } else if (btn.text === '濕度變化圖') {
+            currentMockData = mockHumidDataMap[displayTab as keyof typeof mockHumidDataMap] || mockHumidDataMap['週'];
+          } else if (btn.text === '日照變化圖') {
+            currentMockData = mockBaskDataMap[displayTab as keyof typeof mockBaskDataMap] || mockBaskDataMap['週'];
+          } else if (btn.text === '體重變化圖') {
+            currentMockData = mockWeightDataMap[displayTab as keyof typeof mockWeightDataMap] || mockWeightDataMap['週'];
+          } else if (btn.text === '身長變化圖') {
+            currentMockData = mockLengthDataMap[displayTab as keyof typeof mockLengthDataMap] || mockLengthDataMap['週'];
+          } else {
+            // 其他圖表的暫時回退邏輯
+            currentMockData = mockHumidDataMap['週'];
+          }
+
+          // 預先計算每個點的高度比例，用於折線圖或長條圖
+          const processedData = currentMockData.map((data: any) => {
+            let heightPercent = 0;
+            if (btn.text === '溫度變化圖') {
+              heightPercent = ((data.val - 10) / 30) * 100;
+            } else if (btn.text === '體重變化圖') {
+              heightPercent = (data.val / 500) * 100;
+            } else if (btn.text === '身長變化圖') {
+              heightPercent = (data.val / 50) * 100;
+            } else if (btn.text === '日照變化圖') {
+              heightPercent = (data.val / 12) * 100;
+            } else {
+              heightPercent = data.val;
+            }
+            heightPercent = Math.max(0, Math.min(100, heightPercent));
+            return { ...data, heightPercent };
+          });
+
+          // 如果是折線圖，準備 SVG points
+          let polylinePoints = '';
+          const isLineChart = btn.text === '體重變化圖' || btn.text === '身長變化圖';
+          if (isLineChart) {
+            const len = processedData.length;
+            polylinePoints = processedData.map((d, i) => {
+              // X: space-around 對齊的中心點 X 座標比例
+              const x = ((2 * i + 1) / (2 * len)) * 100;
+              // Y: SVg viewBox 從上到下 0~100，所以 100 - heightPercent
+              // 但圖表內有 margin/padding 留白 (chartBarWrapper height 85%)
+              // 上下各留 7.5%? SVG 高度為 100% 蓋在 chartBarsContainer 上
+              // 我們只要精準映射 0-100，因為 chartArea 是 100%。但是 X 軸標籤在裡面，我們需要微調
+              // Wait, chartBarsContainer 高度是 100%，然後 xAxisLabel 是 Text。
+              // 折線圖我們將 SVG 放在 chartArea 裡面。
+              // Y 範圍：底部位於是 100%，對應 heightPercent=0。
+              // 所以 Y = 100 - heightPercent。但為了避開 xAxisLabel，我們實際只佔用 height: 85% 的空間。
+              // 我們後續將 SVG 的 bottom 設為 24 (避開文字)，這樣 viewBox 的 Y 就剛好吻合了！
+              const y = 100 - d.heightPercent;
+              return `${x},${y}`;
+            }).join(' ');
+          }
+          
           return (
-            <Pressable
-              key={index}
-              style={styles.actionButton}
-              onPress={() => { /* TODO: 導航或動作实作 */ }}
-            >
-              <View style={styles.buttonContent}>
-                <IconComponent width={24} height={24} color={theme.primary} />
-                <Text style={[styles.headerLabel, { color: theme.primary, fontFamily: fontFamilyName }]}>
-                  {btn.text}
-                </Text>
-              </View>
-            </Pressable>
+            <React.Fragment key={index}>
+              <Pressable
+                style={[
+                  styles.actionButton, 
+                  isExpanded && { marginBottom: 0, borderBottomLeftRadius: 0, borderBottomRightRadius: 0, boxShadow: 'none' } // 展開時移除底部圓角與陰影，讓下方卡片接續
+                ]}
+                onPress={() => {
+                  setExpandedChart(isExpanded ? null : btn.text);
+                }}
+              >
+                <View style={styles.buttonContent}>
+                  <IconComponent width={24} height={24} color={theme.primary} />
+                  <Text style={[styles.headerLabel, { color: theme.primary, fontFamily: fontFamilyName }]}>
+                    {btn.text}
+                  </Text>
+                </View>
+              </Pressable>
+
+              {/* 展開後的圖表卡片區塊 */}
+              {isExpanded && (
+                <View style={styles.chartCard}>
+                  {(btn.text === '排便日曆' || btn.text === '蛻皮日曆') ? (
+                    (() => {
+                      const calYear = calendarDate.getFullYear();
+                      const calMonth = calendarDate.getMonth() + 1;
+                      const daysInMonth = new Date(calYear, calMonth, 0).getDate();
+                      const firstDayOffset = new Date(calYear, calMonth - 1, 1).getDay(); // 0:日, 1:一
+                      const totalCells = daysInMonth + firstDayOffset;
+                      const rows = Math.ceil(totalCells / 7);
+                      
+                      const today = new Date();
+                      const isCurrentMonth = today.getFullYear() === calYear && today.getMonth() + 1 === calMonth;
+                      const currentDay = today.getDate();
+
+                      // 模擬不同月份的事件
+                      const getMockEvents = (text: string, m: number) => {
+                        if (m % 2 === 0) {
+                          return text === '排便日曆' ? [3, 7, 14, 19, 21, 28] : [5, 20];
+                        } else {
+                          return text === '排便日曆' ? [2, 5, 8, 12, 15, 18, 22, 25, 28] : [10, 25];
+                        }
+                      };
+                      const eventDays = getMockEvents(btn.text, calMonth);
+                      const bgColor = paletteColors.MU_CHENG; // 統一使用橘色
+
+                      return (
+                        <View style={{ paddingVertical: 16, paddingHorizontal: 8 }}>
+                          {/* 月份切換列 */}
+                          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20, paddingHorizontal: 16 }}>
+                            <Pressable 
+                              onPress={() => setCalendarDate(new Date(calYear, calMonth - 2, 1))} 
+                              style={({ pressed }) => [{ padding: 8, borderRadius: 16, opacity: pressed ? 0.5 : 1 }]}
+                            >
+                              <Text style={{ fontSize: getFontSize(16, 'medium'), color: theme.primary, fontFamily: fontFamilyName }}>{'< 上月'}</Text>
+                            </Pressable>
+                            <Text style={{ fontSize: getFontSize(18, 'medium'), fontWeight: '600', color: theme.primary, textAlign: 'center', fontFamily: fontFamilyName }}>
+                              {calYear} 年 {calMonth} 月
+                            </Text>
+                            <Pressable 
+                              onPress={() => setCalendarDate(new Date(calYear, calMonth, 1))} 
+                              style={({ pressed }) => [{ padding: 8, borderRadius: 16, opacity: pressed ? 0.5 : 1 }]}
+                            >
+                              <Text style={{ fontSize: getFontSize(16, 'medium'), color: theme.primary, fontFamily: fontFamilyName }}>{'下月 >'}</Text>
+                            </Pressable>
+                          </View>
+
+                          {/* 星期標題 */}
+                          <View style={{ flexDirection: 'row', justifyContent: 'space-around', marginBottom: 12 }}>
+                            {['日', '一', '二', '三', '四', '五', '六'].map(d => (
+                              <Text key={d} style={{ color: '#999999', fontSize: getFontSize(12, 'small'), width: 36, textAlign: 'center', fontFamily: fontFamilyName }}>{d}</Text>
+                            ))}
+                          </View>
+
+                          {/* 日期網格 */}
+                          <View style={{ flexDirection: 'row', flexWrap: 'wrap' }}>
+                            {Array.from({ length: rows * 7 }).map((_, i) => {
+                              const dayNum = i - firstDayOffset + 1;
+                              const isValid = dayNum >= 1 && dayNum <= daysInMonth;
+                              
+                              // 判斷是否為未來日期
+                              const isFuture = calYear > today.getFullYear() || 
+                                               (calYear === today.getFullYear() && calMonth > today.getMonth() + 1) || 
+                                               (calYear === today.getFullYear() && calMonth === today.getMonth() + 1 && dayNum > currentDay);
+                                               
+                              const hasEvent = isValid && !isFuture && eventDays.includes(dayNum);
+                              const isToday = isCurrentMonth && dayNum === currentDay;
+
+                              return (
+                                <View key={i} style={{ width: '14.28%', height: 44, alignItems: 'center', justifyContent: 'center' }}>
+                                  {isValid && (
+                                    <View style={[
+                                      { 
+                                        width: 32, 
+                                        height: 32, 
+                                        borderRadius: 16, 
+                                        alignItems: 'center', 
+                                        justifyContent: 'center',
+                                        overflow: 'hidden',
+                                        borderWidth: 1.5,
+                                        borderColor: hasEvent ? bgColor : 'transparent', // 固定 border寬度，只切換顏色
+                                        backgroundColor: isToday ? '#FFF0D4' : 'transparent' // 固定屬性，只切換顏色
+                                      }
+                                    ]}>
+                                      <Text style={[
+                                        { fontSize: getFontSize(14, 'medium'), color: '#333333', fontFamily: fontFamilyName },
+                                        isToday && { color: bgColor, fontWeight: 'bold' }
+                                      ]}>{dayNum}</Text>
+                                    </View>
+                                  )}
+                                </View>
+                              );
+                            })}
+                          </View>
+                        </View>
+                      );
+                    })()
+                  ) : (
+                    <>
+                      {/* 圖表實作： Segmented Control */}
+                  <View style={styles.chartTabsRow}>
+                    {availableTabs.map((tab) => (
+                      <Pressable
+                        key={tab}
+                        style={[styles.chartTab, displayTab === tab && styles.chartTabActive]}
+                        onPress={() => setActiveChartTab(tab)}
+                      >
+                        <Text style={[styles.chartTabText, displayTab === tab && styles.chartTabTextActive, { fontFamily: fontFamilyName }]}>{tab}</Text>
+                      </Pressable>
+                    ))}
+                  </View>
+
+                  {/* 圖表主體與 Y 軸外框 */}
+                  <View style={styles.chartMainContainer}>
+                    {/* 左側 Y 軸標籤 */}
+                    <View style={styles.yAxisContainer}>
+                      {yAxisLabels.map((val, i) => (
+                        <Text key={i} style={[styles.yAxisLabel, { fontFamily: fontFamilyName }]}>{val}</Text>
+                      ))}
+                    </View>
+
+                    {/* 圖表主體 */}
+                    <View style={styles.chartArea}>
+                      {/* 背景水平格線 */}
+                      {yAxisLabels.map((_, i) => (
+                        <View key={i} style={[styles.chartGridLine, { top: `${(i / (yAxisLabels.length - 1)) * 100}%` }]} />
+                      ))}
+                      
+                      {/* 圖表內容區：長條圖 或 折線圖 */}
+                      <View style={styles.chartBarsContainer}>
+                        {isLineChart && (
+                          <Svg 
+                            width="100%" 
+                            height="85%" // 與 chartBarWrapper 相同高度
+                            viewBox="0 0 100 100" 
+                            preserveAspectRatio="none" 
+                            style={{ position: 'absolute', bottom: 24, left: 0, right: 0 }}
+                          >
+                            <Polyline 
+                              points={polylinePoints} 
+                              fill="none" 
+                              stroke={paletteColors.MU_CHENG} 
+                              strokeWidth="2" 
+                              vectorEffect="non-scaling-stroke" 
+                            />
+                          </Svg>
+                        )}
+
+                        {processedData.map((data: any, idx: number) => {
+                          return (
+                            <View key={idx} style={styles.chartBarCol}>
+                              <View style={[styles.chartBarWrapper, isLineChart && { backgroundColor: 'transparent', boxShadow: 'none' }]}>
+                                 {isLineChart ? (
+                                   // 折線圖的圓點
+                                   <View 
+                                     style={{
+                                       width: 10,
+                                       height: 10,
+                                       borderRadius: 5,
+                                       backgroundColor: '#FFFFFF',
+                                       borderWidth: 2,
+                                       borderColor: paletteColors.MU_CHENG,
+                                       position: 'absolute',
+                                       bottom: `${data.heightPercent}%`,
+                                       marginBottom: -5 // 對齊圓心
+                                     }}
+                                   />
+                                 ) : (
+                                   // 一般的長條圖
+                                   <View 
+                                     style={[
+                                       styles.chartBarFilled, 
+                                       { height: `${data.heightPercent}%` },
+                                       data.isAbnormal === 'high' && { backgroundColor: '#FF3B30' },
+                                       data.isAbnormal === 'low' && { backgroundColor: '#32ADE6' }
+                                     ]} 
+                                   />
+                                 )}
+                              </View>
+                              <Text style={[styles.xAxisLabel, { fontFamily: fontFamilyName }]}>{data.label}</Text>
+                            </View>
+                          );
+                        })}
+                      </View>
+                    </View>
+                  </View>
+                </>
+              )}
+
+                  {/* 底部按鈕 */}
+                  <Pressable 
+                    style={styles.chartFooterButton}
+                    onPress={() => Alert.alert('提示', '詳細數據清單與報表功能建置中...')}
+                  >
+                    <Text style={[styles.chartFooterButtonText, { fontFamily: fontFamilyName }]}>詳細數據</Text>
+                  </Pressable>
+                </View>
+              )}
+            </React.Fragment>
           );
         })}
 
@@ -254,7 +744,7 @@ const styles = StyleSheet.create({
     backgroundColor: 'transparent',
   },
   cardHeader: {
-    width: '100%',
+    width: '96%',
     alignSelf: 'center',
     backgroundColor: paletteColors.RI_CHU,
     borderRadius: 16,
@@ -267,7 +757,7 @@ const styles = StyleSheet.create({
     boxShadow: 'inset 2px 2px 7px rgba(0, 0, 0, 0.25)',
   },
   actionButton: {
-    width: '100%',
+    width: '96%',
     alignSelf: 'center',
     backgroundColor: paletteColors.RI_CHU,
     borderRadius: 16,
@@ -292,7 +782,7 @@ const styles = StyleSheet.create({
   dropdownModal: {
     position: 'absolute',
     top: 55,
-    right: 0,
+    right: 4,
     width: 150,
     backgroundColor: '#FFFFFF',
     borderRadius: 16,
@@ -300,7 +790,7 @@ const styles = StyleSheet.create({
     shadowColor: '#000000',
     shadowOffset: { width: 0, height: 6 },
     shadowOpacity: 0.15,
-    shadowRadius: 16,
+    shadowRadius: 8,
     elevation: 10,
     borderWidth: 1,
     borderColor: 'rgba(0,0,0,0.05)',
@@ -335,7 +825,7 @@ const styles = StyleSheet.create({
     paddingBottom: 8,
   },
   recordCard: {
-    width: '100%',
+    width: '96%',
     alignSelf: 'center',
     backgroundColor: paletteColors.RI_CHU,
     borderRadius: 8,
@@ -368,6 +858,118 @@ const styles = StyleSheet.create({
   },
   recordFooter: {
     paddingLeft: 32,
+    fontSize: getFontSize(16, 'medium'),
+  },
+
+  // ===== 圖表展開卡片樣式 =====
+  chartCard: {
+    width: '96%',
+    alignSelf: 'center',
+    backgroundColor: paletteColors.RI_CHU,
+    borderBottomLeftRadius: 16,
+    borderBottomRightRadius: 16,
+    padding: 24,
+    paddingTop: 16,
+    marginBottom: 16,
+    boxShadow: '0px 4px 7px rgba(0, 0, 0, 0.25)',
+  },
+  chartTabsRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    backgroundColor: 'transparent',
+    borderRadius: 20,
+    marginBottom: 24,
+    paddingHorizontal: 8,
+  },
+  chartTab: {
+    paddingVertical: 6,
+    paddingHorizontal: 16,
+    borderRadius: 20,
+  },
+  chartTabActive: {
+    backgroundColor: '#FFFFFF', // 模擬 SVG 中高亮背景，或使用邊框
+    borderWidth: 1,
+    borderColor: paletteColors.MU_CHENG, // 橘色邊框
+  },
+  chartTabText: {
+    fontSize: getFontSize(16, 'medium'),
+    color: '#999999',
+  },
+  chartTabTextActive: {
+    color: paletteColors.MU_CHENG,
+  },
+  chartMainContainer: {
+    flexDirection: 'row',
+    height: 200, // 增加一點高度容納 X 軸文字
+    marginBottom: 24,
+  },
+  yAxisContainer: {
+    width: 45, // 加寬以容納 '100%' 等標籤，避免斷行
+    justifyContent: 'space-between',
+    alignItems: 'flex-end',
+    paddingRight: 8,
+    paddingBottom: 24, // 預留空間給 X 軸，與長條圖對齊
+  },
+  yAxisLabel: {
+    fontSize: getFontSize(13, 'medium'), // 稍微放大一點點提升辨識度
+    color: '#999999',
+    lineHeight: 14, // 調整行高讓文字更居中舒適
+    textAlign: 'right', // 確保文字靠右對齊
+  },
+  chartArea: {
+    flex: 1,
+    position: 'relative',
+  },
+  chartGridLine: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    height: 1,
+    backgroundColor: paletteColors.RI_LUO, // #FFC500 暖黃色格線
+    opacity: 0.5,
+  },
+  chartBarsContainer: {
+    flex: 1,
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    alignItems: 'flex-end',
+    paddingHorizontal: 0,
+  },
+  chartBarCol: {
+    alignItems: 'center',
+    height: '100%',
+    justifyContent: 'flex-end',
+  },
+  chartBarWrapper: {
+    width: 10, // 模擬 SVG 細長條
+    height: '85%', // 留白給上下的文字
+    backgroundColor: paletteColors.RI_CHU,
+    borderRadius: 5,
+    boxShadow: 'inset 2px 2px 4px rgba(0,0,0,0.15)', // 空白進度條內陰影
+    justifyContent: 'flex-end',
+    overflow: 'hidden',
+    marginBottom: 8, // 距離下方文字的空間
+  },
+  chartBarFilled: {
+    width: '100%',
+    backgroundColor: paletteColors.MU_CHENG, // 橘色填滿
+    borderRadius: 5,
+  },
+  xAxisLabel: {
+    fontSize: getFontSize(12, 'medium'),
+    color: '#999999',
+    height: 16,
+  },
+  chartFooterButton: {
+    alignSelf: 'center',
+    paddingVertical: 8,
+    paddingHorizontal: 32,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: paletteColors.MU_CHENG,
+  },
+  chartFooterButtonText: {
+    color: paletteColors.MU_CHENG,
     fontSize: getFontSize(16, 'medium'),
   },
 });

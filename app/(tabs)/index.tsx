@@ -1,4 +1,4 @@
-﻿import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   View,
   Text,
@@ -197,6 +197,22 @@ export default function HomeScreen() {
         scrollable={false}
         floatingAction={null}
       >
+        {/* 透明遮罩，點擊關閉選單 */}
+        {isDropdownVisible && (
+          <Pressable
+            style={{
+              position: 'absolute',
+              top: 0,
+              bottom: 0,
+              left: 0,
+              right: 0,
+              zIndex: 90,
+              elevation: 9,
+            }}
+            onPress={() => setIsDropdownVisible(false)}
+          />
+        )}
+
         {/* 卡片 1：當前顯示 / 寵物切換下拉選單 */}
         <View style={[styles.cardHeader, isDropdownVisible ? { zIndex: 100 } : { zIndex: 1 }]}>
           <Text style={[styles.headerLabel, { color: theme.primary, fontFamily: fontFamilyName }]}>當前顯示</Text>
@@ -445,8 +461,9 @@ const styles = StyleSheet.create({
     borderRightColor: 'rgba(255,255,255,0.5)',
   },
 
-  // Header 專用 (對話框)
   cardHeader: {
+    width: '96%',
+    alignSelf: 'center',
     backgroundColor: paletteColors.RI_CHU,
     borderRadius: 16,
     height: 55, // 保持小一點，讓日記有更多空間
@@ -466,11 +483,10 @@ const styles = StyleSheet.create({
     // 移除 fontWeight，統一樣式跟未連接感測器一致
   },
 
-  // 下拉選單樣式
   dropdownModal: {
     position: 'absolute',
     top: 55, // 放置於 header 下方，貼合卡片底部
-    right: 0, // 切齊卡片最右側外框
+    right: 4, // 留空間避免陰影裁切
     width: 150, 
     backgroundColor: '#FFFFFF',
     borderRadius: 16,
@@ -478,7 +494,7 @@ const styles = StyleSheet.create({
     shadowColor: '#000000',
     shadowOffset: { width: 0, height: 6 },
     shadowOpacity: 0.15,
-    shadowRadius: 16,
+    shadowRadius: 8,
     elevation: 10,
     borderWidth: 1,
     borderColor: 'rgba(0,0,0,0.05)',
@@ -506,8 +522,9 @@ const styles = StyleSheet.create({
     display: 'none',
   },
 
-  // Sensor 卡片
   sensorCardBlock: {
+    width: '96%',
+    alignSelf: 'center',
     backgroundColor: paletteColors.RI_CHU,
     borderRadius: 16,
     height: 160, // 必須加回固定高度，才能讓內部的 flex: 1 完美撐開上下距
@@ -561,8 +578,9 @@ const styles = StyleSheet.create({
     resizeMode: 'contain',
   },
 
-  // Reminder 大框
   reminderCardBlock: {
+    width: '96%',
+    alignSelf: 'center',
     backgroundColor: paletteColors.RI_CHU,
     borderRadius: 16,
     paddingVertical: 8,
@@ -629,13 +647,12 @@ const styles = StyleSheet.create({
     borderRadius: 6,
   },
 
-  // Diary 卡片
   diaryBlock: {
     backgroundColor: '#FFFFFF',
     borderRadius: 16,
     flex: 1,
     minHeight: 200,
-    width: '98%',
+    width: '96%',
     alignSelf: 'center',
     padding: 20,
     marginBottom: 0, // 設為 0，讓底部距離僅吃 ScrollView 的 16 padding，保持等距
@@ -661,7 +678,7 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     flex: 1,
     minHeight: 200, // 使用要求最小高度 200
-    width: '98%',
+    width: '96%',
     alignSelf: 'center',
     marginBottom: 0,
     flexDirection: 'row',
