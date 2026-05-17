@@ -61,6 +61,8 @@ type Props = {
 };
 
 export function FloatingActionBar({ actions, style }: Props) {
+  const { themeId } = useTheme();
+  const theme = getThemeTokens(themeId);
   if (actions.length === 0) return null;
 
   const limitedActions = actions.slice(0, 4);
@@ -76,7 +78,7 @@ export function FloatingActionBar({ actions, style }: Props) {
             onPress={onPress}
             style={{ width: 50, height: 50, padding: 12 }}
           >
-            <IconComponent width="100%" height="100%" preserveAspectRatio="xMidYMid meet" />
+            <IconComponent width="100%" height="100%" preserveAspectRatio="xMidYMid meet" color={theme.primary} />
           </NeumorphicButton>
         );
       })}

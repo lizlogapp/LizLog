@@ -10,25 +10,30 @@ import {
   Alert,
   Modal,
 } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useTheme } from '../../../src/theme/ThemeContext';
 import { getThemeTokens } from '../../../src/theme/themeSettings';
 import { getFontSize } from '../../../src/theme/typographySettings';
 import { paletteColors } from '../../../src/theme/themeColorSettings';
 import { BaseScreen } from '../../../src/components/common/BaseScreen';
 import { FloatingActionBar } from '../../../src/components/FloatingActionBar';
+import { mockPetDB, updatePetData } from './mockPetDB';
 
 export default function AddPetScreen() {
   const router = useRouter();
+  const { id } = useLocalSearchParams<{ id?: string }>();
   const { themeId, fontFamilyName } = useTheme();
   const theme = getThemeTokens(themeId);
 
-  const [name, setName] = useState('');
-  const [species, setSpecies] = useState('鬆獅蜥');
-  const [birthday, setBirthday] = useState('');
-  const [homeDate, setHomeDate] = useState('');
-  const [gender, setGender] = useState('');
-  const [tag, setTag] = useState('');
+  const isEditing = !!id;
+  const existingPet = isEditing && id ? mockPetDB[id] : null;
+
+  const [name, setName] = useState(existingPet?.name || '');
+  const [species, setSpecies] = useState(existingPet?.species || '鬆獅蜥');
+  const [birthday, setBirthday] = useState(existingPet?.birthDate || '');
+  const [homeDate, setHomeDate] = useState(existingPet?.homeDate || '');
+  const [gender, setGender] = useState(existingPet?.gender || '');
+  const [tag, setTag] = useState(existingPet?.tag || '');
 
   const [showDatePicker, setShowDatePicker] = useState<{ visible: boolean; target: 'birthday' | 'homeDate' | null }>({
     visible: false,
@@ -43,8 +48,8 @@ export default function AddPetScreen() {
   const closePicker = () => setShowDatePicker({ visible: false, target: null });
 
   const labelStyle = [styles.fieldLabel, { color: theme.primary, fontFamily: fontFamilyName }];
-  const inputStyle = [styles.input, { color: paletteColors.LIE_RI, fontFamily: fontFamilyName }];
-  const fieldTextStyle = [styles.fieldValue, { color: paletteColors.LIE_RI, fontFamily: fontFamilyName }];
+  const inputStyle = [styles.input, { color: theme.text, fontFamily: fontFamilyName }];
+  const fieldTextStyle = [styles.fieldValue, { color: theme.text, fontFamily: fontFamilyName }];
 
   return (
     <BaseScreen
@@ -60,7 +65,21 @@ export default function AddPetScreen() {
                   Alert.alert('提示', '請填寫寵物名字');
                   return;
                 }
-                Alert.alert('成功', `已新增寵物：${name}`);
+                
+                if (isEditing && id) {
+                  updatePetData(id, {
+                    name,
+                    species,
+                    birthDate: birthday,
+                    homeDate,
+                    gender,
+                    tag,
+                  });
+                  Alert.alert('成功', `已更新寵物：${name}`);
+                } else {
+                  Alert.alert('成功', `已新增寵物：${name}`);
+                }
+                
                 router.back();
               },
             },
@@ -74,7 +93,7 @@ export default function AddPetScreen() {
         keyboardShouldPersistTaps="handled"
       >
         {/* 主要卡片 */}
-        <View style={styles.mainCard}>
+        <View style={[styles.mainCard, { backgroundColor: theme.background }]}>
           {/* 照片區 */}
           <Pressable
           style={styles.photoCard}
@@ -97,11 +116,11 @@ export default function AddPetScreen() {
           {/* 名字 */}
           <View style={styles.fieldRow}>
             <Text style={labelStyle}>名字</Text>
-            <View style={styles.inputCard}>
+            <View style={[styles.inputCard, { backgroundColor: theme.background }]}>
               <TextInput
                 style={inputStyle}
                 placeholder="編輯寵物名字"
-                placeholderTextColor={paletteColors.LIE_RI}
+                placeholderTextColor={theme.text + '50'}
                 value={name}
                 onChangeText={setName}
                 maxLength={20}
@@ -112,11 +131,11 @@ export default function AddPetScreen() {
           {/* 物種 */}
           <View style={styles.fieldRow}>
             <Text style={labelStyle}>物種</Text>
-            <View style={styles.inputCard}>
+            <View style={[styles.inputCard, { backgroundColor: theme.background }]}>
               <TextInput
                 style={inputStyle}
                 placeholder="鬆獅蜥"
-                placeholderTextColor={paletteColors.LIE_RI}
+                placeholderTextColor={theme.text + '50'}
                 value={species}
                 onChangeText={setSpecies}
               />
@@ -127,7 +146,7 @@ export default function AddPetScreen() {
           <View style={styles.fieldRow}>
             <Text style={labelStyle}>生日</Text>
             <Pressable
-              style={styles.inputCard}
+              style={[styles.inputCard, { backgroundColor: theme.background }]}
               onPress={() => setShowDatePicker({ visible: true, target: 'birthday' })}
             >
               <View style={styles.dateTextRow}>
@@ -136,7 +155,7 @@ export default function AddPetScreen() {
                 </Text>
                 <Image 
                   source={require('../../../assets/icons/icon-down.png')} 
-                  style={[styles.chevronIcon, { tintColor: paletteColors.LIE_RI }]} 
+                  style={[styles.chevronIcon, { tintColor: theme.text }]} 
                   resizeMode="contain" 
                 />
               </View>
@@ -147,7 +166,7 @@ export default function AddPetScreen() {
           <View style={styles.fieldRow}>
             <Text style={labelStyle}>到家日子</Text>
             <Pressable
-              style={styles.inputCard}
+              style={[styles.inputCard, { backgroundColor: theme.background }]}
               onPress={() => setShowDatePicker({ visible: true, target: 'homeDate' })}
             >
               <View style={styles.dateTextRow}>
@@ -156,7 +175,7 @@ export default function AddPetScreen() {
                 </Text>
                 <Image 
                   source={require('../../../assets/icons/icon-down.png')} 
-                  style={[styles.chevronIcon, { tintColor: paletteColors.LIE_RI }]} 
+                  style={[styles.chevronIcon, { tintColor: theme.text }]} 
                   resizeMode="contain" 
                 />
               </View>
@@ -166,7 +185,7 @@ export default function AddPetScreen() {
           {/* 性別 */}
           <View style={styles.fieldRow}>
             <Text style={labelStyle}>性別</Text>
-            <View style={styles.genderRow}>
+            <View style={[styles.genderRow, { backgroundColor: theme.background }]}>
               {['男生', '女生', '未知'].map((g) => (
                 <Pressable
                   key={g}
@@ -181,8 +200,8 @@ export default function AddPetScreen() {
                       styles.genderText,
                       { fontFamily: fontFamilyName },
                       gender === g
-                        ? { color: '#FFFFFF', fontWeight: '600' }
-                        : { color: paletteColors.LIE_RI },
+                        ? { color: theme.background, fontWeight: '600' }
+                        : { color: theme.text },
                     ]}
                   >
                     {g}
@@ -195,11 +214,11 @@ export default function AddPetScreen() {
           {/* 標籤綽號 */}
           <View style={styles.fieldRow}>
             <Text style={labelStyle}>標籤綽號</Text>
-            <View style={styles.inputCard}>
+            <View style={[styles.inputCard, { backgroundColor: theme.background }]}>
               <TextInput
                 style={inputStyle}
                 placeholder="編輯標籤綽號"
-                placeholderTextColor={paletteColors.LIE_RI}
+                placeholderTextColor={theme.text + '50'}
                 value={tag}
                 onChangeText={setTag}
               />
@@ -217,7 +236,7 @@ export default function AddPetScreen() {
         onRequestClose={closePicker}
       >
         <Pressable style={styles.modalOverlay} onPress={closePicker}>
-          <Pressable style={styles.modalContent} onPress={(e) => e.stopPropagation()}>
+          <Pressable style={[styles.modalContent, { backgroundColor: theme.background }]} onPress={(e) => e.stopPropagation()}>
             {/* 年月選擇列 */}
             <View style={styles.yearMonthNav}>
               {/* 左側：年份切換 */}
@@ -310,7 +329,7 @@ const styles = StyleSheet.create({
   mainCard: {
     width: '96%',
     alignSelf: 'center',
-    backgroundColor: paletteColors.RI_CHU,
+    backgroundColor: '#FFFEFA',
     borderRadius: 20,
     padding: 16,
     gap: 24, // 圖片和第一行文字間距
@@ -368,7 +387,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: paletteColors.RI_CHU,
+    backgroundColor: '#FFFEFA',
     borderRadius: 16,
     paddingVertical: 12,
     paddingHorizontal: 16,
@@ -404,7 +423,7 @@ const styles = StyleSheet.create({
   genderRow: {
     flex: 1,
     flexDirection: 'row',
-    backgroundColor: paletteColors.RI_CHU,
+    backgroundColor: '#FFFEFA',
     borderRadius: 16,
     padding: 4,
     gap: 4,
@@ -434,7 +453,7 @@ const styles = StyleSheet.create({
   },
   modalContent: {
     width: '85%',
-    backgroundColor: paletteColors.RI_CHU,
+    backgroundColor: '#FFFEFA',
     borderRadius: 20,
     padding: 20,
     alignItems: 'center',

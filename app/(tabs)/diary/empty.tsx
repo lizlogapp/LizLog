@@ -66,7 +66,7 @@ export default function EmptyDiaryScreen() {
               <Pressable onPress={() => setIsPetDropdownVisible(!isPetDropdownVisible)}>
                 <Image
                   source={require('../../../assets/icons/icon-menu.png')}
-                  style={[styles.headerIcon, { tintColor: theme.panelBackground }]}
+                  style={[styles.headerIcon, { tintColor: theme.primary }]}
                 />
               </Pressable>
             </View>
@@ -87,7 +87,7 @@ export default function EmptyDiaryScreen() {
                 style={[styles.monthSelector, { backgroundColor: theme.panelBackground, zIndex: 1200 }]}
                 onPress={() => setIsDropdownVisible(!isDropdownVisible)}
               >
-                <Text style={[styles.monthText, { fontFamily: fontFamilyName }]}>{currentMonth}\u6708</Text>
+                <Text style={[styles.monthText, { color: theme.panelPatternText, fontFamily: fontFamilyName }]}>{currentMonth}\u6708</Text>
               </Pressable>
 
               {isDropdownVisible && (
@@ -106,7 +106,7 @@ export default function EmptyDiaryScreen() {
                         ]}
                         onPress={() => handleMonthSelect(item.date)}
                       >
-                        <Text style={[styles.dropdownItemText, { fontFamily: fontFamilyName }]}>
+                        <Text style={[styles.dropdownItemText, { color: theme.panelPatternText, fontFamily: fontFamilyName }]}>
                           {item.label}
                         </Text>
                       </Pressable>
@@ -120,14 +120,14 @@ export default function EmptyDiaryScreen() {
           <Pressable onPress={() => setIsSearchVisible(!isSearchVisible)} style={{ zIndex: 1300 }}>
             <Image
               source={require('../../../assets/icons/icon-search.png')}
-              style={[styles.headerIcon, { tintColor: theme.panelBackground }]}
+              style={[styles.headerIcon, { tintColor: theme.primary }]}
             />
           </Pressable>
         </View>
 
         {/* Pet dropdown */}
         {isPetDropdownVisible && (
-          <View style={[styles.petDropdownModal, { left: 16, top: 80, zIndex: 2000 }]}>
+          <View style={[styles.petDropdownModal, { left: 16, top: 80, zIndex: 2000, backgroundColor: theme.background }]}>
             <ScrollView style={styles.petDropdownScroll} showsVerticalScrollIndicator={false} bounces={false}>
               {availablePets.map((pet, idx) => (
                 <Pressable
@@ -193,7 +193,6 @@ const styles = StyleSheet.create({
     shadowRadius: 5,
   },
   monthText: {
-    color: '#FFFFFF',
     fontSize: getFontSize(16, 'medium'),
     fontWeight: '600',
     textAlign: 'center',
@@ -228,7 +227,6 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(255,255,255,0.2)',
   },
   dropdownItemText: {
-    color: '#FFFFFF',
     fontSize: getFontSize(16, 'medium'),
     fontWeight: '500',
   },
@@ -251,7 +249,7 @@ const styles = StyleSheet.create({
   petDropdownModal: {
     position: 'absolute',
     width: 150,
-    backgroundColor: '#FFFFFF',
+
     borderRadius: 16,
     paddingVertical: 8,
     shadowColor: '#000000',

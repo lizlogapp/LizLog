@@ -90,6 +90,7 @@ export default function PetsScreen() {
             key={pet.id}
             style={({ pressed }) => [
               styles.petCard,
+              { backgroundColor: theme.background },
               { opacity: pressed ? 0.85 : 1 },
             ]}
             onPress={() => {
@@ -139,6 +140,7 @@ export default function PetsScreen() {
         <Pressable
           style={({ pressed }) => [
             styles.addButton,
+            { backgroundColor: theme.background },
             { opacity: pressed ? 0.7 : 1 },
           ]}
           onPress={() => router.push('/(tabs)/pets/add')}

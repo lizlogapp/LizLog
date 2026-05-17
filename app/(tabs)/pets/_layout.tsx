@@ -11,6 +11,7 @@ export default function PetsLayout() {
       <Stack.Screen name="medical" />
       <Stack.Screen name="medical-detail" />
       <Stack.Screen name="add-medical" />
+      <Stack.Screen name="co-parent" />
     </Stack>
   );
 }

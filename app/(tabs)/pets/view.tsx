@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import {
   View,
   Text,
@@ -6,6 +6,8 @@ import {
   Image,
   ScrollView,
   Pressable,
+  Modal,
+  TextInput,
 } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useTheme } from '../../../src/theme/ThemeContext';
@@ -13,72 +15,13 @@ import { getThemeTokens } from '../../../src/theme/themeSettings';
 import { getFontSize } from '../../../src/theme/typographySettings';
 import { paletteColors } from '../../../src/theme/themeColorSettings';
 import { BaseScreen } from '../../../src/components/common/BaseScreen';
-import { FloatingActionBar } from '../../../src/components/FloatingActionBar';
+import { FloatingActionBar, FloatingActionItem } from '../../../src/components/FloatingActionBar';
+import { mockPetDB, deletePetData } from './mockPetDB';
 
-// 模擬寵物詳細資料（未來從 Supabase 取得）
-const petDetails: Record<string, {
-  name: string;
-  species: string;
-  birthDate: Date;
-  tag: string;
-  imageUri: any;
-  weight: string;
-  length: string;
-  nextReminder: string;
-  reminderNote: string;
-  lastVisit: string;
-}> = {
-  '1': {
-    name: 'DELETE',
-    species: '鬆獅蜥',
-    birthDate: new Date('2022-07-01'),
-    tag: '睡姿奇葩',
-    imageUri: require('../../../assets/user-uploads/lizard-001.jpg'),
-    weight: '415 g',
-    length: '44 cm',
-    nextReminder: '明天　10:00',
-    reminderNote: '食物添加維生素',
-    lastVisit: '5個月前',
-  },
-  '2': {
-    name: 'CTRL',
-    species: '鬆獅蜥',
-    birthDate: new Date('2024-12-01'),
-    tag: '吃貨擔當',
-    imageUri: require('../../../assets/user-uploads/lizard-003.jpg'),
-    weight: '280 g',
-    length: '32 cm',
-    nextReminder: '後天　09:00',
-    reminderNote: '驅蟲藥',
-    lastVisit: '2個月前',
-  },
-  '3': {
-    name: 'ENTER',
-    species: '鬆獅蜥',
-    birthDate: new Date('2024-02-01'),
-    tag: '小太陽',
-    imageUri: require('../../../assets/user-uploads/lizard-005.jpg'),
-    weight: '320 g',
-    length: '35 cm',
-    nextReminder: '下週一　14:00',
-    reminderNote: '健檢',
-    lastVisit: '1個月前',
-  },
-  '4': {
-    name: 'ALT',
-    species: '鬆獅蜥',
-    birthDate: new Date('2023-10-01'),
-    tag: '探險家',
-    imageUri: require('../../../assets/user-uploads/lizard-007.jpg'),
-    weight: '350 g',
-    length: '38 cm',
-    nextReminder: '週五　11:00',
-    reminderNote: '補鈣粉',
-    lastVisit: '3個月前',
-  },
-};
+function calcAge(birthDateStr: string): string {
+  const birthDate = new Date(birthDateStr.replace(/\//g, '-'));
+  if (isNaN(birthDate.getTime())) return '未知年紀';
 
-function calcAge(birthDate: Date): string {
   const now = new Date();
   let years = now.getFullYear() - birthDate.getFullYear();
   let months = now.getMonth() - birthDate.getMonth();
@@ -106,18 +49,64 @@ export default function PetViewScreen() {
   const { themeId, fontFamilyName } = useTheme();
   const theme = getThemeTokens(themeId);
 
-  const pet = petDetails[id || '1'];
-  if (!pet) return null;
+  const pet = mockPetDB[id || '1'];
+
+  // 刪除確認狀態
+  const [showDeleteScreen, setShowDeleteScreen] = useState(false);
+  const [deleteInputName, setDeleteInputName] = useState('');
+  const [showDeletedConfirm, setShowDeletedConfirm] = useState(false);
+  const [deletedPetName, setDeletedPetName] = useState('');
+
+  const isDeleteNameMatch = pet
+    ? deleteInputName.trim().toLowerCase() === pet.name.toLowerCase()
+    : false;
+
+  const handleDeleteFinal = () => {
+    if (!pet) return;
+    setDeletedPetName(pet.name);
+    setShowDeleteScreen(false);
+    setShowDeletedConfirm(true);
+    // 注意：此時先不刪除資料，等使用者關閉確認視窗後再刪除
+  };
+
+  const handleDeletedClose = () => {
+    deletePetData(id || '1');
+    setShowDeletedConfirm(false);
+    router.replace('/(tabs)/pets');
+  };
+
+  // 如果 pet 已被刪除且正在顯示確認視窗，只渲染 Modal
+  if (!pet) {
+    return (
+      <BaseScreen scrollable={false}>
+        <Modal visible={showDeletedConfirm} transparent animationType="fade" onRequestClose={() => {}}>
+          <View style={styles.modalOverlay}>
+            <View style={styles.deletedCard}>
+              <Text style={[styles.deletedTitle, { fontFamily: fontFamilyName }]}>
+                {deletedPetName} 已被刪除
+              </Text>
+              <Pressable style={styles.deletedCloseButton} onPress={handleDeletedClose}>
+                <Text style={[styles.deletedCloseText, { fontFamily: fontFamilyName }]}>
+                  關閉
+                </Text>
+              </Pressable>
+            </View>
+          </View>
+        </Modal>
+      </BaseScreen>
+    );
+  }
+
+  // FloatingActionBar 動態切換
+  const floatingActions: FloatingActionItem[] = showDeleteScreen
+    ? [{ id: 'back' as const, onPress: () => setShowDeleteScreen(false) }]
+    : [{ id: 'back' as const, onPress: () => router.back() }];
 
   return (
     <BaseScreen
       scrollable={false}
       floatingAction={
-        <FloatingActionBar
-          actions={[
-            { id: 'back', onPress: () => router.back() },
-          ]}
-        />
+        <FloatingActionBar actions={floatingActions} />
       }
     >
       <ScrollView
@@ -125,7 +114,7 @@ export default function PetViewScreen() {
         contentContainerStyle={styles.scrollContent}
       >
         {/* 主卡片 */}
-        <View style={styles.mainCard}>
+        <View style={[styles.mainCard, { backgroundColor: theme.background }]}>
           {/* 寵物照片 */}
           <View style={styles.photoWrapper}>
             <Image
@@ -150,19 +139,19 @@ export default function PetViewScreen() {
 
           {/* 數值資訊區 */}
           <View style={styles.statsSection}>
-            <Text style={[styles.statLine, { color: paletteColors.XUAN_RI, fontFamily: fontFamilyName }]}>
+            <Text style={[styles.statLine, { color: theme.primary, fontFamily: fontFamilyName }]}>
               最新體重：{pet.weight}
             </Text>
-            <Text style={[styles.statLine, { color: paletteColors.XUAN_RI, fontFamily: fontFamilyName }]}>
+            <Text style={[styles.statLine, { color: theme.primary, fontFamily: fontFamilyName }]}>
               最新身長：{pet.length}
             </Text>
-            <Text style={[styles.statLine, { color: paletteColors.XUAN_RI, fontFamily: fontFamilyName }]}>
+            <Text style={[styles.statLine, { color: theme.primary, fontFamily: fontFamilyName }]}>
               下次提醒：{pet.nextReminder}
             </Text>
-            <Text style={[styles.statLine, { color: paletteColors.XUAN_RI, fontFamily: fontFamilyName }]}>
+            <Text style={[styles.statLine, { color: theme.primary, fontFamily: fontFamilyName }]}>
               {'　　　　　'}{pet.reminderNote}
             </Text>
-            <Text style={[styles.statLine, { color: paletteColors.XUAN_RI, fontFamily: fontFamilyName }]}>
+            <Text style={[styles.statLine, { color: theme.primary, fontFamily: fontFamilyName }]}>
               上次就診：{pet.lastVisit}
             </Text>
           </View>
@@ -175,6 +164,7 @@ export default function PetViewScreen() {
               key={item.id}
               style={({ pressed }) => [
                 styles.menuButton,
+                { backgroundColor: theme.background },
                 { opacity: pressed ? 0.7 : 1 },
               ]}
               onPress={() => {
@@ -182,8 +172,14 @@ export default function PetViewScreen() {
                   router.push({ pathname: '/(tabs)/pets/reminder', params: { id } });
                 } else if (item.id === 'medical') {
                   router.push({ pathname: '/(tabs)/pets/medical', params: { id } });
+                } else if (item.id === 'coparent') {
+                  router.push({ pathname: '/(tabs)/pets/co-parent', params: { id } });
+                } else if (item.id === 'edit') {
+                  router.push({ pathname: '/(tabs)/pets/add', params: { id } });
+                } else if (item.id === 'delete') {
+                  setDeleteInputName('');
+                  setShowDeleteScreen(true);
                 }
-                // TODO: 其他功能頁面導航
               }}
             >
               <Image
@@ -198,6 +194,96 @@ export default function PetViewScreen() {
           ))}
         </View>
       </ScrollView>
+
+      {/* ========== 全頁橙色刪除確認畫面 ========== */}
+      {showDeleteScreen && (
+        <View style={styles.deleteOverlay}>
+          <ScrollView
+            showsVerticalScrollIndicator={false}
+            contentContainerStyle={styles.deleteScrollContent}
+            keyboardShouldPersistTaps="handled"
+          >
+            {/* 垃圾桶圖示 */}
+            <Image
+              source={require('../../../assets/icons/icon-delete.png')}
+              style={styles.deleteIcon}
+              resizeMode="contain"
+            />
+
+            {/* 標題 */}
+            <Text style={[styles.deleteTitle, { fontFamily: fontFamilyName }]} numberOfLines={1} adjustsFontSizeToFit>
+              您確定要刪除 {pet.name} 嗎？
+            </Text>
+
+            {/* 警告列表 */}
+            <View style={styles.warningList}>
+              <View style={styles.warningItem}>
+                <Text style={[styles.warningBullet, { fontFamily: fontFamilyName }]}>！</Text>
+                <Text style={[styles.warningText, { fontFamily: fontFamilyName }]}>
+                  這是一個無法復原的動作。
+                </Text>
+              </View>
+              <View style={styles.warningItem}>
+                <Text style={[styles.warningBullet, { fontFamily: fontFamilyName }]}>！</Text>
+                <Text style={[styles.warningText, { fontFamily: fontFamilyName }]}>
+                  所有關於 {pet.name} 的資料將會被永久刪除。
+                </Text>
+              </View>
+              <View style={styles.warningItem}>
+                <Text style={[styles.warningBullet, { fontFamily: fontFamilyName }]}>！</Text>
+                <Text style={[styles.warningText, { fontFamily: fontFamilyName }]}>
+                  主要飼育者刪除寵物資料，所有被邀請的共同飼育，也將同時失去對這份資料的存取權限。
+                </Text>
+              </View>
+            </View>
+
+            {/* 輸入確認 */}
+            <Text style={[styles.deleteInputLabel, { fontFamily: fontFamilyName }]}>
+              請輸入寵物的名字以進行確認
+            </Text>
+            <TextInput
+              style={[styles.deleteInput, { fontFamily: fontFamilyName }]}
+              placeholder={`請在此輸入 '${pet.name}'`}
+              placeholderTextColor="rgba(255,255,255,0.5)"
+              value={deleteInputName}
+              onChangeText={setDeleteInputName}
+              autoCapitalize="none"
+            />
+
+            {/* 確認刪除按鈕 */}
+            <Pressable
+              style={[styles.deleteConfirmButton, !isDeleteNameMatch && styles.deleteConfirmButtonDisabled]}
+              onPress={() => {
+                if (isDeleteNameMatch) handleDeleteFinal();
+              }}
+            >
+              <Text style={[styles.deleteConfirmText, { fontFamily: fontFamilyName }]}>
+                確認刪除
+              </Text>
+            </Pressable>
+          </ScrollView>
+        </View>
+      )}
+
+      {/* ========== 刪除成功確認 Modal ========== */}
+      <Modal visible={showDeletedConfirm} transparent animationType="fade" onRequestClose={() => {}}>
+        <View style={styles.modalOverlay}>
+          <View style={styles.deletedCard}>
+            <Text style={[styles.deletedTitle, { fontFamily: fontFamilyName }]}>
+              {deletedPetName} 已被刪除
+            </Text>
+            <Pressable
+              style={styles.deletedCloseButton}
+              onPress={handleDeletedClose}
+            >
+              <Text style={[styles.deletedCloseText, { fontFamily: fontFamilyName }]}>
+                關閉
+              </Text>
+            </Pressable>
+          </View>
+        </View>
+      </Modal>
+
     </BaseScreen>
   );
 }
@@ -298,5 +384,129 @@ const styles = StyleSheet.create({
     fontSize: getFontSize(16, 'medium'),
     fontWeight: '600',
     letterSpacing: 1,
+  },
+
+  // 全頁橙色刪除確認畫面
+  deleteOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: paletteColors.MU_CHENG,
+    zIndex: 10,
+  },
+  deleteScrollContent: {
+    paddingTop: 48,
+    paddingBottom: 140,
+    paddingHorizontal: 28,
+    alignItems: 'center',
+  },
+  deleteIcon: {
+    width: 56,
+    height: 56,
+    tintColor: '#FFFFFF',
+    marginBottom: 20,
+  },
+  deleteTitle: {
+    fontSize: getFontSize(18, 'large'),
+    fontWeight: '300',
+    color: '#FFFFFF',
+    textAlign: 'center',
+    marginBottom: 32,
+  },
+  warningList: {
+    width: '100%',
+    gap: 20,
+    marginBottom: 32,
+  },
+  warningItem: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 12,
+  },
+  warningBullet: {
+    fontSize: getFontSize(14, 'medium'),
+    fontWeight: '700',
+    color: '#FFFFFF',
+    marginTop: 1,
+  },
+  warningText: {
+    flex: 1,
+    fontSize: getFontSize(14, 'medium'),
+    fontWeight: '300',
+    color: '#FFFFFF',
+    lineHeight: 22,
+  },
+  deleteInputLabel: {
+    fontSize: getFontSize(13, 'small'),
+    fontWeight: '300',
+    color: 'rgba(255,255,255,0.6)',
+    textAlign: 'center',
+    marginBottom: 10,
+  },
+  deleteInput: {
+    width: '100%',
+    backgroundColor: 'rgba(255,255,255,0.15)',
+    borderRadius: 12,
+    paddingVertical: 12,
+    paddingHorizontal: 20,
+    fontSize: getFontSize(14, 'medium'),
+    color: '#FFFFFF',
+    textAlign: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.3)',
+  },
+  deleteConfirmButton: {
+    width: '100%',
+    backgroundColor: '#FFFFFF',
+    borderRadius: 12,
+    paddingVertical: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 24,
+  },
+  deleteConfirmButtonDisabled: {
+    opacity: 0.35,
+  },
+  deleteConfirmText: {
+    fontSize: getFontSize(16, 'medium'),
+    fontWeight: '400',
+    color: paletteColors.MU_CHENG,
+  },
+
+  // 刪除成功確認 Modal
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.35)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  deletedCard: {
+    width: '85%',
+    backgroundColor: paletteColors.MU_CHENG,
+    borderRadius: 20,
+    paddingVertical: 40,
+    paddingHorizontal: 32,
+    alignItems: 'center',
+    gap: 32,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.2,
+    shadowRadius: 16,
+    elevation: 10,
+  },
+  deletedTitle: {
+    fontSize: getFontSize(15, 'medium'),
+    fontWeight: '300',
+    color: '#FFFFFF',
+    textAlign: 'center',
+  },
+  deletedCloseButton: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 8,
+    paddingVertical: 12,
+    paddingHorizontal: 40,
+  },
+  deletedCloseText: {
+    fontSize: getFontSize(16, 'medium'),
+    fontWeight: '400',
+    color: paletteColors.MU_CHENG,
   },
 });

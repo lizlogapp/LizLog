@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -15,12 +15,13 @@ import { getFontSize } from '../../../src/theme/typographySettings';
 import { paletteColors } from '../../../src/theme/themeColorSettings';
 import { BaseScreen } from '../../../src/components/common/BaseScreen';
 import { FloatingActionBar } from '../../../src/components/FloatingActionBar';
+import { mockReminderDB } from './mockReminderDB';
 
 const defaultTypes = ['餵食', '換水', '清掃', '用藥', '驅蟲', '回診'];
 const weekDays = ['日', '一', '二', '三', '四', '五', '六'];
 type Frequency = 'once' | 'daily' | 'everyN' | 'weekly';
 
-const tagColors = ['#FFD239', '#5CD85A', '#FF6B6B', '#4DB8FF', '#B072FF', '#FF9F43'];
+const tagColors = ['#FF6B6B', '#FF9F43', '#FFD239', '#5CD85A', '#4DB8FF', '#B072FF', '#8E8E93'];
 
 // 模擬寵物名單（未來從 context / Supabase 取得）
 const petList = [
@@ -35,7 +36,7 @@ const getFirstDayOfMonth = (y: number, m: number) => new Date(y, m - 1, 1).getDa
 
 export default function AddReminderScreen() {
   const router = useRouter();
-  const { id } = useLocalSearchParams<{ id: string }>();
+  const { id, reminderId } = useLocalSearchParams<{ id: string; reminderId: string }>();
   const { themeId, fontFamilyName } = useTheme();
   const theme = getThemeTokens(themeId);
 
@@ -83,7 +84,64 @@ export default function AddReminderScreen() {
     );
   };
 
+  // 預填資料 (如果是編輯模式)
+  useEffect(() => {
+    if (reminderId && mockReminderDB[reminderId]) {
+      const data = mockReminderDB[reminderId];
+      setSelectedPets(data.pets || []);
+      
+      if (defaultTypes.includes(data.type)) {
+        setSelectedType(data.type);
+        setIsAddingCustom(false);
+      } else {
+        setSelectedType('');
+        setIsAddingCustom(true);
+        setCustomType(data.type);
+      }
+
+      setTagColor(data.tagColor || tagColors[0]);
+      setFrequency(data.frequencyType || 'once');
+      if (data.everyNDays) setEveryNDays(data.everyNDays);
+      if (data.startDate) setStartDate(data.startDate);
+      if (data.selectedWeekDays) setSelectedWeekDays(data.selectedWeekDays);
+
+      if (data.time) {
+        const [h, m] = data.time.split(':');
+        setHour(h);
+        setMinute(m);
+      }
+      setNote(data.note || '');
+    }
+  }, [reminderId]);
+
   const handleSave = () => {
+    const finalType = isAddingCustom ? customType : selectedType;
+    const finalTime = `${hour.padStart(2, '0')}:${minute.padStart(2, '0')}`;
+    let finalFreq = '';
+    if (frequency === 'once') finalFreq = '單次';
+    else if (frequency === 'daily') finalFreq = '每天';
+    else if (frequency === 'everyN') finalFreq = `每${everyNDays}天`;
+    else if (frequency === 'weekly') {
+      const wDays = selectedWeekDays.map(d => weekDays[d]).join('、');
+      finalFreq = `每週(${wDays})`;
+    }
+
+    const newData = {
+      id: reminderId || Date.now().toString(),
+      type: finalType,
+      freq: finalFreq,
+      frequencyType: frequency,
+      everyNDays,
+      startDate,
+      selectedWeekDays,
+      time: finalTime,
+      pets: selectedPets,
+      note,
+      isOn: true,
+      tagColor,
+    };
+
+    mockReminderDB[newData.id] = newData;
     router.back();
   };
 
@@ -119,7 +177,7 @@ export default function AddReminderScreen() {
         contentContainerStyle={styles.scrollContent}
       >
         {/* 主表單卡片 */}
-        <View style={styles.formCard}>
+        <View style={[styles.formCard, { backgroundColor: theme.background }]}>
           {/* 左側色帶 (點擊切換顏色) */}
           <Pressable 
             style={[styles.colorTab, { backgroundColor: tagColor }]} 
@@ -142,7 +200,7 @@ export default function AddReminderScreen() {
                 onPress={() => togglePet(pet.id)}
               >
                 <Text style={[styles.chipText, {
-                  color: selectedPets.includes(pet.id) ? '#FFFFFF' : theme.primary,
+                  color: selectedPets.includes(pet.id) ? theme.background : theme.primary,
                   fontFamily: fontFamilyName,
                 }]}>{pet.name}</Text>
               </Pressable>
@@ -167,7 +225,7 @@ export default function AddReminderScreen() {
                 onPress={() => { setSelectedType(t); setIsAddingCustom(false); }}
               >
                 <Text style={[styles.chipText, {
-                  color: selectedType === t ? '#FFFFFF' : theme.primary,
+                  color: selectedType === t ? theme.background : theme.primary,
                   fontFamily: fontFamilyName,
                 }]}>{t}</Text>
               </Pressable>
@@ -184,14 +242,14 @@ export default function AddReminderScreen() {
               onPress={() => { setIsAddingCustom(true); setSelectedType(''); }}
             >
               <Text style={[styles.chipText, {
-                color: isAddingCustom ? '#FFFFFF' : theme.primary,
+                color: isAddingCustom ? theme.background : theme.primary,
                 fontFamily: fontFamilyName,
               }]}>＋新增</Text>
             </Pressable>
           </View>
           {isAddingCustom && (
             <TextInput
-              style={[styles.customInput, { color: paletteColors.XUAN_RI, fontFamily: fontFamilyName, borderColor: theme.primary + '40' }]}
+              style={[styles.customInput, { color: theme.text, fontFamily: fontFamilyName, borderColor: theme.primary + '40' }]}
               placeholder="輸入自定義類型"
               placeholderTextColor={paletteColors.XUAN_RI + '60'}
               value={customType}
@@ -218,7 +276,7 @@ export default function AddReminderScreen() {
                 onPress={() => setFrequency(f.key)}
               >
                 <Text style={[styles.chipText, {
-                  color: frequency === f.key ? '#FFFFFF' : theme.primary,
+                  color: frequency === f.key ? theme.background : theme.primary,
                   fontFamily: fontFamilyName,
                 }]}>{f.label}</Text>
               </Pressable>
@@ -231,7 +289,7 @@ export default function AddReminderScreen() {
               <View style={styles.everyNRow}>
                 <Text style={[styles.subLabel, { color: theme.primary, fontFamily: fontFamilyName }]}>每</Text>
                 <TextInput
-                  style={[styles.nInput, { color: paletteColors.XUAN_RI, fontFamily: fontFamilyName, borderColor: theme.primary }]}
+                  style={[styles.nInput, { color: theme.text, fontFamily: fontFamilyName, borderColor: theme.primary }]}
                   value={everyNDays}
                   onChangeText={setEveryNDays}
                   keyboardType="number-pad"
@@ -248,7 +306,7 @@ export default function AddReminderScreen() {
                   onPress={() => setShowCalendar(true)}
                 >
                   <Text style={[styles.dateText, {
-                    color: startDate ? paletteColors.XUAN_RI : paletteColors.XUAN_RI + '60',
+                    color: startDate ? theme.text : theme.text + '60',
                     fontFamily: fontFamilyName,
                   }]}>
                     {startDate || '選擇日期'}
@@ -275,7 +333,7 @@ export default function AddReminderScreen() {
                     onPress={() => toggleWeekDay(idx)}
                   >
                     <Text style={[styles.weekDayText, {
-                      color: selectedWeekDays.includes(idx) ? '#FFFFFF' : theme.primary,
+                      color: selectedWeekDays.includes(idx) ? theme.background : theme.primary,
                       fontFamily: fontFamilyName,
                     }]}>{day}</Text>
                   </Pressable>
@@ -290,7 +348,7 @@ export default function AddReminderScreen() {
           <Text style={labelStyle}>時間</Text>
           <View style={styles.timeRow}>
             <TextInput
-              style={[styles.timeInput, { color: paletteColors.XUAN_RI, fontFamily: fontFamilyName, borderColor: theme.primary }]}
+              style={[styles.timeInput, { color: theme.text, fontFamily: fontFamilyName, borderColor: theme.primary }]}
               value={hour}
               onChangeText={setHour}
               keyboardType="number-pad"
@@ -299,7 +357,7 @@ export default function AddReminderScreen() {
             />
             <Text style={[styles.timeColon, { color: theme.primary, fontFamily: fontFamilyName }]}>:</Text>
             <TextInput
-              style={[styles.timeInput, { color: paletteColors.XUAN_RI, fontFamily: fontFamilyName, borderColor: theme.primary }]}
+              style={[styles.timeInput, { color: theme.text, fontFamily: fontFamilyName, borderColor: theme.primary }]}
               value={minute}
               onChangeText={setMinute}
               keyboardType="number-pad"
@@ -314,9 +372,9 @@ export default function AddReminderScreen() {
           <View style={styles.noteRow}>
             <Text style={labelStyle}>備註</Text>
             <TextInput
-              style={[styles.noteInput, { color: paletteColors.XUAN_RI, fontFamily: fontFamilyName }]}
+              style={[styles.noteInput, { color: theme.text, fontFamily: fontFamilyName, borderBottomColor: theme.text + '20' }]}
               placeholder="食物添加維生素"
-              placeholderTextColor={paletteColors.XUAN_RI + '40'}
+              placeholderTextColor={theme.text + '40'}
               value={note}
               onChangeText={setNote}
             />
@@ -327,7 +385,7 @@ export default function AddReminderScreen() {
       {/* ========== 日曆 Modal ========== */}
       <Modal visible={showCalendar} transparent animationType="fade" onRequestClose={() => setShowCalendar(false)}>
         <Pressable style={styles.modalOverlay} onPress={() => setShowCalendar(false)}>
-          <Pressable style={styles.modalContent} onPress={e => e.stopPropagation()}>
+          <Pressable style={[styles.modalContent, { backgroundColor: theme.background }]} onPress={e => e.stopPropagation()}>
             {/* 年月導覽 */}
             <View style={styles.yearMonthNav}>
               <View style={styles.navGroup}>
@@ -415,7 +473,7 @@ const styles = StyleSheet.create({
   formCard: {
     width: '96%',
     alignSelf: 'center',
-    backgroundColor: paletteColors.RI_CHU,
+    backgroundColor: '#FFFEFA',
     borderRadius: 20,
     paddingVertical: 24,
     paddingHorizontal: 24,
@@ -574,7 +632,7 @@ const styles = StyleSheet.create({
   },
   modalContent: {
     width: '85%',
-    backgroundColor: paletteColors.RI_CHU,
+    backgroundColor: '#FFFEFA',
     borderRadius: 20,
     padding: 20,
     shadowColor: '#000',

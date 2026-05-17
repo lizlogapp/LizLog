@@ -214,7 +214,7 @@ export default function HomeScreen() {
         )}
 
         {/* 卡片 1：當前顯示 / 寵物切換下拉選單 */}
-        <View style={[styles.cardHeader, isDropdownVisible ? { zIndex: 100 } : { zIndex: 1 }]}>
+        <View style={[styles.cardHeader, isDropdownVisible ? { zIndex: 100 } : { zIndex: 1 }, { backgroundColor: theme.background }]}>
           <Text style={[styles.headerLabel, { color: theme.primary, fontFamily: fontFamilyName }]}>當前顯示</Text>
           <Pressable
             onPress={() => {
@@ -232,7 +232,7 @@ export default function HomeScreen() {
 
           {/* 懸浮下拉選單 (Dropdown) */}
           {isDropdownVisible && availablePets.length > 0 && (
-            <View style={styles.dropdownModal}>
+            <View style={[styles.dropdownModal, { backgroundColor: theme.background }]}>
               <View style={styles.dropdownTail} />
               <ScrollView
                 style={styles.dropdownScroll}
@@ -252,7 +252,7 @@ export default function HomeScreen() {
                       setIsDropdownVisible(false);
                     }}
                   >
-                    <Text style={[styles.dropdownItemText, { color: theme.primary, fontFamily: fontFamilyName }]}>
+                    <Text style={[styles.dropdownItemText, { color: theme.text, fontFamily: fontFamilyName }]}>
                       {pet}
                     </Text>
                   </Pressable>
@@ -263,7 +263,7 @@ export default function HomeScreen() {
         </View>
 
         {/* 卡片 2：未連接感測器 & 快速紀錄 (四功能) */}
-        <View style={styles.sensorCardBlock}>
+        <View style={[styles.sensorCardBlock, { backgroundColor: theme.background }]}>
           <View style={styles.sensorTopHalf}>
             {!isConnected ? (
               <Pressable onPress={() => router.push('/settings')}>
@@ -277,7 +277,7 @@ export default function HomeScreen() {
                     <Text style={[styles.sensorDataChar, { color: theme.primary, fontFamily: fontFamilyName }]}>溫</Text>
                     <Text style={[styles.sensorDataChar, { color: theme.primary, fontFamily: fontFamilyName }]}>度</Text>
                   </View>
-                  <Text style={[styles.sensorDataValue, { color: '#666666', fontFamily: fontFamilyName }]}>31°C</Text>
+                  <Text style={[styles.sensorDataValue, { color: theme.text, fontFamily: fontFamilyName }]}>31°C</Text>
                 </View>
 
                 {/* 濕度區塊 */}
@@ -286,7 +286,7 @@ export default function HomeScreen() {
                     <Text style={[styles.sensorDataChar, { color: theme.primary, fontFamily: fontFamilyName }]}>濕</Text>
                     <Text style={[styles.sensorDataChar, { color: theme.primary, fontFamily: fontFamilyName }]}>度</Text>
                   </View>
-                  <Text style={[styles.sensorDataValue, { color: '#666666', fontFamily: fontFamilyName }]}>30%</Text>
+                  <Text style={[styles.sensorDataValue, { color: theme.text, fontFamily: fontFamilyName }]}>30%</Text>
                 </View>
               </View>
             )}
@@ -294,27 +294,27 @@ export default function HomeScreen() {
 
           <View style={styles.actionIconsRow}>
             <Pressable onPress={() => toggleIcon('basking')}>
-              <Image source={activeIcons.basking ? require('../../assets/icons/category-basking-active.png') : require('../../assets/icons/category-basking-default.png')} style={styles.actionIcon} />
+              <Image source={activeIcons.basking ? require('../../assets/icons/category-basking-active.png') : require('../../assets/icons/category-basking-default.png')} style={[styles.actionIcon, { tintColor: activeIcons.basking ? theme.primary : theme.accentHot }]} />
             </Pressable>
             <Pressable onPress={() => toggleIcon('food')}>
-              <Image source={activeIcons.food ? require('../../assets/icons/category-food-active.png') : require('../../assets/icons/category-food-default.png')} style={styles.actionIcon} />
+              <Image source={activeIcons.food ? require('../../assets/icons/category-food-active.png') : require('../../assets/icons/category-food-default.png')} style={[styles.actionIcon, { tintColor: activeIcons.food ? theme.primary : theme.accentHot }]} />
             </Pressable>
             <Pressable onPress={() => toggleIcon('bath')}>
-              <Image source={activeIcons.bath ? require('../../assets/icons/category-bath-active.png') : require('../../assets/icons/category-bath-default.png')} style={styles.actionIcon} />
+              <Image source={activeIcons.bath ? require('../../assets/icons/category-bath-active.png') : require('../../assets/icons/category-bath-default.png')} style={[styles.actionIcon, { tintColor: activeIcons.bath ? theme.primary : theme.accentHot }]} />
             </Pressable>
             <Pressable onPress={() => toggleIcon('poop')}>
-              <Image source={activeIcons.poop ? require('../../assets/icons/category-poop-active.png') : require('../../assets/icons/category-poop-default.png')} style={styles.actionIcon} />
+              <Image source={activeIcons.poop ? require('../../assets/icons/category-poop-active.png') : require('../../assets/icons/category-poop-default.png')} style={[styles.actionIcon, { tintColor: activeIcons.poop ? theme.primary : theme.accentHot }]} />
             </Pressable>
           </View>
         </View>
 
         {/* 卡片 3：提醒事項 */}
-        <View style={styles.reminderCardBlock}>
+        <View style={[styles.reminderCardBlock, { backgroundColor: theme.background }]}>
           {reminders.map((reminder) => (
-            <View key={reminder.id} style={styles.reminderItem}>
+            <View key={reminder.id} style={[styles.reminderItem, { backgroundColor: theme.background }]}>
               {/* 拖拉與打卡 */}
               <View style={styles.reminderLeft}>
-                <Image source={require('../../assets/icons/icon-drag.png')} style={styles.dragIcon} />
+                <Image source={require('../../assets/icons/icon-drag.png')} style={[styles.dragIcon, { tintColor: theme.primary }]} />
                 <Pressable onPress={() => toggleReminder(reminder.id)} style={styles.checkboxContainer}>
                   <Image
                     source={
@@ -322,7 +322,7 @@ export default function HomeScreen() {
                         ? require('../../assets/icons/checkbox-checked.png')
                         : require('../../assets/icons/checkbox-unchecked.png')
                     }
-                    style={styles.checkboxIcon}
+                    style={[styles.checkboxIcon, { tintColor: reminder.checked ? theme.panelBackground : theme.primary }]}
                   />
                 </Pressable>
               </View>
@@ -333,7 +333,7 @@ export default function HomeScreen() {
                 onPress={() => router.push('/(tabs)/pets/reminder')}
               >
                 {!!reminder.pet && (
-                  <Text style={[styles.reminderPet, { color: theme.primary, fontFamily: fontFamilyName }]}>
+                  <Text style={[styles.reminderPet, { color: theme.text, fontFamily: fontFamilyName }]}>
                     {reminder.pet}
                   </Text>
                 )}
@@ -357,7 +357,7 @@ export default function HomeScreen() {
         {/* 卡片 4：新增/顯示最近一篇日記 */}
         {!latestDiary ? (
           <Pressable
-            style={styles.diaryBlock}
+            style={[styles.diaryBlock, { backgroundColor: theme.background }]}
             onPress={() => router.push('/diary')}
           >
             <Text style={[styles.diaryText, { color: theme.primary, fontFamily: fontFamilyName }]}>
@@ -367,7 +367,7 @@ export default function HomeScreen() {
           </Pressable>
         ) : (
           <Pressable
-            style={styles.diaryBlockActive}
+            style={[styles.diaryBlockActive, { backgroundColor: theme.background }]}
             onPress={() => router.push('/diary/view')}
           >
             {/* 左側：精緻雜誌風資訊區塊 (資料綁定) */}

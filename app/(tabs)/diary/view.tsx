@@ -15,7 +15,6 @@ import { getThemeTokens } from '../../../src/theme/themeSettings';
 import { getFontSize } from '../../../src/theme/typographySettings';
 import { FloatingActionBar } from '../../../src/components/FloatingActionBar';
 import { BaseScreen } from '../../../src/components/common/BaseScreen';
-import { paletteColors } from '../../../src/theme/themeColorSettings';
 
 // SVG Icons
 // @ts-ignore
@@ -49,7 +48,7 @@ export default function DiaryViewScreen() {
   const { themeId, fontFamilyName } = useTheme();
   const theme = getThemeTokens(themeId);
   const labelColor = theme.primary;
-  const valueColor = paletteColors.LIE_RI;
+  const valueColor = theme.accentHot;
 
   // 模擬日記資料（未來從資料庫根據 diaryId 取得）
   const mockDiary = {
@@ -134,7 +133,7 @@ export default function DiaryViewScreen() {
           showsVerticalScrollIndicator={false}
         >
           {/* ===== 卡片一：照片輪播 + 資訊 ===== */}
-          <View style={styles.mainCard}>
+          <View style={[styles.mainCard, { backgroundColor: theme.background }]}>
             <View style={styles.carouselContainer}>
               <ScrollView
                 ref={carouselRef}
@@ -166,8 +165,8 @@ export default function DiaryViewScreen() {
 
               {/* 寵物標籤 */}
               <View style={styles.petTagsContainer}>
-                <View style={styles.petTag}>
-                  <Text style={[styles.petTagText, { color: labelColor, fontFamily: fontFamilyName }]}>{mockDiary.petName}</Text>
+                <View style={[styles.petTag, { backgroundColor: theme.accentDawn }]}>
+                  <Text style={[styles.petTagText, { color: theme.primary, fontFamily: fontFamilyName }]}>{mockDiary.petName}</Text>
                 </View>
               </View>
             </View>
@@ -193,13 +192,13 @@ export default function DiaryViewScreen() {
           </View>
 
           {/* ===== 卡片二：日記全文 ===== */}
-          <View style={styles.contentCard}>
+          <View style={[styles.contentCard, { backgroundColor: theme.background }]}>
             <Text style={[styles.contentTitle, { color: labelColor, fontFamily: fontFamilyName }]}>{mockDiary.title}</Text>
             <Text style={[styles.contentBody, { color: theme.text, fontFamily: fontFamilyName }]}>{mockDiary.content}</Text>
           </View>
 
           {/* ===== 卡片三：狀態紀錄 ===== */}
-          <View style={styles.detailCard}>
+          <View style={[styles.detailCard, { backgroundColor: theme.background }]}>
             {recordItems.map((item, idx) => {
               const IconComp = item.icon;
               return (
@@ -217,7 +216,7 @@ export default function DiaryViewScreen() {
           </View>
 
           {/* ===== 卡片四：附件照片 ===== */}
-          <View style={styles.attachmentCard}>
+          <View style={[styles.attachmentCard, { backgroundColor: theme.background }]}>
             <View style={styles.attachmentRow}>
               {mockDiary.attachments.map((img, idx) => (
                 <Pressable key={idx} onPress={() => setFullscreenImage(img)} style={styles.thumbnailWrapper}>
@@ -306,7 +305,7 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   petTag: {
-    backgroundColor: '#FFF1D0',
+
     paddingVertical: 4,
     paddingHorizontal: 14,
     borderTopRightRadius: 4,
@@ -391,7 +390,7 @@ const styles = StyleSheet.create({
   // ===== 狀態紀錄卡片 =====
   detailCard: {
     width: '100%',
-    backgroundColor: paletteColors.RI_CHU,
+
     borderRadius: 16,
     padding: 20,
     gap: 14,

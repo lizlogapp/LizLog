@@ -6,7 +6,6 @@ import { getThemeTokens } from '../../../src/theme/themeSettings';
 import { getFontSize } from '../../../src/theme/typographySettings';
 import { FloatingActionBar } from '../../../src/components/FloatingActionBar';
 import { BaseScreen } from '../../../src/components/common/BaseScreen';
-import { paletteColors } from '../../../src/theme/themeColorSettings';
 
 // SVG Icons
 // @ts-ignore
@@ -52,7 +51,7 @@ export default function AddDiaryScreen() {
 
   // 色彩定義
   const labelColor = theme.primary;           // 色票/主色 用於標籤文字（溫度：、濕度：等）
-  const valueColor = paletteColors.LIE_RI;    // 色票/輔色-烈日 用於可編輯數據
+  const valueColor = theme.accentHot;    // 顏色/標準色/輔色-烈日 用於可編輯數據
 
   // 寵物選單狀態
   const [availablePets] = useState<string[]>(['DELETE', 'CTRL', 'ENTER', 'ALT']);
@@ -128,9 +127,9 @@ export default function AddDiaryScreen() {
           showsVerticalScrollIndicator={false}
         >
           {/* ===== 卡片一：照片 + 寵物標籤 + 日期資訊 ===== */}
-          <View style={styles.mainCard}>
+          <View style={[styles.mainCard, { backgroundColor: theme.background }]}>
             {/* 照片區域 */}
-            <View style={styles.photoArea}>
+            <View style={[styles.photoArea, { backgroundColor: theme.accentNoon }]}>
               {/* 新增照片按鈕 */}
               <Pressable style={styles.addPhotoButton} onPress={() => { /* TODO: 開啟相簿 */ }}>
                 <Image
@@ -143,7 +142,7 @@ export default function AddDiaryScreen() {
               <View style={[styles.petTagsContainer, { zIndex: 1000 }]}>
                 <Pressable onPress={() => setIsPetDropdownVisible(!isPetDropdownVisible)}>
                   {selectedPets.map((pet, idx) => (
-                    <View key={idx} style={styles.petTag}>
+                    <View key={idx} style={[styles.petTag, { backgroundColor: theme.accentDawn }]}>
                       <Text style={[styles.petTagText, { color: theme.primary, fontFamily: fontFamilyName }]}>{pet}</Text>
                     </View>
                   ))}
@@ -151,7 +150,7 @@ export default function AddDiaryScreen() {
 
                 {/* 寵物選擇下拉選單 */}
                 {isPetDropdownVisible && (
-                  <View style={styles.petDropdownModal}>
+                  <View style={[styles.petDropdownModal, { backgroundColor: theme.background }]}>
                     <ScrollView
                       style={styles.petDropdownScroll}
                       showsVerticalScrollIndicator={false}
@@ -162,7 +161,7 @@ export default function AddDiaryScreen() {
                           key={pet}
                           style={[
                             styles.petDropdownItem,
-                            selectedPets.includes(pet) && styles.petDropdownItemActive,
+                            selectedPets.includes(pet) && { backgroundColor: 'rgba(255, 195, 0, 0.3)', borderWidth: 1.5, borderColor: theme.accentHot },
                             idx === availablePets.length - 1 && { marginBottom: 0 },
                           ]}
                           onPress={() => togglePet(pet)}
@@ -220,7 +219,7 @@ export default function AddDiaryScreen() {
           </View>
 
           {/* ===== 卡片二：詳細狀態紀錄 ===== */}
-          <View style={styles.detailCard}>
+          <View style={[styles.detailCard, { backgroundColor: theme.background }]}>
             {recordItems.map((item, idx) => {
               const IconComp = item.icon;
               return (
@@ -239,14 +238,14 @@ export default function AddDiaryScreen() {
 
           {/* ===== 卡片三：寫日記（可展開） ===== */}
           <Pressable
-            style={styles.actionCard}
+            style={[styles.actionCard, { backgroundColor: theme.background }]}
             onPress={() => setIsDiaryExpanded(!isDiaryExpanded)}
           >
             <IconDiaryWrite width={28} height={28} color={theme.primary} />
           </Pressable>
 
           {isDiaryExpanded && (
-            <View style={styles.diaryEditCard}>
+            <View style={[styles.diaryEditCard, { backgroundColor: theme.background }]}>
               {/* 標題編輯 */}
               <TextInput
                 style={[styles.diaryTitleInput, { color: valueColor, fontFamily: fontFamilyName }]}
@@ -270,15 +269,15 @@ export default function AddDiaryScreen() {
 
           {/* ===== 卡片四：上傳（可展開新增照片/檔案） ===== */}
           <Pressable
-            style={styles.actionCard}
+            style={[styles.actionCard, { backgroundColor: theme.background }]}
             onPress={() => setIsUploadExpanded(!isUploadExpanded)}
           >
             <IconUploadSvg width={28} height={28} color={theme.primary} />
           </Pressable>
 
           {isUploadExpanded && (
-            <View style={styles.uploadExpandedCard}>
-              <Pressable style={styles.uploadAddButton} onPress={() => { /* TODO: 開啟檔案選擇器 */ }}>
+            <View style={[styles.uploadExpandedCard, { backgroundColor: theme.background }]}>
+              <Pressable style={[styles.uploadAddButton, { borderColor: theme.primary }]} onPress={() => { /* TODO: 開啟檔案選擇器 */ }}>
                 <Image
                   source={require('../../../assets/icons/icon-image.png')}
                   style={[styles.uploadAddIcon, { tintColor: theme.primary }]}
@@ -310,7 +309,7 @@ const styles = StyleSheet.create({
   mainCard: {
     width: '96%',
     alignSelf: 'center',
-    backgroundColor: '#FFFFFF',
+
     borderRadius: 16,
     overflow: 'visible',
     shadowColor: '#000000',
@@ -322,7 +321,7 @@ const styles = StyleSheet.create({
   photoArea: {
     width: '100%',
     height: 200,
-    backgroundColor: paletteColors.WU_JIN,
+
     borderTopLeftRadius: 16,
     borderTopRightRadius: 16,
     alignItems: 'center',
@@ -349,7 +348,7 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   petTag: {
-    backgroundColor: '#FFF1D0',
+
     paddingVertical: 4,
     paddingHorizontal: 14,
     borderTopRightRadius: 4,
@@ -391,7 +390,7 @@ const styles = StyleSheet.create({
   petDropdownItemActive: {
     backgroundColor: 'rgba(255, 195, 0, 0.3)',
     borderWidth: 1.5,
-    borderColor: paletteColors.LIE_RI,
+    borderColor: '#FFC500',
   },
   petDropdownItemText: {
     fontSize: getFontSize(16, 'medium'),
@@ -456,7 +455,7 @@ const styles = StyleSheet.create({
   detailCard: {
     width: '96%',
     alignSelf: 'center',
-    backgroundColor: paletteColors.RI_CHU,
+
     borderRadius: 16,
     padding: 20,
     gap: 14,
@@ -482,7 +481,7 @@ const styles = StyleSheet.create({
   actionCard: {
     width: '96%',
     alignSelf: 'center',
-    backgroundColor: paletteColors.RI_CHU,
+
     borderRadius: 16,
     paddingVertical: 16,
     alignItems: 'center',
@@ -525,7 +524,7 @@ const styles = StyleSheet.create({
   uploadExpandedCard: {
     width: '96%',
     alignSelf: 'center',
-    backgroundColor: paletteColors.RI_CHU,
+
     borderRadius: 16,
     padding: 24,
     alignItems: 'center',
@@ -543,7 +542,7 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     paddingHorizontal: 24,
     borderWidth: 1.5,
-    borderColor: paletteColors.XIA_RI,
+    borderColor: '#FF7300',
     borderRadius: 12,
     borderStyle: 'dashed',
   },

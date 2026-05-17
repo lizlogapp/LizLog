@@ -4,7 +4,7 @@ import Svg, { Polyline } from 'react-native-svg';
 import { useRouter } from 'expo-router';
 import { useTheme } from '../../src/theme/ThemeContext';
 import { getThemeTokens } from '../../src/theme/themeSettings';
-import { paletteColors } from '../../src/theme/themeColorSettings';
+
 import { getFontSize } from '../../src/theme/typographySettings';
 import { BaseScreen } from '../../src/components/common/BaseScreen';
 
@@ -261,7 +261,7 @@ export default function AnalyticsScreen() {
         )}
 
         {/* 第一個卡片容器：當前顯示 (包含寵物選單) */}
-        <View style={[styles.cardHeader, isDropdownVisible ? { zIndex: 100 } : { zIndex: 1 }]}>
+        <View style={[styles.cardHeader, isDropdownVisible ? { zIndex: 100 } : { zIndex: 1 }, { backgroundColor: theme.background }]}>
           <Text style={[styles.headerLabel, { color: theme.primary, fontFamily: fontFamilyName }]}>當前顯示</Text>
           <Pressable 
             onPress={() => {
@@ -279,7 +279,7 @@ export default function AnalyticsScreen() {
 
           {/* 懸浮下拉選單 */}
           {isDropdownVisible && availablePets.length > 0 && (
-            <View style={styles.dropdownModal}>
+            <View style={[styles.dropdownModal, { backgroundColor: theme.background }]}>
               <View style={styles.dropdownTail} />
               <ScrollView
                 style={styles.dropdownScroll}
@@ -311,7 +311,7 @@ export default function AnalyticsScreen() {
 
         {/* 第二個卡片：最新狀態紀錄 (點擊可展開詳細卡片，常保外陰影) */}
         <Pressable
-          style={styles.actionButton}
+          style={[styles.actionButton, { backgroundColor: theme.background }]}
           onPress={() => setIsRecordsExpanded(!isRecordsExpanded)}
         >
           <Text style={[styles.headerLabel, { color: theme.primary, fontFamily: fontFamilyName }]}>最新狀態紀錄</Text>
@@ -321,7 +321,7 @@ export default function AnalyticsScreen() {
         {isRecordsExpanded && (
           <View style={styles.recordsContainer}>
             {/* 溫度卡片 */}
-            <View style={styles.recordCard}>
+            <View style={[styles.recordCard, { backgroundColor: theme.background }]}>
               <View style={styles.recordTitleRow}>
                 <IconTemp width={24} height={24} color={theme.primary} style={styles.recordIcon} />
                 <Text style={[styles.recordTitle, { color: theme.primary, fontFamily: fontFamilyName }]}>溫度</Text>
@@ -336,7 +336,7 @@ export default function AnalyticsScreen() {
             </View>
 
             {/* 濕度卡片 */}
-            <View style={styles.recordCard}>
+            <View style={[styles.recordCard, { backgroundColor: theme.background }]}>
               <View style={styles.recordTitleRow}>
                 <IconHumid width={24} height={24} color={theme.primary} style={styles.recordIcon} />
                 <Text style={[styles.recordTitle, { color: theme.primary, fontFamily: fontFamilyName }]}>濕度</Text>
@@ -351,7 +351,7 @@ export default function AnalyticsScreen() {
             </View>
 
             {/* 日照卡片 */}
-            <View style={styles.recordCard}>
+            <View style={[styles.recordCard, { backgroundColor: theme.background }]}>
               <View style={styles.recordTitleRow}>
                 <IconBask width={24} height={24} color={theme.primary} style={styles.recordIcon} />
                 <Text style={[styles.recordTitle, { color: theme.primary, fontFamily: fontFamilyName }]}>日照</Text>
@@ -364,7 +364,7 @@ export default function AnalyticsScreen() {
             </View>
 
             {/* 飲食卡片 */}
-            <View style={styles.recordCard}>
+            <View style={[styles.recordCard, { backgroundColor: theme.background }]}>
               <View style={styles.recordTitleRow}>
                 <IconFeed width={24} height={24} color={theme.primary} style={styles.recordIcon} />
                 <Text style={[styles.recordTitle, { color: theme.primary, fontFamily: fontFamilyName }]}>飲食</Text>
@@ -377,7 +377,7 @@ export default function AnalyticsScreen() {
             </View>
 
             {/* 泡澡卡片 */}
-            <View style={styles.recordCard}>
+            <View style={[styles.recordCard, { backgroundColor: theme.background }]}>
               <View style={styles.recordTitleRow}>
                 <IconBath width={24} height={24} color={theme.primary} style={styles.recordIcon} />
                 <Text style={[styles.recordTitle, { color: theme.primary, fontFamily: fontFamilyName }]}>泡澡</Text>
@@ -390,7 +390,7 @@ export default function AnalyticsScreen() {
             </View>
 
             {/* 排便卡片 */}
-            <View style={styles.recordCard}>
+            <View style={[styles.recordCard, { backgroundColor: theme.background }]}>
               <View style={styles.recordTitleRow}>
                 <IconPoop width={24} height={24} color={theme.primary} style={styles.recordIcon} />
                 <Text style={[styles.recordTitle, { color: theme.primary, fontFamily: fontFamilyName }]}>排便</Text>
@@ -403,7 +403,7 @@ export default function AnalyticsScreen() {
             </View>
 
             {/* 體重卡片 */}
-            <View style={styles.recordCard}>
+            <View style={[styles.recordCard, { backgroundColor: theme.background }]}>
               <View style={styles.recordTitleRow}>
                 <IconWeight width={24} height={24} color={theme.primary} style={styles.recordIcon} />
                 <Text style={[styles.recordTitle, { color: theme.primary, fontFamily: fontFamilyName }]}>體重</Text>
@@ -416,7 +416,7 @@ export default function AnalyticsScreen() {
             </View>
 
             {/* 身長卡片 */}
-            <View style={styles.recordCard}>
+            <View style={[styles.recordCard, { backgroundColor: theme.background }]}>
               <View style={styles.recordTitleRow}>
                 <IconLength width={24} height={24} color={theme.primary} style={styles.recordIcon} />
                 <Text style={[styles.recordTitle, { color: theme.primary, fontFamily: fontFamilyName }]}>身長</Text>
@@ -515,8 +515,14 @@ export default function AnalyticsScreen() {
             <React.Fragment key={index}>
               <Pressable
                 style={[
-                  styles.actionButton, 
-                  isExpanded && { marginBottom: 0, borderBottomLeftRadius: 0, borderBottomRightRadius: 0, boxShadow: 'none' } // 展開時移除底部圓角與陰影，讓下方卡片接續
+                  styles.actionButton,
+                  isExpanded && {
+                    borderBottomLeftRadius: 0,
+                    borderBottomRightRadius: 0,
+                    marginBottom: 0,
+                    elevation: 0, // 展開時取消底部陰影，與下方內容卡片相連
+                  },
+                  { backgroundColor: theme.background }
                 ]}
                 onPress={() => {
                   setExpandedChart(isExpanded ? null : btn.text);
@@ -532,7 +538,7 @@ export default function AnalyticsScreen() {
 
               {/* 展開後的圖表卡片區塊 */}
               {isExpanded && (
-                <View style={styles.chartCard}>
+                <View style={[styles.chartCard, { backgroundColor: theme.background }]}>
                   {(btn.text === '排便日曆' || btn.text === '蛻皮日曆') ? (
                     (() => {
                       const calYear = calendarDate.getFullYear();
@@ -555,7 +561,7 @@ export default function AnalyticsScreen() {
                         }
                       };
                       const eventDays = getMockEvents(btn.text, calMonth);
-                      const bgColor = paletteColors.MU_CHENG; // 統一使用橘色
+                      const bgColor = theme.secondary;
 
                       return (
                         <View style={{ paddingVertical: 16, paddingHorizontal: 8 }}>
@@ -635,10 +641,10 @@ export default function AnalyticsScreen() {
                     {availableTabs.map((tab) => (
                       <Pressable
                         key={tab}
-                        style={[styles.chartTab, displayTab === tab && styles.chartTabActive]}
+                        style={[styles.chartTab, displayTab === tab && [styles.chartTabActive, { backgroundColor: theme.panelBackground }]]}
                         onPress={() => setActiveChartTab(tab)}
                       >
-                        <Text style={[styles.chartTabText, displayTab === tab && styles.chartTabTextActive, { fontFamily: fontFamilyName }]}>{tab}</Text>
+                        <Text style={[styles.chartTabText, { color: theme.primary, fontFamily: fontFamilyName }]}>{tab}</Text>
                       </Pressable>
                     ))}
                   </View>
@@ -648,7 +654,7 @@ export default function AnalyticsScreen() {
                     {/* 左側 Y 軸標籤 */}
                     <View style={styles.yAxisContainer}>
                       {yAxisLabels.map((val, i) => (
-                        <Text key={i} style={[styles.yAxisLabel, { fontFamily: fontFamilyName }]}>{val}</Text>
+                        <Text key={i} style={[styles.yAxisLabel, { color: theme.primary }, { fontFamily: fontFamilyName }]}>{val}</Text>
                       ))}
                     </View>
 
@@ -656,7 +662,12 @@ export default function AnalyticsScreen() {
                     <View style={styles.chartArea}>
                       {/* 背景水平格線 */}
                       {yAxisLabels.map((_, i) => (
-                        <View key={i} style={[styles.chartGridLine, { top: `${(i / (yAxisLabels.length - 1)) * 100}%` }]} />
+                        <View key={i} style={[styles.chartGridLine, { borderColor: theme.primary, top: `${(i / (yAxisLabels.length - 1)) * 100}%` }]} />
+                      ))}
+                      
+                      {/* 背景垂直格線 (與 X 軸對齊) */}
+                      {processedData.map((_: any, i: number) => (
+                        <View key={`v-${i}`} style={[styles.chartGridLineVertical, { borderColor: theme.primary, left: `${((2 * i + 1) / (2 * processedData.length)) * 100}%` }]} />
                       ))}
                       
                       {/* 圖表內容區：長條圖 或 折線圖 */}
@@ -672,7 +683,7 @@ export default function AnalyticsScreen() {
                             <Polyline 
                               points={polylinePoints} 
                               fill="none" 
-                              stroke={paletteColors.MU_CHENG} 
+                              stroke={theme.primary} 
                               strokeWidth="2" 
                               vectorEffect="non-scaling-stroke" 
                             />
@@ -682,35 +693,49 @@ export default function AnalyticsScreen() {
                         {processedData.map((data: any, idx: number) => {
                           return (
                             <View key={idx} style={styles.chartBarCol}>
-                              <View style={[styles.chartBarWrapper, isLineChart && { backgroundColor: 'transparent', boxShadow: 'none' }]}>
+                              <View style={[styles.chartBarWrapper, isLineChart && { backgroundColor: 'transparent', boxShadow: 'none' }, !isLineChart && { backgroundColor: theme.panelBackground }]}>
                                  {isLineChart ? (
                                    // 折線圖的圓點
-                                   <View 
-                                     style={{
-                                       width: 10,
-                                       height: 10,
-                                       borderRadius: 5,
-                                       backgroundColor: '#FFFFFF',
-                                       borderWidth: 2,
-                                       borderColor: paletteColors.MU_CHENG,
-                                       position: 'absolute',
-                                       bottom: `${data.heightPercent}%`,
-                                       marginBottom: -5 // 對齊圓心
-                                     }}
-                                   />
+                                     <>
+                                       <View 
+                                         style={{
+                                           width: 10,
+                                           height: 10,
+                                           borderRadius: 5,
+                                           backgroundColor: theme.background,
+                                           borderWidth: 2,
+                                           borderColor: theme.primary,
+                                           position: 'absolute',
+                                           bottom: `${data.heightPercent}%`,
+                                           marginBottom: -5 // 對齊圓心
+                                         }}
+                                       />
+                                       <Text style={{
+                                         position: 'absolute',
+                                         bottom: `${data.heightPercent}%`, 
+                                         transform: [{ translateY: 20 }], // 向下位移
+                                         color: theme.primary,
+                                         fontSize: getFontSize(12, 'small'),
+                                         fontFamily: fontFamilyName,
+                                         textAlign: 'center',
+                                         width: 30,
+                                       }}>
+                                         {data.val}
+                                       </Text>
+                                     </>
                                  ) : (
                                    // 一般的長條圖
                                    <View 
                                      style={[
                                        styles.chartBarFilled, 
-                                       { height: `${data.heightPercent}%` },
+                                       { height: `${data.heightPercent}%`, backgroundColor: theme.primary },
                                        data.isAbnormal === 'high' && { backgroundColor: '#FF3B30' },
                                        data.isAbnormal === 'low' && { backgroundColor: '#32ADE6' }
                                      ]} 
                                    />
                                  )}
                               </View>
-                              <Text style={[styles.xAxisLabel, { fontFamily: fontFamilyName }]}>{data.label}</Text>
+                              <Text style={[styles.xAxisLabel, { color: theme.primary }, { fontFamily: fontFamilyName }]}>{data.label}</Text>
                             </View>
                           );
                         })}
@@ -722,10 +747,10 @@ export default function AnalyticsScreen() {
 
                   {/* 底部按鈕 */}
                   <Pressable 
-                    style={styles.chartFooterButton}
+                    style={[styles.chartFooterButton, { backgroundColor: theme.background, borderColor: 'transparent', shadowColor: '#000000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.25, shadowRadius: 7, elevation: 4 }]}
                     onPress={() => Alert.alert('提示', '詳細數據清單與報表功能建置中...')}
                   >
-                    <Text style={[styles.chartFooterButtonText, { fontFamily: fontFamilyName }]}>詳細數據</Text>
+                    <Text style={[styles.chartFooterButtonText, { color: theme.primary, fontFamily: fontFamilyName }]}>今日濕度趨勢</Text>
                   </Pressable>
                 </View>
               )}
@@ -746,7 +771,7 @@ const styles = StyleSheet.create({
   cardHeader: {
     width: '96%',
     alignSelf: 'center',
-    backgroundColor: paletteColors.RI_CHU,
+    backgroundColor: '#FFFEFA',
     borderRadius: 16,
     height: 55,
     paddingHorizontal: 24,
@@ -759,7 +784,7 @@ const styles = StyleSheet.create({
   actionButton: {
     width: '96%',
     alignSelf: 'center',
-    backgroundColor: paletteColors.RI_CHU,
+    backgroundColor: '#FFFEFA',
     borderRadius: 16,
     height: 55,
     paddingHorizontal: 24,
@@ -827,7 +852,7 @@ const styles = StyleSheet.create({
   recordCard: {
     width: '96%',
     alignSelf: 'center',
-    backgroundColor: paletteColors.RI_CHU,
+    backgroundColor: '#FFFEFA',
     borderRadius: 8,
     padding: 16,
     marginBottom: 16,
@@ -865,13 +890,12 @@ const styles = StyleSheet.create({
   chartCard: {
     width: '96%',
     alignSelf: 'center',
-    backgroundColor: paletteColors.RI_CHU,
     borderBottomLeftRadius: 16,
     borderBottomRightRadius: 16,
     padding: 24,
     paddingTop: 16,
     marginBottom: 16,
-    boxShadow: '0px 4px 7px rgba(0, 0, 0, 0.25)',
+    boxShadow: 'inset 2px 2px 4px rgba(0, 0, 0, 0.25), inset -2px -2px 4px rgba(255, 255, 255, 0.2)',
   },
   chartTabsRow: {
     flexDirection: 'row',
@@ -887,16 +911,14 @@ const styles = StyleSheet.create({
     borderRadius: 20,
   },
   chartTabActive: {
-    backgroundColor: '#FFFFFF', // 模擬 SVG 中高亮背景，或使用邊框
-    borderWidth: 1,
-    borderColor: paletteColors.MU_CHENG, // 橘色邊框
+    boxShadow: 'inset 2px 2px 4px rgba(0, 0, 0, 0.25), inset -2px -2px 4px rgba(255, 255, 255, 0.25)',
   },
   chartTabText: {
     fontSize: getFontSize(16, 'medium'),
     color: '#999999',
   },
   chartTabTextActive: {
-    color: paletteColors.MU_CHENG,
+    // 讓其跟隨 theme.primary（此屬性改為使用 inline style 處理較佳，但若定義在這可用 transparent 避免覆蓋）
   },
   chartMainContainer: {
     flexDirection: 'row',
@@ -925,8 +947,18 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     height: 1,
-    backgroundColor: paletteColors.RI_LUO, // #FFC500 暖黃色格線
-    opacity: 0.5,
+    borderBottomWidth: 1,
+    borderStyle: 'dashed',
+    opacity: 0.3,
+  },
+  chartGridLineVertical: {
+    position: 'absolute',
+    top: 0,
+    bottom: 24, // 預留給 X 軸的空間
+    width: 1,
+    borderRightWidth: 1,
+    borderStyle: 'dashed',
+    opacity: 0.3,
   },
   chartBarsContainer: {
     flex: 1,
@@ -943,7 +975,6 @@ const styles = StyleSheet.create({
   chartBarWrapper: {
     width: 10, // 模擬 SVG 細長條
     height: '85%', // 留白給上下的文字
-    backgroundColor: paletteColors.RI_CHU,
     borderRadius: 5,
     boxShadow: 'inset 2px 2px 4px rgba(0,0,0,0.15)', // 空白進度條內陰影
     justifyContent: 'flex-end',
@@ -952,7 +983,6 @@ const styles = StyleSheet.create({
   },
   chartBarFilled: {
     width: '100%',
-    backgroundColor: paletteColors.MU_CHENG, // 橘色填滿
     borderRadius: 5,
   },
   xAxisLabel: {
@@ -966,10 +996,10 @@ const styles = StyleSheet.create({
     paddingHorizontal: 32,
     borderRadius: 20,
     borderWidth: 1,
-    borderColor: paletteColors.MU_CHENG,
+    borderColor: '#FFAA1E',
   },
   chartFooterButtonText: {
-    color: paletteColors.MU_CHENG,
+    color: '#FFAA1E',
     fontSize: getFontSize(16, 'medium'),
   },
 });

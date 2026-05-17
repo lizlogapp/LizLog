@@ -13,7 +13,8 @@
   },
   "include": [
     "app",
-    "src"
+    "src",
+    "declarations.d.ts"
   ],
   "extends": "expo/tsconfig.base"
 }

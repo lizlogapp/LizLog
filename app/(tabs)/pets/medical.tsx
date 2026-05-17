@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useCallback } from 'react';
 import {
   View,
   Text,
@@ -7,15 +7,15 @@ import {
   Pressable,
   Image,
 } from 'react-native';
-import { useRouter, useLocalSearchParams } from 'expo-router';
+import { useRouter, useLocalSearchParams, useFocusEffect } from 'expo-router';
 import { useTheme } from '../../../src/theme/ThemeContext';
 import { getThemeTokens } from '../../../src/theme/themeSettings';
 import { getFontSize } from '../../../src/theme/typographySettings';
 import { paletteColors } from '../../../src/theme/themeColorSettings';
 import { BaseScreen } from '../../../src/components/common/BaseScreen';
 import { FloatingActionBar } from '../../../src/components/FloatingActionBar';
-// @ts-ignore
 import LizardIllustration from '../../../assets/illustrations/lizard-6.svg';
+import { mockMedicalDB } from './mockMedicalDB';
 
 export default function MedicalScreen() {
   const router = useRouter();
@@ -23,27 +23,15 @@ export default function MedicalScreen() {
   const { themeId, fontFamilyName } = useTheme();
   const theme = getThemeTokens(themeId);
 
-  // 模擬醫護資料
-  const [records, setRecords] = useState([
-    {
-      id: '1',
-      title: '皮膚問題回診',
-      date: '2024.11.15',
-      type: '一般回診',
-      hospital: '布達佩斯動物醫院',
-      note: '測量體重、檢查糞便寄生蟲，開了兩週的驅蟲藥，建議每兩週回診追蹤。',
-      tagColor: '#FF9600'
-    },
-    {
-      id: '2',
-      title: '年度健康檢查',
-      date: '2024.10.01',
-      type: '健康檢查',
-      hospital: '侏羅紀野生動物專科醫院',
-      note: 'X光檢查骨骼發育正常，血檢數值皆在標準範圍內。',
-      tagColor: '#5CD85A'
-    }
-  ]);
+  const [records, setRecords] = useState<any[]>([]);
+
+  useFocusEffect(
+    useCallback(() => {
+      // 轉換 DB 物件為陣列供列表顯示
+      const dataArray = Object.values(mockMedicalDB);
+      setRecords(dataArray);
+    }, [])
+  );
 
   return (
     <BaseScreen
@@ -63,7 +51,7 @@ export default function MedicalScreen() {
       >
         {records.length === 0 ? (
           /* 空狀態 */
-          <View style={styles.emptyCard}>
+          <View style={[styles.emptyCard, { backgroundColor: theme.background }]}>
             <Text style={[styles.emptyTitle, { color: theme.primary, fontFamily: fontFamilyName }]}>
               尚無醫護紀錄
             </Text>
@@ -77,7 +65,7 @@ export default function MedicalScreen() {
             {records.map(record => (
               <Pressable
                 key={record.id}
-                style={styles.recordCard}
+                style={[styles.recordCard, { backgroundColor: theme.background }]}
                 onPress={() => router.push({ pathname: '/(tabs)/pets/medical-detail', params: { id: record.id } })}
               >
                 {/* 左側動態顏色裝飾條 */}
@@ -96,14 +84,14 @@ export default function MedicalScreen() {
                     <Text style={[styles.cardDate, { color: theme.primary, fontFamily: fontFamilyName }]}>
                       {record.date}
                     </Text>
-                    <Text style={[styles.cardHospital, { color: paletteColors.XUAN_RI, fontFamily: fontFamilyName }]}>
+                    <Text style={[styles.cardHospital, { color: theme.text, fontFamily: fontFamilyName }]}>
                       {record.hospital}
                     </Text>
                   </View>
 
                   {/* 備註 */}
                   <View style={styles.cardDetailRow}>
-                    <Text style={[styles.cardNote, { color: paletteColors.XUAN_RI + '90', fontFamily: fontFamilyName }]} numberOfLines={2}>
+                    <Text style={[styles.cardNote, { color: theme.text, fontFamily: fontFamilyName, opacity: 0.9 }]} numberOfLines={2}>
                       {record.note}
                     </Text>
                   </View>
@@ -124,10 +112,19 @@ const styles = StyleSheet.create({
     paddingBottom: 120,
   },
   emptyCard: {
-    flex: 1,
+    backgroundColor: '#FFFEFA',
+    borderRadius: 20,
+    width: '90%',
+    alignSelf: 'center',
+    paddingVertical: 40,
+    paddingHorizontal: 24,
     alignItems: 'center',
-    justifyContent: 'center',
-    paddingTop: 60,
+    gap: 16,
+    shadowColor: '#000000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 8,
+    elevation: 4,
   },
   emptyTitle: {
     fontSize: getFontSize(20, 'medium'),
@@ -145,7 +142,7 @@ const styles = StyleSheet.create({
     gap: 16,
   },
   recordCard: {
-    backgroundColor: paletteColors.RI_CHU,
+    backgroundColor: '#FFFEFA',
     borderRadius: 20,
     flexDirection: 'row',
     overflow: 'hidden',

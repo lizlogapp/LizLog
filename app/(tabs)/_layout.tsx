@@ -29,7 +29,7 @@ function TabsLayoutInner() {
     }
     return (
       <View style={{ width: 50, height: 50, padding: 12, justifyContent: 'center', alignItems: 'center' }}>
-        <IconComponent width="100%" height="100%" preserveAspectRatio="xMidYMid meet" color={theme.text} />
+        <IconComponent width="100%" height="100%" preserveAspectRatio="xMidYMid meet" color="rgba(255, 255, 255, 0.6)" />
       </View>
     );
   };
@@ -41,7 +41,7 @@ function TabsLayoutInner() {
         tabBarShowLabel: false,
         sceneStyle: { backgroundColor: 'transparent' },
         tabBarActiveTintColor: theme.primary,
-        tabBarInactiveTintColor: theme.text,
+        tabBarInactiveTintColor: 'rgba(255, 255, 255, 0.6)',
         tabBarStyle: {
           backgroundColor: 'transparent',
           position: 'absolute',

@@ -6,7 +6,6 @@ import { getThemeTokens } from '../../../src/theme/themeSettings';
 import { getFontSize } from '../../../src/theme/typographySettings';
 import { FloatingActionBar } from '../../../src/components/FloatingActionBar';
 import { BaseScreen } from '../../../src/components/common/BaseScreen';
-import { paletteColors } from '../../../src/theme/themeColorSettings';
 
 /**
  * 年份篩選月曆頁面
@@ -99,7 +98,7 @@ export default function CalendarFilterScreen() {
                 style={[styles.yearSelector, { backgroundColor: theme.panelBackground, zIndex: 1200 }]}
                 onPress={() => setIsYearDropdownVisible(!isYearDropdownVisible)}
               >
-                <Text style={[styles.yearText, { fontFamily: fontFamilyName }]}>{selectedYear}年</Text>
+                <Text style={[styles.yearText, { color: theme.panelPatternText, fontFamily: fontFamilyName }]}>{selectedYear}年</Text>
               </Pressable>
 
               {/* 年份下拉選單 */}
@@ -122,7 +121,7 @@ export default function CalendarFilterScreen() {
                           setIsYearDropdownVisible(false);
                         }}
                       >
-                        <Text style={[styles.dropdownItemText, { fontFamily: fontFamilyName }]}>
+                        <Text style={[styles.dropdownItemText, { color: theme.panelPatternText, fontFamily: fontFamilyName }]}>
                           {year}年
                         </Text>
                       </Pressable>
@@ -134,7 +133,7 @@ export default function CalendarFilterScreen() {
           )}
 
           <Pressable onPress={() => setIsSearchVisible(!isSearchVisible)} style={{ zIndex: 1300 }}>
-            <Image source={require('../../../assets/icons/icon-search.png')} style={[styles.headerIcon, { tintColor: theme.panelBackground }]} />
+            <Image source={require('../../../assets/icons/icon-search.png')} style={[styles.headerIcon, { tintColor: theme.primary }]} />
           </Pressable>
         </View>
 
@@ -151,7 +150,7 @@ export default function CalendarFilterScreen() {
             const rows = Math.ceil(totalCells / 7);
 
             return (
-              <View key={month} style={styles.monthBlock}>
+              <View key={month} style={[styles.monthBlock, { backgroundColor: theme.background }]}>
                 {/* 月份標題 */}
                 <View style={styles.monthHeader}>
                   <Text style={[styles.monthTitle, { color: colorOrange, fontFamily: fontFamilyName }]}>
@@ -256,7 +255,6 @@ const styles = StyleSheet.create({
     shadowRadius: 5,
   },
   yearText: {
-    color: '#FF9600',
     fontSize: getFontSize(16, 'medium'),
     fontWeight: '600',
     textAlign: 'center',
@@ -290,7 +288,6 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(255, 255, 255, 0.2)',
   },
   dropdownItemText: {
-    color: '#FF9600',
     fontSize: getFontSize(16, 'medium'),
     fontWeight: '500',
   },
@@ -317,7 +314,7 @@ const styles = StyleSheet.create({
   },
   monthBlock: {
     width: '100%',
-    backgroundColor: paletteColors.RI_CHU,
+
     borderRadius: 16,
     padding: 16,
     shadowColor: '#000000',

@@ -103,33 +103,33 @@ export const themeTokens: Record<ThemeId, ThemeTokens> = {
     accentNoon: paletteColors.WU_JIN,
     // 底色：日初
     background: paletteColors.RI_CHU,
-    // 面板-圖樣-字樣：日初（延用）
+    // 面板-圖樣-字樣：日初
     panelPatternText: paletteColors.RI_CHU,
     // 面板-底色：暖陽
     panelBackground: paletteColors.NUAN_YANG,
     // 內文：玄日
-    text: baseColors.textBlack,
+    text: paletteColors.XUAN_RI,
   },
 
   // 主題：澄日
   [ThemeId.CHENG_RI_THEME]: {
-    // 主色：FF7300
-    primary: paletteColors.XIA_RI,
-    // 次主色：晨曦 FFF7D7
+    // 主色：日初
+    primary: paletteColors.RI_CHU,
+    // 次主色：晨曦
     secondary: paletteColors.CHEN_XI,
-    // 輔色-烈日：暖陽 FFE691
+    // 輔色-烈日：暖陽
     accentHot: paletteColors.NUAN_YANG,
-    // 輔色-晨曦：FF F7 D7（依你提供的 hex）
-    accentDawn: paletteColors.CHEN_XI,
-    // 輔色-午金：FFD239
+    // 輔色-晨曦：霞日
+    accentDawn: paletteColors.XIA_RI,
+    // 輔色-午金：午金
     accentNoon: paletteColors.WU_JIN,
-    // 底色：暮橙 FFAA1E
+    // 底色：暮橙
     background: paletteColors.MU_CHENG,
-    // 面板-圖樣-字樣：日初（延用）
+    // 面板-圖樣-字樣：日初
     panelPatternText: paletteColors.RI_CHU,
-    // 面板-底色：午金 FFD239
+    // 面板-底色：午金
     panelBackground: paletteColors.WU_JIN,
-    // 內文：白日
+    // 內文：FFFFFF
     text: baseColors.textWhite,
   },
 };

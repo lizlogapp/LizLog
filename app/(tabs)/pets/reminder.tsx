@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useCallback } from 'react';
 import {
   View,
   Text,
@@ -8,7 +8,7 @@ import {
   Switch,
   Image,
 } from 'react-native';
-import { useRouter, useLocalSearchParams } from 'expo-router';
+import { useRouter, useLocalSearchParams, useFocusEffect } from 'expo-router';
 import { useTheme } from '../../../src/theme/ThemeContext';
 import { getThemeTokens } from '../../../src/theme/themeSettings';
 import { getFontSize } from '../../../src/theme/typographySettings';
@@ -17,6 +17,7 @@ import { BaseScreen } from '../../../src/components/common/BaseScreen';
 import { FloatingActionBar } from '../../../src/components/FloatingActionBar';
 // @ts-ignore
 import LizardIllustration from '../../../assets/illustrations/lizard-6.svg';
+import { mockReminderDB } from './mockReminderDB';
 
 export default function ReminderScreen() {
   const router = useRouter();
@@ -25,16 +26,29 @@ export default function ReminderScreen() {
   const theme = getThemeTokens(themeId);
 
   // 模擬提醒資料
-  const [reminders, setReminders] = useState([
-    { id: '1', type: '餵食', freq: '每天', time: '12:00', pets: ['DELETE', 'CTRL'], note: '食物添加維生素', isOn: true, tagColor: '#FFD239' },
-    { id: '2', type: '換水', freq: '每3天', time: '08:30', pets: ['DELETE'], note: '', isOn: true, tagColor: '#5CD85A' },
-    { id: '3', type: '驅蟲', freq: '每週(六)', time: '20:00', pets: ['ENTER'], note: '注意劑量', isOn: false, tagColor: '#FF6B6B' },
-  ]);
+  const [reminders, setReminders] = useState<any[]>([]);
 
-  const toggleReminder = (id: string) => {
-    setReminders(prev =>
-      prev.map(r => r.id === id ? { ...r, isOn: !r.isOn } : r)
-    );
+  useFocusEffect(
+    useCallback(() => {
+      setReminders(Object.values(mockReminderDB).map(r => {
+        const petNames = r.pets.map((pid: string) => {
+          if (pid === '1') return 'DELETE';
+          if (pid === '2') return 'CTRL';
+          if (pid === '3') return 'ENTER';
+          if (pid === '4') return 'ALT';
+          return pid;
+        });
+        return { ...r, petsListDisplay: petNames };
+      }));
+    }, [])
+  );
+
+  const toggleReminder = (rId: string) => {
+    if (mockReminderDB[rId]) {
+      mockReminderDB[rId].isOn = !mockReminderDB[rId].isOn;
+      // Trigger a re-render
+      setReminders(prev => prev.map(r => r.id === rId ? { ...r, isOn: mockReminderDB[rId].isOn } : r));
+    }
   };
 
   return (
@@ -58,7 +72,7 @@ export default function ReminderScreen() {
       >
         {reminders.length === 0 ? (
           /* 空狀態 */
-          <View style={styles.emptyCard}>
+          <View style={[styles.emptyCard, { backgroundColor: theme.background }]}>
             <Text style={[styles.emptyTitle, { color: theme.primary, fontFamily: fontFamilyName }]}>
               尚無提醒設定
             </Text>
@@ -72,7 +86,7 @@ export default function ReminderScreen() {
           /* 有資料時的列表 */
           <View style={styles.listContainer}>
             {reminders.map(reminder => (
-              <View key={reminder.id} style={[styles.reminderCard, !reminder.isOn && styles.reminderCardOff]}>
+              <View key={reminder.id} style={[styles.reminderCard, !reminder.isOn && styles.reminderCardOff, { backgroundColor: theme.background }]}>
                 {/* 左側動態顏色裝飾條 */}
                 <View style={[styles.cardSideBar, { backgroundColor: reminder.isOn ? reminder.tagColor : '#CCCCCC' }]} />
 
@@ -92,7 +106,7 @@ export default function ReminderScreen() {
 
                   {/* 時間與頻率 */}
                   <View style={styles.cardInfoRow}>
-                    <Text style={[styles.cardTime, { color: paletteColors.XUAN_RI, fontFamily: fontFamilyName }]}>
+                    <Text style={[styles.cardTime, { color: theme.text, fontFamily: fontFamilyName }]}>
                       {reminder.time}
                     </Text>
                     <Text style={[styles.cardFreq, { color: theme.primary, fontFamily: fontFamilyName }]}>
@@ -103,11 +117,11 @@ export default function ReminderScreen() {
                   {/* 寵物與備註 */}
                   <View style={styles.cardDetailRow}>
                     <View style={styles.cardDetailLeft}>
-                      <Text style={[styles.cardPets, { color: paletteColors.XUAN_RI, fontFamily: fontFamilyName }]} numberOfLines={1}>
-                        對象：{reminder.pets.join(', ')}
+                      <Text style={[styles.cardPets, { color: theme.text, fontFamily: fontFamilyName }]} numberOfLines={1}>
+                        對象：{reminder.petsListDisplay?.join(', ')}
                       </Text>
                       {!!reminder.note && (
-                        <Text style={[styles.cardNote, { color: paletteColors.XUAN_RI + '80', fontFamily: fontFamilyName }]} numberOfLines={1}>
+                        <Text style={[styles.cardNote, { color: theme.text, fontFamily: fontFamilyName, opacity: 0.8 }]} numberOfLines={1}>
                           {reminder.note}
                         </Text>
                       )}
@@ -115,10 +129,19 @@ export default function ReminderScreen() {
                     
                     {/* 操作按鈕 */}
                     <View style={styles.cardActions}>
-                      <Pressable style={[styles.actionButton, !reminder.isOn && styles.actionButtonOff]} onPress={() => {}}>
+                      <Pressable 
+                        style={[styles.actionButton, !reminder.isOn && styles.actionButtonOff, { backgroundColor: theme.background }]} 
+                        onPress={() => router.push({ pathname: '/(tabs)/pets/add-reminder', params: { reminderId: reminder.id, petId: id } })}
+                      >
                         <Image source={require('../../../assets/icons/icon-edit.png')} style={[styles.actionIcon, { tintColor: theme.primary }]} />
                       </Pressable>
-                      <Pressable style={[styles.actionButton, !reminder.isOn && styles.actionButtonOff]} onPress={() => {}}>
+                      <Pressable 
+                        style={[styles.actionButton, !reminder.isOn && styles.actionButtonOff, { backgroundColor: theme.background }]} 
+                        onPress={() => {
+                          delete mockReminderDB[reminder.id];
+                          setReminders(prev => prev.filter(r => r.id !== reminder.id));
+                        }}
+                      >
                         <Image source={require('../../../assets/icons/icon-delete.png')} style={[styles.actionIcon, { tintColor: '#FF6B6B' }]} />
                       </Pressable>
                     </View>
@@ -144,7 +167,7 @@ const styles = StyleSheet.create({
   emptyCard: {
     width: '96%',
     alignSelf: 'center',
-    backgroundColor: paletteColors.RI_CHU,
+    backgroundColor: '#FFFEFA',
     borderRadius: 20,
     paddingVertical: 40,
     paddingHorizontal: 24,
@@ -174,7 +197,7 @@ const styles = StyleSheet.create({
     gap: 16,
   },
   reminderCard: {
-    backgroundColor: paletteColors.RI_CHU,
+    backgroundColor: '#FFFEFA',
     borderRadius: 20,
     flexDirection: 'row',
     overflow: 'hidden',
@@ -247,7 +270,7 @@ const styles = StyleSheet.create({
   actionButton: {
     width: 40,
     height: 40,
-    backgroundColor: paletteColors.RI_CHU,
+    backgroundColor: '#FFFEFA',
     borderRadius: 10,
     alignItems: 'center',
     justifyContent: 'center',

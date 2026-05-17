@@ -38,6 +38,7 @@ const mockDB: Record<string, any> = {
     frequency: '每日 2 次',
     dosage: '取約一顆米粒大小，薄擦於患部皮膚。',
     medNote: '1. 塗抹後 15 分鐘內，盡量避免寵物舔舐患部。\n2. 請存放於陰涼乾燥處，避免陽光直射。\n3. 此為外用藥，切勿口服。',
+    tagColor: '#FF9600',
   },
   '2': {
     title: '年度健康檢查',
@@ -55,6 +56,7 @@ const mockDB: Record<string, any> = {
     frequency: '-',
     dosage: '-',
     medNote: '',
+    tagColor: '#5CD85A',
   }
 };
 
@@ -65,7 +67,6 @@ export default function AddMedicalScreen() {
   const theme = getThemeTokens(themeId);
 
   const [title, setTitle] = useState('');
-  
   // Visit section
   const [visitDate, setVisitDate] = useState('');
   const [hospital, setHospital] = useState('');
@@ -138,7 +139,7 @@ export default function AddMedicalScreen() {
   const labelStyle = [styles.fieldLabel, { color: theme.primary, fontFamily: fontFamilyName }];
   const inputStyle = [styles.input, { borderColor: theme.primary, color: paletteColors.XUAN_RI, fontFamily: fontFamilyName }];
   const multiInputStyle = [styles.multiInput, { borderColor: theme.primary, color: paletteColors.XUAN_RI, fontFamily: fontFamilyName }];
-  const dateInputStyle = [styles.input, { borderColor: theme.primary, color: paletteColors.XUAN_RI, fontFamily: fontFamilyName, justifyContent: 'center' }];
+  const dateInputStyle = [styles.input, { borderColor: theme.primary, color: paletteColors.XUAN_RI, fontFamily: fontFamilyName, justifyContent: 'center' as const }];
 
   return (
     <BaseScreen
@@ -156,13 +157,13 @@ export default function AddMedicalScreen() {
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.scrollContent}
       >
-        <View style={styles.formCard}>
+        <View style={[styles.formCard, { backgroundColor: theme.background }]}>
           {/* Title */}
           <Text style={labelStyle}>標題</Text>
           <TextInput
             style={inputStyle}
             placeholder="例如：皮膚問題就診及用藥"
-            placeholderTextColor={paletteColors.XUAN_RI + '50'}
+            placeholderTextColor={theme.text + '50'}
             value={title}
             onChangeText={setTitle}
           />
@@ -174,7 +175,7 @@ export default function AddMedicalScreen() {
           
           <Text style={labelStyle}>日期</Text>
           <Pressable style={dateInputStyle} onPress={() => openCalendar('visit')}>
-            <Text style={{ color: visitDate ? paletteColors.XUAN_RI : paletteColors.XUAN_RI + '50', fontFamily: fontFamilyName, fontSize: getFontSize(16, 'medium'), fontWeight: '300' }}>
+            <Text style={{ color: visitDate ? theme.text : theme.text + '50', fontFamily: fontFamilyName, fontSize: getFontSize(16, 'medium'), fontWeight: '300' }}>
               {visitDate || '選擇就診日期'}
             </Text>
           </Pressable>
@@ -183,7 +184,7 @@ export default function AddMedicalScreen() {
           <TextInput
             style={inputStyle}
             placeholder="動物醫院名稱"
-            placeholderTextColor={paletteColors.XUAN_RI + '50'}
+            placeholderTextColor={theme.text + '50'}
             value={hospital}
             onChangeText={setHospital}
           />
@@ -192,7 +193,7 @@ export default function AddMedicalScreen() {
           <TextInput
             style={inputStyle}
             placeholder="醫師名稱"
-            placeholderTextColor={paletteColors.XUAN_RI + '50'}
+            placeholderTextColor={theme.text + '50'}
             value={doctor}
             onChangeText={setDoctor}
           />
@@ -201,7 +202,7 @@ export default function AddMedicalScreen() {
           <TextInput
             style={multiInputStyle}
             placeholder="請輸入就診原因..."
-            placeholderTextColor={paletteColors.XUAN_RI + '50'}
+            placeholderTextColor={theme.text + '50'}
             multiline
             value={reason}
             onChangeText={setReason}
@@ -211,7 +212,7 @@ export default function AddMedicalScreen() {
           <TextInput
             style={multiInputStyle}
             placeholder="請輸入診斷結果..."
-            placeholderTextColor={paletteColors.XUAN_RI + '50'}
+            placeholderTextColor={theme.text + '50'}
             multiline
             value={diagnosis}
             onChangeText={setDiagnosis}
@@ -221,7 +222,7 @@ export default function AddMedicalScreen() {
           <TextInput
             style={multiInputStyle}
             placeholder="請輸入醫囑..."
-            placeholderTextColor={paletteColors.XUAN_RI + '50'}
+            placeholderTextColor={theme.text + '50'}
             multiline
             value={advice}
             onChangeText={setAdvice}
@@ -253,14 +254,14 @@ export default function AddMedicalScreen() {
 
           <Text style={labelStyle}>起始</Text>
           <Pressable style={dateInputStyle} onPress={() => openCalendar('medStart')}>
-            <Text style={{ color: medStartDate ? paletteColors.XUAN_RI : paletteColors.XUAN_RI + '50', fontFamily: fontFamilyName, fontSize: getFontSize(16, 'medium'), fontWeight: '300' }}>
+            <Text style={{ color: medStartDate ? theme.text : theme.text + '50', fontFamily: fontFamilyName, fontSize: getFontSize(16, 'medium'), fontWeight: '300' }}>
               {medStartDate || '選擇起始日期'}
             </Text>
           </Pressable>
 
           <Text style={labelStyle}>結束</Text>
           <Pressable style={dateInputStyle} onPress={() => openCalendar('medEnd')}>
-            <Text style={{ color: medEndDate ? paletteColors.XUAN_RI : paletteColors.XUAN_RI + '50', fontFamily: fontFamilyName, fontSize: getFontSize(16, 'medium'), fontWeight: '300' }}>
+            <Text style={{ color: medEndDate ? theme.text : theme.text + '50', fontFamily: fontFamilyName, fontSize: getFontSize(16, 'medium'), fontWeight: '300' }}>
               {medEndDate || '選擇結束日期'}
             </Text>
           </Pressable>
@@ -269,7 +270,7 @@ export default function AddMedicalScreen() {
           <TextInput
             style={inputStyle}
             placeholder="藥品名稱"
-            placeholderTextColor={paletteColors.XUAN_RI + '50'}
+            placeholderTextColor={theme.text + '50'}
             value={medicine}
             onChangeText={setMedicine}
           />
@@ -278,7 +279,7 @@ export default function AddMedicalScreen() {
           <TextInput
             style={inputStyle}
             placeholder="例如：外部塗抹"
-            placeholderTextColor={paletteColors.XUAN_RI + '50'}
+            placeholderTextColor={theme.text + '50'}
             value={method}
             onChangeText={setMethod}
           />
@@ -287,7 +288,7 @@ export default function AddMedicalScreen() {
           <TextInput
             style={inputStyle}
             placeholder="例如：每日 2 次"
-            placeholderTextColor={paletteColors.XUAN_RI + '50'}
+            placeholderTextColor={theme.text + '50'}
             value={frequency}
             onChangeText={setFrequency}
           />
@@ -296,7 +297,7 @@ export default function AddMedicalScreen() {
           <TextInput
             style={inputStyle}
             placeholder="例如：取約一顆米粒大小"
-            placeholderTextColor={paletteColors.XUAN_RI + '50'}
+            placeholderTextColor={theme.text + '50'}
             value={dosage}
             onChangeText={setDosage}
           />
@@ -305,7 +306,7 @@ export default function AddMedicalScreen() {
           <TextInput
             style={multiInputStyle}
             placeholder="用藥備註..."
-            placeholderTextColor={paletteColors.XUAN_RI + '50'}
+            placeholderTextColor={theme.text + '50'}
             multiline
             value={medNote}
             onChangeText={setMedNote}
@@ -317,7 +318,7 @@ export default function AddMedicalScreen() {
       {/* ========== 日曆 Modal ========== */}
       <Modal visible={showCalendar} transparent animationType="fade" onRequestClose={() => setShowCalendar(false)}>
         <Pressable style={styles.modalOverlay} onPress={() => setShowCalendar(false)}>
-          <Pressable style={styles.modalContent} onPress={e => e.stopPropagation()}>
+          <Pressable style={[styles.modalContent, { backgroundColor: theme.background }]} onPress={e => e.stopPropagation()}>
             {/* 年月導覽 */}
             <View style={styles.yearMonthNav}>
               <View style={styles.navGroup}>
@@ -398,7 +399,7 @@ const styles = StyleSheet.create({
   formCard: {
     width: '96%',
     alignSelf: 'center',
-    backgroundColor: paletteColors.RI_CHU,
+    backgroundColor: '#FFFEFA',
     borderRadius: 20,
     padding: 24,
     shadowColor: '#000000',
@@ -499,7 +500,7 @@ const styles = StyleSheet.create({
   },
   modalContent: {
     width: '85%',
-    backgroundColor: paletteColors.RI_CHU,
+    backgroundColor: '#FFFEFA',
     borderRadius: 20,
     padding: 20,
     shadowColor: '#000',

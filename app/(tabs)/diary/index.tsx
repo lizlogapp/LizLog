@@ -7,7 +7,6 @@ import { getFontSize } from '../../../src/theme/typographySettings';
 import { FloatingActionBar } from '../../../src/components/FloatingActionBar';
 import { BaseScreen } from '../../../src/components/common/BaseScreen';
 import { STATUS_BAR_HEIGHT } from '../../../src/theme/layoutSettings';
-
 /**
  * 有資料時的日記首頁
  * 包含月份選擇器與動態生成的日記卡片
@@ -178,12 +177,12 @@ export default function DiaryScreen() {
         {!isSearchVisible && (
           <View style={{ position: 'relative', zIndex: 1500 }}>
             <Pressable onPress={() => setIsPetDropdownVisible(!isPetDropdownVisible)}>
-              <Image source={require('../../../assets/icons/icon-menu.png')} style={[styles.headerIcon, { tintColor: theme.panelBackground }]} />
+              <Image source={require('../../../assets/icons/icon-menu.png')} style={[styles.headerIcon, { tintColor: theme.primary }]} />
             </Pressable>
             
             {/* 寵物切換下拉選單 (與首頁設計一致) */}
             {isPetDropdownVisible && (
-              <View style={styles.petDropdownModal}>
+              <View style={[styles.petDropdownModal, { backgroundColor: theme.background }]}>
                 <ScrollView
                   style={styles.petDropdownScroll}
                   showsVerticalScrollIndicator={false}
@@ -227,7 +226,7 @@ export default function DiaryScreen() {
               style={[styles.monthSelector, { backgroundColor: theme.panelBackground, zIndex: 1200 }]}
               onPress={() => setIsDropdownVisible(!isDropdownVisible)}
             >
-              <Text style={[styles.monthText, { fontFamily: fontFamilyName }]}>{currentMonth}月</Text>
+              <Text style={[styles.monthText, { color: theme.panelPatternText, fontFamily: fontFamilyName }]}>{currentMonth}月</Text>
             </Pressable>
 
             {/* 下拉選單：顯示前後各兩月，且支援全域滑動 */}
@@ -251,7 +250,7 @@ export default function DiaryScreen() {
                       ]}
                       onPress={() => handleMonthSelect(item.date)}
                     >
-                      <Text style={[styles.dropdownItemText, { fontFamily: fontFamilyName }]}>
+                      <Text style={[styles.dropdownItemText, { color: theme.panelPatternText, fontFamily: fontFamilyName }]}>
                         {item.label}
                       </Text>
                     </Pressable>
@@ -263,7 +262,7 @@ export default function DiaryScreen() {
         )}
 
         <Pressable onPress={() => setIsSearchVisible(!isSearchVisible)} style={{ zIndex: 1300 }}>
-          <Image source={require('../../../assets/icons/icon-search.png')} style={[styles.headerIcon, { tintColor: theme.panelBackground }]} />
+          <Image source={require('../../../assets/icons/icon-search.png')} style={[styles.headerIcon, { tintColor: theme.primary }]} />
         </Pressable>
       </View>
 
@@ -273,7 +272,7 @@ export default function DiaryScreen() {
         showsVerticalScrollIndicator={false}
       >
         {mockDiaries.map((diary) => (
-          <Pressable key={diary.id} onPress={() => router.push({ pathname: '/diary/view', params: { id: diary.id } } as any)} style={styles.diaryCard}>
+          <Pressable key={diary.id} onPress={() => router.push({ pathname: '/diary/view', params: { id: diary.id } } as any)} style={[styles.diaryCard, { backgroundColor: theme.background }]}>
             
             {/* 照片區與重疊的寵物標籤 / 無照片時的頂部標籤 */}
             {diary.image ? (
@@ -281,15 +280,15 @@ export default function DiaryScreen() {
                 <Image source={diary.image} style={styles.diaryImage} />
                 <View style={styles.petTagsContainer}>
                   {diary.pets.map((pet, idx) => (
-                    <View key={idx} style={styles.petTag}>
-                      <Text style={[styles.petTagText, { color: colorOrange, fontFamily: fontFamilyName }]}>{pet.name}</Text>
+                    <View key={idx} style={[styles.petTag, { backgroundColor: theme.accentDawn }]}>
+                      <Text style={[styles.petTagText, { color: theme.primary, fontFamily: fontFamilyName }]}>{pet.name}</Text>
                     </View>
                   ))}
                 </View>
               </View>
             ) : (
-              <View style={styles.noImageTagsContainer}>
-                <Text style={[styles.noImageTagText, { color: colorOrange, fontFamily: fontFamilyName }]}>
+              <View style={[styles.noImageTagsContainer, { backgroundColor: theme.accentDawn }]}>
+                <Text style={[styles.noImageTagText, { color: theme.primary, fontFamily: fontFamilyName }]}>
                   {diary.pets.map(p => p.name).join(' ')}
                 </Text>
               </View>
@@ -298,25 +297,25 @@ export default function DiaryScreen() {
             {/* 資訊區塊：日期、天氣、標題 */}
             <View style={styles.diaryInfoContainer}>
               <View style={styles.diaryHeaderRow}>
-                <Text style={[styles.diaryDateText, { color: colorOrange, fontFamily: fontFamilyName }]}>{diary.dateStr}</Text>
-                <Image source={diary.weatherIcon} style={[styles.weatherIcon, { tintColor: colorOrange }]} />
+                <Text style={[styles.diaryDateText, { color: theme.primary, fontFamily: fontFamilyName }]}>{diary.dateStr}</Text>
+                <Image source={diary.weatherIcon} style={[styles.weatherIcon, { tintColor: theme.primary }]} />
               </View>
               {diary.title ? (
-                <Text style={[styles.diaryTitleText, { color: colorOrange, fontFamily: fontFamilyName }]}>{diary.title}</Text>
+                <Text style={[styles.diaryTitleText, { color: theme.primary, fontFamily: fontFamilyName }]}>{diary.title}</Text>
               ) : null}
 
               {/* 寵物數據列 (依照標記數量渲染) */}
               <View style={styles.metricsWrapper}>
                 {diary.pets.map((pet, idx) => (
                   <View key={idx} style={styles.metricRow}>
-                    <Text style={[styles.metricText, { color: colorOrange, fontFamily: fontFamilyName }]}>{pet.temp}</Text>
-                    <Text style={[styles.metricText, { color: colorOrange, fontFamily: fontFamilyName }]}>{pet.humid}</Text>
+                    <Text style={[styles.metricText, { color: theme.primary, fontFamily: fontFamilyName }]}>{pet.temp}</Text>
+                    <Text style={[styles.metricText, { color: theme.primary, fontFamily: fontFamilyName }]}>{pet.humid}</Text>
                     
                     <View style={styles.metricIconsBlock}>
-                      <Image source={pet.states.bask ? require('../../../assets/icons/category-basking-active.png') : require('../../../assets/icons/category-basking-default.png')} style={styles.stateIcon} />
-                      <Image source={pet.states.feed ? require('../../../assets/icons/category-food-active.png') : require('../../../assets/icons/category-food-default.png')} style={styles.stateIcon} />
-                      <Image source={pet.states.bath ? require('../../../assets/icons/category-bath-active.png') : require('../../../assets/icons/category-bath-default.png')} style={styles.stateIcon} />
-                      <Image source={pet.states.poop ? require('../../../assets/icons/category-poop-active.png') : require('../../../assets/icons/category-poop-default.png')} style={styles.stateIcon} />
+                      <Image source={pet.states.bask ? require('../../../assets/icons/category-basking-active.png') : require('../../../assets/icons/category-basking-default.png')} style={[styles.stateIcon, { tintColor: theme.primary }]} />
+                      <Image source={pet.states.feed ? require('../../../assets/icons/category-food-active.png') : require('../../../assets/icons/category-food-default.png')} style={[styles.stateIcon, { tintColor: theme.primary }]} />
+                      <Image source={pet.states.bath ? require('../../../assets/icons/category-bath-active.png') : require('../../../assets/icons/category-bath-default.png')} style={[styles.stateIcon, { tintColor: theme.primary }]} />
+                      <Image source={pet.states.poop ? require('../../../assets/icons/category-poop-active.png') : require('../../../assets/icons/category-poop-default.png')} style={[styles.stateIcon, { tintColor: theme.primary }]} />
                     </View>
                   </View>
                 ))}
@@ -369,7 +368,6 @@ const styles = StyleSheet.create({
     shadowRadius: 5,
   },
   monthText: {
-    color: '#FFFFFF',
     fontSize: getFontSize(16, 'medium'),
     fontWeight: '600',
     textAlign: 'center',
@@ -404,7 +402,6 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(255, 255, 255, 0.2)',
   },
   dropdownItemText: {
-    color: '#FFFFFF',
     fontSize: getFontSize(16, 'medium'),
     fontWeight: '500',
   },
@@ -535,7 +532,6 @@ const styles = StyleSheet.create({
     top: 36,
     left: -8, // 稍微左移以視覺平衡
     width: 150,
-    backgroundColor: '#FFFFFF',
     borderRadius: 8,
     padding: 12,
     shadowColor: '#000000',
