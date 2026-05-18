@@ -138,13 +138,6 @@ export default function LoginScreen() {
                 resizeMode="contain"
               />
             </Pressable>
-            <Pressable style={styles.ssoIconButton}>
-              <Image
-                source={require('../assets/icons/icon-line.png')}
-                style={styles.ssoIconImage}
-                resizeMode="contain"
-              />
-            </Pressable>
           </View>
         </View>
 
