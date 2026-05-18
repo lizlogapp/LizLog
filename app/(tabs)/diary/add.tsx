@@ -7,6 +7,7 @@ import { getFontSize } from '../../../src/theme/typographySettings';
 import { FloatingActionBar } from '../../../src/components/FloatingActionBar';
 import { BaseScreen } from '../../../src/components/common/BaseScreen';
 import Slider from '@react-native-community/slider';
+import { addFeedData } from '../../../src/data/mockDiaryData';
 // SVG Icons
 // @ts-ignore
 import IconTemp from '../../../assets/icons/icon-temp.svg';
@@ -63,10 +64,11 @@ export default function AddDiaryScreen() {
   // 可編輯欄位
   const [title, setTitle] = useState(isEditing ? '初次探索！家旁邊的新公園草地' : '未命名標題');
   const [isEditingTitle, setIsEditingTitle] = useState(false);
-  const [diaryContent, setDiaryContent] = useState(isEditing ? '今天第一次帶 Delete 還有 Enter 去家裡旁邊剛整修好的新公園，沒想到兩隻都對草地超級好奇！原本以為 Delete 會比較膽小，結果牠竟然主動往前爬，反而是一向活潑的 Enter 一直躲在我的陰影下不肯出來。天氣雖然有點熱，但看到牠們在陽光下顏色變得好鮮豔，覺得這趟出門真的太值得了。下次也許可以帶點小點心來試試看牠們在戶外的食慾。' : '');
-  const [isDiaryExpanded, setIsDiaryExpanded] = useState(false);
+  const initialDiaryContent = isEditing ? '今天第一次帶 Delete 還有 Enter 去家裡旁邊剛整修好的新公園，沒想到兩隻都對草地超級好奇！原本以為 Delete 會比較膽小，結果牠竟然主動往前爬，反而是一向活潑的 Enter 一直躲在我的陰影下不肯出來。天氣雖然有點熱，但看到牠們在陽光下顏色變得好鮮豔，覺得這趟出門真的太值得了。下次也許可以帶點小點心來試試看牠們在戶外的食慾。' : '';
+  const [diaryContent, setDiaryContent] = useState(initialDiaryContent);
+  const [isDiaryExpanded, setIsDiaryExpanded] = useState(initialDiaryContent.length > 0);
   const [isUploadExpanded, setIsUploadExpanded] = useState(false);
-  const [appetite, setAppetite] = useState(3); // 食慾狀態，預設 3
+  const [appetite, setAppetite] = useState(0); // 食慾狀態，預設 0 (未檢測)
   const [poopState, setPoopState] = useState('無'); // 排便狀態，預設 '無'
   const [feedState, setFeedState] = useState('無'); // 飲食狀態，預設 '無'
   const [baskMinutes, setBaskMinutes] = useState('0'); // 日照分鐘，預設 0
@@ -116,6 +118,10 @@ export default function AddDiaryScreen() {
             }},
             { id: 'confirm', onPress: () => { 
               // TODO: 儲存日記
+              if (appetite > 0) {
+                const now = new Date();
+                addFeedData(`${now.getMonth()+1}/${now.getDate()}`, appetite);
+              }
               if (isEditing && id) {
                 router.navigate({ pathname: '/(tabs)/diary/view', params: { id } });
               } else {
@@ -319,14 +325,14 @@ export default function AddDiaryScreen() {
                           minimumValue={1}
                           maximumValue={5}
                           step={1}
-                          value={appetite}
+                          value={appetite === 0 ? 3 : appetite}
                           onValueChange={setAppetite}
-                          minimumTrackTintColor={appetite === 1 ? '#FF3B30' : appetite === 2 ? '#FF9500' : '#34C759'}
+                          minimumTrackTintColor={appetite === 0 ? '#CCCCCC' : appetite === 1 ? '#FF3B30' : appetite === 2 ? '#FF9500' : '#34C759'}
                           maximumTrackTintColor={theme.primary + '30'}
-                          thumbTintColor={appetite === 1 ? '#FF3B30' : appetite === 2 ? '#FF9500' : '#34C759'}
+                          thumbTintColor={appetite === 0 ? '#CCCCCC' : appetite === 1 ? '#FF3B30' : appetite === 2 ? '#FF9500' : '#34C759'}
                         />
-                        <Text style={[styles.recordLabel, { color: labelColor, fontFamily: fontFamilyName, width: 42, textAlign: 'center' }]}>
-                          {appetite === 1 ? '差' : appetite === 2 ? '偏差' : appetite === 3 ? '普通' : appetite === 4 ? '偏好' : '好'}
+                        <Text style={[styles.recordLabel, { color: appetite === 0 ? labelColor + '80' : labelColor, fontFamily: fontFamilyName, width: 52, textAlign: 'center' }]}>
+                          {appetite === 0 ? '未檢測' : appetite === 1 ? '差' : appetite === 2 ? '偏差' : appetite === 3 ? '普通' : appetite === 4 ? '偏好' : '好'}
                         </Text>
                       </View>
                     </View>

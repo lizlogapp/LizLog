@@ -329,6 +329,16 @@ export const mockFeedDataMap: ChartDataMap = {
   ],
 };
 
+export const addFeedData = (dateLabel: string, val: number) => {
+  if (val > 0) {
+    mockFeedDataMap['週'].push({ label: dateLabel, val, isAbnormal: val <= 2 ? 'low' : undefined });
+    // 保持最多顯示最近的 7 筆數據，避免超出圖表範圍
+    if (mockFeedDataMap['週'].length > 7) {
+      mockFeedDataMap['週'].shift();
+    }
+  }
+};
+
 // 8. 排便日曆事件 (模擬不同月份的事件)
 export const getMockPoopEvents = (month: number): number[] => {
   if (month % 2 === 0) {
