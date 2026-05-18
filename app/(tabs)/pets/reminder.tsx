@@ -17,27 +17,21 @@ import { BaseScreen } from '../../../src/components/common/BaseScreen';
 import { FloatingActionBar } from '../../../src/components/FloatingActionBar';
 // @ts-ignore
 import LizardIllustration from '../../../assets/illustrations/lizard-6.svg';
-import { mockReminderDB } from './mockReminderDB';
+import { mockReminderDB, petIdToName } from '../../../src/data/mockDiaryData';
 
 export default function ReminderScreen() {
   const router = useRouter();
-  const { id } = useLocalSearchParams<{ id: string }>();
+  const { id, from } = useLocalSearchParams<{ id: string; from?: string }>();
   const { themeId, fontFamilyName } = useTheme();
   const theme = getThemeTokens(themeId);
 
-  // 模擬提醒資料
+  // 提醒資料（從共用資料中心讀取）
   const [reminders, setReminders] = useState<any[]>([]);
 
   useFocusEffect(
     useCallback(() => {
       setReminders(Object.values(mockReminderDB).map(r => {
-        const petNames = r.pets.map((pid: string) => {
-          if (pid === '1') return 'DELETE';
-          if (pid === '2') return 'CTRL';
-          if (pid === '3') return 'ENTER';
-          if (pid === '4') return 'ALT';
-          return pid;
-        });
+        const petNames = r.pets.map((pid: string) => petIdToName[pid] || pid);
         return { ...r, petsListDisplay: petNames };
       }));
     }, [])
@@ -57,7 +51,10 @@ export default function ReminderScreen() {
       floatingAction={
         <FloatingActionBar
           actions={[
-            { id: 'back', onPress: () => router.back() },
+            { id: 'back', onPress: () => {
+              // 返回層級：寵物提醒 -> 寵物詳情
+              router.navigate({ pathname: '/(tabs)/pets/view', params: { id } });
+            }},
             { id: 'add', onPress: () => {
               router.push({ pathname: '/(tabs)/pets/add-reminder', params: { id } });
             }},

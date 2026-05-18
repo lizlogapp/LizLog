@@ -10,11 +10,13 @@ import {
   Pressable,
   Modal,
 } from 'react-native';
+import Slider from '@react-native-community/slider';
 import { useTheme } from '../../../src/theme/ThemeContext';
 import { getThemeTokens } from '../../../src/theme/themeSettings';
 import { getFontSize } from '../../../src/theme/typographySettings';
 import { FloatingActionBar } from '../../../src/components/FloatingActionBar';
 import { BaseScreen } from '../../../src/components/common/BaseScreen';
+import { mockDiaryRecord, appetiteToLabel } from '../../../src/data/mockDiaryData';
 
 // SVG Icons
 // @ts-ignore
@@ -43,7 +45,7 @@ const { width: SCREEN_WIDTH } = Dimensions.get('window');
  */
 export default function DiaryViewScreen() {
   const router = useRouter();
-  const { id } = useLocalSearchParams<{ id: string }>();
+  const { id, from } = useLocalSearchParams<{ id: string; from?: string }>();
   const diaryId = id ? parseInt(id, 10) : null;
   const { themeId, fontFamilyName } = useTheme();
   const theme = getThemeTokens(themeId);
@@ -64,14 +66,15 @@ export default function DiaryViewScreen() {
       require('../../../assets/user-uploads/lizard-003.jpg'),
     ],
     sensorData: {
-      temp: '31℃',
-      humid: '30%',
-      bask: '30分鐘',
-      feed: '蟋蟀10隻+高麗菜0.5片',
-      bath: '溫水泡澡15分鐘',
-      poop: '無',
-      weight: '415公克',
-      length: '44公分',
+      temp: mockDiaryRecord.temp,
+      humid: mockDiaryRecord.humid,
+      bask: mockDiaryRecord.bask,
+      feed: mockDiaryRecord.feed,
+      appetite: mockDiaryRecord.appetite,
+      bath: mockDiaryRecord.bath,
+      poop: mockDiaryRecord.poop,
+      weight: mockDiaryRecord.weight,
+      length: mockDiaryRecord.length,
     },
     statusIcons: {
       bask: false,
@@ -108,7 +111,7 @@ export default function DiaryViewScreen() {
     { icon: IconTemp, label: '溫度', value: mockDiary.sensorData.temp },
     { icon: IconHumid, label: '濕度', value: mockDiary.sensorData.humid },
     { icon: IconBask, label: '日照', value: mockDiary.sensorData.bask },
-    { icon: IconFeed, label: '飲食', value: mockDiary.sensorData.feed },
+    { icon: IconFeed, label: '飲食', value: mockDiary.sensorData.feed, appetite: mockDiary.sensorData.appetite },
     { icon: IconBath, label: '泡澡', value: mockDiary.sensorData.bath },
     { icon: IconPoop, label: '排便', value: mockDiary.sensorData.poop },
     { icon: IconWeight, label: '體重', value: mockDiary.sensorData.weight },
@@ -121,7 +124,10 @@ export default function DiaryViewScreen() {
       floatingAction={
         <FloatingActionBar
           actions={[
-            { id: 'back', onPress: () => router.back() },
+            { id: 'back', onPress: () => {
+              // 返回層級：日記檢視 -> 日記列表
+              router.navigate('/(tabs)/diary');
+            }},
             { id: 'edit', onPress: () => { /* TODO: 進入編輯模式 */ } },
           ]}
         />
@@ -202,14 +208,82 @@ export default function DiaryViewScreen() {
             {recordItems.map((item, idx) => {
               const IconComp = item.icon;
               return (
-                <View key={idx} style={styles.recordRow}>
-                  <IconComp width={20} height={20} color={labelColor} />
-                  <Text style={[styles.recordLabel, { color: labelColor, fontFamily: fontFamilyName }]}>
-                    {item.label}：
-                  </Text>
-                  <Text style={[styles.recordValue, { color: valueColor, fontFamily: fontFamilyName }]}>
-                    {item.value}
-                  </Text>
+                <View key={idx} style={{ gap: 8, width: '100%' }}>
+                  <View style={styles.recordRow}>
+                    <IconComp width={20} height={20} color={labelColor} />
+                    <Text style={[styles.recordLabel, { color: labelColor, fontFamily: fontFamilyName }]}>
+                      {item.label}：
+                    </Text>
+                    {item.label === '排便' ? (
+                      <View style={{ flexDirection: 'row', gap: 6, flex: 1, alignItems: 'center', justifyContent: 'flex-start' }}>
+                        {['無', '有'].map((opt) => (
+                          <View
+                            key={opt}
+                            style={[
+                              { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 12, borderWidth: 1, width: 64, alignItems: 'center' },
+                              item.value === opt
+                                ? { backgroundColor: theme.accentHot + '15', borderColor: theme.accentHot }
+                                : { backgroundColor: theme.primary + '05', borderColor: theme.primary + '20' }
+                            ]}
+                          >
+                            <Text style={{ fontSize: getFontSize(13, 'medium'), fontFamily: fontFamilyName, color: item.value === opt ? theme.accentHot : theme.primary + 'A0', fontWeight: item.value === opt ? '600' : '500' }}>
+                              {opt}
+                            </Text>
+                          </View>
+                        ))}
+                      </View>
+                    ) : item.label === '飲食' ? (
+                      <Text
+                        style={[styles.recordValue, { color: valueColor, fontFamily: fontFamilyName, flex: 1, textAlign: 'left', paddingLeft: 24, minHeight: 24 }]}
+                      >
+                        {item.value}
+                      </Text>
+                    ) : ['泡澡', '日照', '體重', '身長', '溫度', '濕度'].includes(item.label) ? (
+                      <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }}>
+                        <Text
+                          style={[styles.recordValue, { color: valueColor, fontFamily: fontFamilyName, width: 64, textAlign: 'center', marginRight: 6 }]}
+                        >
+                          {item.value}
+                        </Text>
+                        <Text style={[styles.recordValue, { color: labelColor, fontFamily: fontFamilyName }]}>
+                          {item.label === '泡澡' || item.label === '日照' ? '分鐘' :
+                           item.label === '體重' ? '公克' :
+                           item.label === '身長' ? '公分' :
+                           item.label === '溫度' ? '℃' :
+                           '%'}
+                        </Text>
+                      </View>
+                    ) : (
+                      <Text style={[styles.recordValue, { color: valueColor, fontFamily: fontFamilyName }]}>
+                        {item.value}
+                      </Text>
+                    )}
+                  </View>
+
+                  {/* 如果是飲食，新增食慾選項拉霸 */}
+                  {item.label === '飲食' && (
+                    <View style={[styles.recordRow, { marginTop: 4, marginBottom: 4, width: '100%', paddingRight: 0, marginRight: -16 }]}>
+                      {/* Icon 佔位 */}
+                      <View style={{ width: 20 }} />
+                      <Text style={[styles.recordLabel, { color: labelColor, fontFamily: fontFamilyName }]}>食慾：</Text>
+                      <View style={styles.sliderRow}>
+                        <Slider
+                          style={{ flex: 1, height: 40, marginLeft: 16, marginRight: 16 }}
+                          minimumValue={1}
+                          maximumValue={5}
+                          step={1}
+                          value={item.appetite}
+                          disabled={true}
+                          minimumTrackTintColor={item.appetite === 1 ? '#FF3B30' : item.appetite === 2 ? '#FF9500' : '#34C759'}
+                          maximumTrackTintColor={theme.primary + '30'}
+                          thumbTintColor={item.appetite === 1 ? '#FF3B30' : item.appetite === 2 ? '#FF9500' : '#34C759'}
+                        />
+                        <Text style={[styles.recordLabel, { color: labelColor, fontFamily: fontFamilyName, width: 42, textAlign: 'center' }]}>
+                          {item.appetite === 1 ? '差' : item.appetite === 2 ? '偏差' : item.appetite === 3 ? '普通' : item.appetite === 4 ? '偏好' : '好'}
+                        </Text>
+                      </View>
+                    </View>
+                  )}
                 </View>
               );
             })}
@@ -410,7 +484,12 @@ const styles = StyleSheet.create({
   },
   recordValue: {
     fontSize: getFontSize(16, 'medium'),
+  },
+  sliderRow: {
     flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
   },
 
   // ===== 附件照片卡片 =====

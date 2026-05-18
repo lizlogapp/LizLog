@@ -21,7 +21,7 @@ import { mockPetDB, updatePetData } from './mockPetDB';
 
 export default function AddPetScreen() {
   const router = useRouter();
-  const { id } = useLocalSearchParams<{ id?: string }>();
+  const { id, from } = useLocalSearchParams<{ id?: string; from?: string }>();
   const { themeId, fontFamilyName } = useTheme();
   const theme = getThemeTokens(themeId);
 
@@ -57,7 +57,14 @@ export default function AddPetScreen() {
       floatingAction={
         <FloatingActionBar
           actions={[
-            { id: 'back', onPress: () => router.back() },
+            { id: 'back', onPress: () => {
+              // 返回層級：如果是編輯模式 -> 寵物詳情；如果是新增 -> 寵物列表
+              if (isEditing && id) {
+                router.navigate({ pathname: '/(tabs)/pets/view', params: { id } });
+              } else {
+                router.navigate('/(tabs)/pets');
+              }
+            }},
             {
               id: 'confirm',
               onPress: () => {

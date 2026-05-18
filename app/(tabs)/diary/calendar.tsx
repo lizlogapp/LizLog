@@ -64,7 +64,7 @@ export default function CalendarFilterScreen() {
       floatingAction={
         <FloatingActionBar
           actions={[
-            { id: 'back', onPress: () => router.back() },
+            { id: 'back', onPress: () => router.navigate('/(tabs)/diary') },
           ]}
         />
       }

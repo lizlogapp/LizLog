@@ -7,6 +7,12 @@ import { getThemeTokens } from '../../src/theme/themeSettings';
 
 import { getFontSize } from '../../src/theme/typographySettings';
 import { BaseScreen } from '../../src/components/common/BaseScreen';
+import {
+  mockTempDataMap, mockHumidDataMap, mockBaskDataMap,
+  mockWeightDataMap, mockLengthDataMap, mockBathDataMap,
+  mockFeedDataMap, mockLatestStatus, mockDiaryRecord,
+  getMockPoopEvents, getMockMoltEvents, appetiteToLabel,
+} from '../../src/data/mockDiaryData';
 
 // 引入從 temp 新增進來的 SVG 圖示
 // 引入從 temp 新增進來並翻成英文避免組件撞名的 SVG 圖示
@@ -43,196 +49,14 @@ export default function AnalyticsScreen() {
   const [activeChartTab, setActiveChartTab] = useState<string>('週');
   const [calendarDate, setCalendarDate] = useState<Date>(new Date());
 
-  // 1. 溫度資料 (單位：度C，合理範圍 25-35，Y軸範圍 10-40)
-  const mockTempDataMap = {
-    '日': [
-      { label: '00', val: 26 },
-      { label: '04', val: 25 },
-      { label: '08', val: 28 },
-      { label: '12', val: 38, isAbnormal: 'high' }, // 中午異常高溫
-      { label: '16', val: 32 },
-      { label: '20', val: 29 },
-      { label: '24', val: 18, isAbnormal: 'low' }, // 寒流半夜異常低溫
-    ],
-    '週': [
-      { label: '一', val: 30 },
-      { label: '二', val: 31 },
-      { label: '三', val: 22, isAbnormal: 'low' },
-      { label: '四', val: 30 },
-      { label: '五', val: 36, isAbnormal: 'high' },
-      { label: '六', val: 32 },
-      { label: '日', val: 31 },
-    ],
-    '月': [
-      { label: '1', val: 30 },
-      { label: '5', val: 31 },
-      { label: '10', val: 32 },
-      { label: '15', val: 28 },
-      { label: '20', val: 29 },
-      { label: '25', val: 30 },
-      { label: '30', val: 33 },
-    ],
-    '年': [
-      { label: '1月', val: 22, isAbnormal: 'low' }, // 冬天寒冷
-      { label: '3月', val: 25 },
-      { label: '5月', val: 30 },
-      { label: '7月', val: 36, isAbnormal: 'high' }, // 夏天極熱
-      { label: '9月', val: 32 },
-      { label: '11月', val: 26 },
-    ],
-  };
-
-  // 2. 濕度資料 (單位：%，合理範圍 40-70)
-  const mockHumidDataMap = {
-    '日': [
-      { label: '00', val: 65 },
-      { label: '04', val: 70 },
-      { label: '08', val: 60 },
-      { label: '12', val: 45 },
-      { label: '16', val: 40 },
-      { label: '20', val: 55 },
-      { label: '24', val: 65 },
-    ],
-    '週': [
-      { label: '一', val: 55 },
-      { label: '二', val: 50 },
-      { label: '三', val: 90, isAbnormal: 'high' }, // 下大雨異常高濕
-      { label: '四', val: 60 },
-      { label: '五', val: 55 },
-      { label: '六', val: 45 },
-      { label: '日', val: 25, isAbnormal: 'low' }, // 異常乾燥
-    ],
-    '月': [
-      { label: '1', val: 50 },
-      { label: '5', val: 55 },
-      { label: '10', val: 60 },
-      { label: '15', val: 55 },
-      { label: '20', val: 50 },
-      { label: '25', val: 45 },
-      { label: '30', val: 50 },
-    ],
-    '年': [
-      { label: '1月', val: 45 },
-      { label: '3月', val: 55 },
-      { label: '5月', val: 80, isAbnormal: 'high' }, // 梅雨季
-      { label: '7月', val: 65 },
-      { label: '9月', val: 55 },
-      { label: '11月', val: 50 },
-    ],
-  };
-
-  // 3. 日照資料 (單位：小時，每日合理範圍 2-8小時)
-  const mockBaskDataMap = {
-    '日': [
-      { label: '00', val: 0 },
-      { label: '04', val: 0 },
-      { label: '08', val: 1.5 },
-      { label: '12', val: 2.5 },
-      { label: '16', val: 2 },
-      { label: '20', val: 0 },
-      { label: '24', val: 0 },
-    ],
-    '週': [
-      { label: '一', val: 4 },
-      { label: '二', val: 3.5 },
-      { label: '三', val: 1, isAbnormal: 'low' }, // 陰天沒出來曬
-      { label: '四', val: 5 },
-      { label: '五', val: 4.5 },
-      { label: '六', val: 6 },
-      { label: '日', val: 5.5 },
-    ],
-    '月': [
-      { label: '1', val: 4 },
-      { label: '5', val: 4.5 },
-      { label: '10', val: 3 },
-      { label: '15', val: 5 },
-      { label: '20', val: 4 },
-      { label: '25', val: 5.5 },
-      { label: '30', val: 4 },
-    ],
-    '年': [
-      { label: '1月', val: 2.5 },
-      { label: '3月', val: 4 },
-      { label: '5月', val: 3 },
-      { label: '7月', val: 6 },
-      { label: '9月', val: 5 },
-      { label: '11月', val: 3 },
-    ],
-  };
-
-  // 4. 體重資料 (單位：克，合理範圍 300-500)
-  const mockWeightDataMap = {
-    '日': [
-      { label: '00', val: 410 },
-      { label: '04', val: 410 },
-      { label: '08', val: 412 },
-      { label: '12', val: 415 },
-      { label: '16', val: 418 },
-      { label: '20', val: 415 },
-      { label: '24', val: 412 },
-    ],
-    '週': [
-      { label: '一', val: 410 },
-      { label: '二', val: 412 },
-      { label: '三', val: 415 },
-      { label: '四', val: 416 },
-      { label: '五', val: 414 },
-      { label: '六', val: 415 },
-      { label: '日', val: 418 },
-    ],
-    '月': [
-      { label: '1', val: 405 },
-      { label: '5', val: 408 },
-      { label: '10', val: 410 },
-      { label: '15', val: 412 },
-      { label: '20', val: 415 },
-      { label: '25', val: 418 },
-      { label: '30', val: 420 },
-    ],
-    '年': [
-      { label: '1月', val: 350 },
-      { label: '3月', val: 370 },
-      { label: '5月', val: 390 },
-      { label: '7月', val: 410 },
-      { label: '9月', val: 425 },
-      { label: '11月', val: 440 },
-    ],
-  };
-
-  // 5. 身長資料 (單位：公分，合理範圍 0-50cm)
-  const mockLengthDataMap = {
-    '週': [
-      { label: '一', val: 45.0 },
-      { label: '二', val: 45.0 },
-      { label: '三', val: 45.1 },
-      { label: '四', val: 45.1 },
-      { label: '五', val: 45.1 },
-      { label: '六', val: 45.2 },
-      { label: '日', val: 45.2 },
-    ],
-    '月': [
-      { label: '1', val: 44.5 },
-      { label: '5', val: 44.6 },
-      { label: '10', val: 44.8 },
-      { label: '15', val: 45.0 },
-      { label: '20', val: 45.1 },
-      { label: '25', val: 45.2 },
-      { label: '30', val: 45.5 },
-    ],
-    '年': [
-      { label: '1月', val: 30 },
-      { label: '3月', val: 35 },
-      { label: '5月', val: 40 },
-      { label: '7月', val: 43 },
-      { label: '9月', val: 45 },
-      { label: '11月', val: 48 },
-    ],
-  };
+  // 所有圖表資料已從 src/data/mockDiaryData.ts 統一匯入
 
   const chartButtons = [
     { text: '溫度變化圖', Icon: IconTemp },
     { text: '濕度變化圖', Icon: IconHumid },
     { text: '日照變化圖', Icon: IconBask },
+    { text: '泡澡變化圖', Icon: IconBath },
+    { text: '飲食變化圖', Icon: IconFeed },
     { text: '體重變化圖', Icon: IconWeight },
     { text: '身長變化圖', Icon: IconLength },
     { text: '排便日曆', Icon: IconPoop },
@@ -266,7 +90,7 @@ export default function AnalyticsScreen() {
           <Pressable 
             onPress={() => {
               if (availablePets.length === 0) {
-                router.push('/pets/add');
+                router.push('/(tabs)/pets/add?from=analytics');
               } else {
                 setIsDropdownVisible(!isDropdownVisible);
               }
@@ -327,12 +151,12 @@ export default function AnalyticsScreen() {
                 <Text style={[styles.recordTitle, { color: theme.primary, fontFamily: fontFamilyName }]}>溫度</Text>
               </View>
               <View style={styles.recordContent}>
-                <Text style={[styles.recordText, { color: theme.primary, fontFamily: fontFamilyName }]}>現在温度 31℃</Text>
-                <Text style={[styles.recordText, { color: theme.primary, fontFamily: fontFamilyName }]}>平均温度 31℃</Text>
-                <Text style={[styles.recordText, { color: theme.primary, fontFamily: fontFamilyName }]}>今日最高温度 33℃</Text>
-                <Text style={[styles.recordText, { color: theme.primary, fontFamily: fontFamilyName }]}>今日最低温度 30℃</Text>
+                <Text style={[styles.recordText, { color: theme.primary, fontFamily: fontFamilyName }]}>現在温度 {mockLatestStatus.temp.current}</Text>
+                <Text style={[styles.recordText, { color: theme.primary, fontFamily: fontFamilyName }]}>平均温度 {mockLatestStatus.temp.avg}</Text>
+                <Text style={[styles.recordText, { color: theme.primary, fontFamily: fontFamilyName }]}>今日最高温度 {mockLatestStatus.temp.high}</Text>
+                <Text style={[styles.recordText, { color: theme.primary, fontFamily: fontFamilyName }]}>今日最低温度 {mockLatestStatus.temp.low}</Text>
               </View>
-              <Text style={[styles.recordFooter, { color: theme.primary, fontFamily: fontFamilyName }]}>更新時間  2025/07/30</Text>
+              <Text style={[styles.recordFooter, { color: theme.primary, fontFamily: fontFamilyName }]}>更新時間  {mockLatestStatus.temp.updatedAt}</Text>
             </View>
 
             {/* 濕度卡片 */}
@@ -342,12 +166,12 @@ export default function AnalyticsScreen() {
                 <Text style={[styles.recordTitle, { color: theme.primary, fontFamily: fontFamilyName }]}>濕度</Text>
               </View>
               <View style={styles.recordContent}>
-                <Text style={[styles.recordText, { color: theme.primary, fontFamily: fontFamilyName }]}>現在濕度 30%</Text>
-                <Text style={[styles.recordText, { color: theme.primary, fontFamily: fontFamilyName }]}>平均濕度 30%</Text>
-                <Text style={[styles.recordText, { color: theme.primary, fontFamily: fontFamilyName }]}>今日最高濕度 31%</Text>
-                <Text style={[styles.recordText, { color: theme.primary, fontFamily: fontFamilyName }]}>今日最低濕度 30℃</Text>
+                <Text style={[styles.recordText, { color: theme.primary, fontFamily: fontFamilyName }]}>現在濕度 {mockLatestStatus.humid.current}</Text>
+                <Text style={[styles.recordText, { color: theme.primary, fontFamily: fontFamilyName }]}>平均濕度 {mockLatestStatus.humid.avg}</Text>
+                <Text style={[styles.recordText, { color: theme.primary, fontFamily: fontFamilyName }]}>今日最高濕度 {mockLatestStatus.humid.high}</Text>
+                <Text style={[styles.recordText, { color: theme.primary, fontFamily: fontFamilyName }]}>今日最低濕度 {mockLatestStatus.humid.low}</Text>
               </View>
-              <Text style={[styles.recordFooter, { color: theme.primary, fontFamily: fontFamilyName }]}>更新時間  2025/07/30</Text>
+              <Text style={[styles.recordFooter, { color: theme.primary, fontFamily: fontFamilyName }]}>更新時間  {mockLatestStatus.humid.updatedAt}</Text>
             </View>
 
             {/* 日照卡片 */}
@@ -357,10 +181,9 @@ export default function AnalyticsScreen() {
                 <Text style={[styles.recordTitle, { color: theme.primary, fontFamily: fontFamilyName }]}>日照</Text>
               </View>
               <View style={styles.recordContent}>
-                <Text style={[styles.recordText, { color: theme.primary, fontFamily: fontFamilyName }]}>描述</Text>
-                <Text style={[styles.recordText, { color: theme.primary, fontFamily: fontFamilyName }]}>30分鐘</Text>
+                <Text style={[styles.recordText, { color: theme.primary, fontFamily: fontFamilyName }]}>{mockLatestStatus.bask.value}</Text>
               </View>
-              <Text style={[styles.recordFooter, { color: theme.primary, fontFamily: fontFamilyName }]}>更新時間  2025/07/17</Text>
+              <Text style={[styles.recordFooter, { color: theme.primary, fontFamily: fontFamilyName }]}>更新時間  {mockLatestStatus.bask.updatedAt}</Text>
             </View>
 
             {/* 飲食卡片 */}
@@ -370,10 +193,9 @@ export default function AnalyticsScreen() {
                 <Text style={[styles.recordTitle, { color: theme.primary, fontFamily: fontFamilyName }]}>飲食</Text>
               </View>
               <View style={styles.recordContent}>
-                <Text style={[styles.recordText, { color: theme.primary, fontFamily: fontFamilyName }]}>描述</Text>
-                <Text style={[styles.recordText, { color: theme.primary, fontFamily: fontFamilyName }]}>蟋蟀10隻+高麗菜0.5片</Text>
+                <Text style={[styles.recordText, { color: theme.primary, fontFamily: fontFamilyName }]}>{mockLatestStatus.feed.value}</Text>
               </View>
-              <Text style={[styles.recordFooter, { color: theme.primary, fontFamily: fontFamilyName }]}>更新時間  2025/07/17</Text>
+              <Text style={[styles.recordFooter, { color: theme.primary, fontFamily: fontFamilyName }]}>更新時間  {mockLatestStatus.feed.updatedAt}</Text>
             </View>
 
             {/* 泡澡卡片 */}
@@ -383,10 +205,9 @@ export default function AnalyticsScreen() {
                 <Text style={[styles.recordTitle, { color: theme.primary, fontFamily: fontFamilyName }]}>泡澡</Text>
               </View>
               <View style={styles.recordContent}>
-                <Text style={[styles.recordText, { color: theme.primary, fontFamily: fontFamilyName }]}>描述</Text>
-                <Text style={[styles.recordText, { color: theme.primary, fontFamily: fontFamilyName }]}>温水泡澡15分鐘</Text>
+                <Text style={[styles.recordText, { color: theme.primary, fontFamily: fontFamilyName }]}>{mockLatestStatus.bath.value}</Text>
               </View>
-              <Text style={[styles.recordFooter, { color: theme.primary, fontFamily: fontFamilyName }]}>更新時間  2025/07/17</Text>
+              <Text style={[styles.recordFooter, { color: theme.primary, fontFamily: fontFamilyName }]}>更新時間  {mockLatestStatus.bath.updatedAt}</Text>
             </View>
 
             {/* 排便卡片 */}
@@ -396,10 +217,9 @@ export default function AnalyticsScreen() {
                 <Text style={[styles.recordTitle, { color: theme.primary, fontFamily: fontFamilyName }]}>排便</Text>
               </View>
               <View style={styles.recordContent}>
-                <Text style={[styles.recordText, { color: theme.primary, fontFamily: fontFamilyName }]}>描述</Text>
-                <Text style={[styles.recordText, { color: theme.primary, fontFamily: fontFamilyName }]}>正常排便</Text>
+                <Text style={[styles.recordText, { color: theme.primary, fontFamily: fontFamilyName }]}>{mockLatestStatus.poop.value}</Text>
               </View>
-              <Text style={[styles.recordFooter, { color: theme.primary, fontFamily: fontFamilyName }]}>更新時間  2025/07/13</Text>
+              <Text style={[styles.recordFooter, { color: theme.primary, fontFamily: fontFamilyName }]}>更新時間  {mockLatestStatus.poop.updatedAt}</Text>
             </View>
 
             {/* 體重卡片 */}
@@ -409,10 +229,9 @@ export default function AnalyticsScreen() {
                 <Text style={[styles.recordTitle, { color: theme.primary, fontFamily: fontFamilyName }]}>體重</Text>
               </View>
               <View style={styles.recordContent}>
-                <Text style={[styles.recordText, { color: theme.primary, fontFamily: fontFamilyName }]}>描述</Text>
-                <Text style={[styles.recordText, { color: theme.primary, fontFamily: fontFamilyName }]}>415公克</Text>
+                <Text style={[styles.recordText, { color: theme.primary, fontFamily: fontFamilyName }]}>{mockLatestStatus.weight.value}</Text>
               </View>
-              <Text style={[styles.recordFooter, { color: theme.primary, fontFamily: fontFamilyName }]}>更新時間  2025/07/05</Text>
+              <Text style={[styles.recordFooter, { color: theme.primary, fontFamily: fontFamilyName }]}>更新時間  {mockLatestStatus.weight.updatedAt}</Text>
             </View>
 
             {/* 身長卡片 */}
@@ -422,10 +241,9 @@ export default function AnalyticsScreen() {
                 <Text style={[styles.recordTitle, { color: theme.primary, fontFamily: fontFamilyName }]}>身長</Text>
               </View>
               <View style={styles.recordContent}>
-                <Text style={[styles.recordText, { color: theme.primary, fontFamily: fontFamilyName }]}>描述</Text>
-                <Text style={[styles.recordText, { color: theme.primary, fontFamily: fontFamilyName }]}>44公分</Text>
+                <Text style={[styles.recordText, { color: theme.primary, fontFamily: fontFamilyName }]}>{mockLatestStatus.length.value}</Text>
               </View>
-              <Text style={[styles.recordFooter, { color: theme.primary, fontFamily: fontFamilyName }]}>更新時間  2025/07/01</Text>
+              <Text style={[styles.recordFooter, { color: theme.primary, fontFamily: fontFamilyName }]}>更新時間  {mockLatestStatus.length.updatedAt}</Text>
             </View>
           </View>
         )}
@@ -444,6 +262,11 @@ export default function AnalyticsScreen() {
             yAxisLabels = ['100%', '80%', '60%', '40%', '20%', '0%'];
           } else if (btn.text === '日照變化圖') {
             yAxisLabels = ['12h', '10h', '8h', '6h', '4h', '2h', '0h'];
+          } else if (btn.text === '泡澡變化圖') {
+            yAxisLabels = ['60m', '50m', '40m', '30m', '20m', '10m', '0m'];
+          } else if (btn.text === '飲食變化圖') {
+            yAxisLabels = ['好', '偏好', '普通', '偏差', '差'];
+            availableTabs = ['週', '月', '年'];
           } else if (btn.text === '體重變化圖') {
             yAxisLabels = ['500g', '400g', '300g', '200g', '100g', '0g'];
             availableTabs = ['週', '月', '年']; // 拿掉日
@@ -462,6 +285,10 @@ export default function AnalyticsScreen() {
             currentMockData = mockHumidDataMap[displayTab as keyof typeof mockHumidDataMap] || mockHumidDataMap['週'];
           } else if (btn.text === '日照變化圖') {
             currentMockData = mockBaskDataMap[displayTab as keyof typeof mockBaskDataMap] || mockBaskDataMap['週'];
+          } else if (btn.text === '泡澡變化圖') {
+            currentMockData = mockBathDataMap[displayTab as keyof typeof mockBathDataMap] || mockBathDataMap['週'];
+          } else if (btn.text === '飲食變化圖') {
+            currentMockData = mockFeedDataMap[displayTab as keyof typeof mockFeedDataMap] || mockFeedDataMap['週'];
           } else if (btn.text === '體重變化圖') {
             currentMockData = mockWeightDataMap[displayTab as keyof typeof mockWeightDataMap] || mockWeightDataMap['週'];
           } else if (btn.text === '身長變化圖') {
@@ -482,6 +309,10 @@ export default function AnalyticsScreen() {
               heightPercent = (data.val / 50) * 100;
             } else if (btn.text === '日照變化圖') {
               heightPercent = (data.val / 12) * 100;
+            } else if (btn.text === '泡澡變化圖') {
+              heightPercent = (data.val / 60) * 100;
+            } else if (btn.text === '飲食變化圖') {
+              heightPercent = ((data.val - 1) / 4) * 100;
             } else {
               heightPercent = data.val;
             }
@@ -491,7 +322,7 @@ export default function AnalyticsScreen() {
 
           // 如果是折線圖，準備 SVG points
           let polylinePoints = '';
-          const isLineChart = btn.text === '體重變化圖' || btn.text === '身長變化圖';
+          const isLineChart = btn.text === '體重變化圖' || btn.text === '身長變化圖' || btn.text === '飲食變化圖';
           if (isLineChart) {
             const len = processedData.length;
             polylinePoints = processedData.map((d, i) => {
@@ -552,15 +383,10 @@ export default function AnalyticsScreen() {
                       const isCurrentMonth = today.getFullYear() === calYear && today.getMonth() + 1 === calMonth;
                       const currentDay = today.getDate();
 
-                      // 模擬不同月份的事件
-                      const getMockEvents = (text: string, m: number) => {
-                        if (m % 2 === 0) {
-                          return text === '排便日曆' ? [3, 7, 14, 19, 21, 28] : [5, 20];
-                        } else {
-                          return text === '排便日曆' ? [2, 5, 8, 12, 15, 18, 22, 25, 28] : [10, 25];
-                        }
-                      };
-                      const eventDays = getMockEvents(btn.text, calMonth);
+                      // 從共用資料中心取得事件日期
+                      const eventDays = btn.text === '排便日曆'
+                        ? getMockPoopEvents(calMonth)
+                        : getMockMoltEvents(calMonth);
                       const bgColor = theme.secondary;
 
                       return (
@@ -661,9 +487,11 @@ export default function AnalyticsScreen() {
                     {/* 圖表主體 */}
                     <View style={styles.chartArea}>
                       {/* 背景水平格線 */}
-                      {yAxisLabels.map((_, i) => (
-                        <View key={i} style={[styles.chartGridLine, { borderColor: theme.primary, top: `${(i / (yAxisLabels.length - 1)) * 100}%` }]} />
-                      ))}
+                      <View style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 24 }}>
+                        {yAxisLabels.map((_, i) => (
+                          <View key={i} style={[styles.chartGridLine, { borderColor: theme.primary, top: `${(i / (yAxisLabels.length - 1)) * 100}%` }]} />
+                        ))}
+                      </View>
                       
                       {/* 背景垂直格線 (與 X 軸對齊) */}
                       {processedData.map((_: any, i: number) => (
@@ -675,10 +503,10 @@ export default function AnalyticsScreen() {
                         {isLineChart && (
                           <Svg 
                             width="100%" 
-                            height="85%" // 與 chartBarWrapper 相同高度
+                            height="100%"
                             viewBox="0 0 100 100" 
                             preserveAspectRatio="none" 
-                            style={{ position: 'absolute', bottom: 24, left: 0, right: 0 }}
+                            style={{ position: 'absolute', top: 0, bottom: 24, left: 0, right: 0 }}
                           >
                             <Polyline 
                               points={polylinePoints} 
@@ -693,7 +521,7 @@ export default function AnalyticsScreen() {
                         {processedData.map((data: any, idx: number) => {
                           return (
                             <View key={idx} style={styles.chartBarCol}>
-                              <View style={[styles.chartBarWrapper, isLineChart && { backgroundColor: 'transparent', boxShadow: 'none' }, !isLineChart && { backgroundColor: theme.panelBackground }]}>
+                              <View style={[styles.chartBarWrapper, isLineChart && { backgroundColor: 'transparent', boxShadow: 'none', overflow: 'visible' }, !isLineChart && { backgroundColor: theme.panelBackground }]}>
                                  {isLineChart ? (
                                    // 折線圖的圓點
                                      <>
@@ -718,7 +546,8 @@ export default function AnalyticsScreen() {
                                          fontSize: getFontSize(12, 'small'),
                                          fontFamily: fontFamilyName,
                                          textAlign: 'center',
-                                         width: 30,
+                                         width: 40,
+                                         left: -15,
                                        }}>
                                          {data.val}
                                        </Text>
@@ -931,6 +760,7 @@ const styles = StyleSheet.create({
     alignItems: 'flex-end',
     paddingRight: 8,
     paddingBottom: 24, // 預留空間給 X 軸，與長條圖對齊
+    marginTop: -7, // 向上位移半行高，讓文字垂直中心精準對齊格線
   },
   yAxisLabel: {
     fontSize: getFontSize(13, 'medium'), // 稍微放大一點點提升辨識度
@@ -974,7 +804,7 @@ const styles = StyleSheet.create({
   },
   chartBarWrapper: {
     width: 10, // 模擬 SVG 細長條
-    height: '85%', // 留白給上下的文字
+    flex: 1, // 自動填滿剩餘高度 (取代原本的 85%)，讓長條能完美頂到最上方 100% 處
     borderRadius: 5,
     boxShadow: 'inset 2px 2px 4px rgba(0,0,0,0.15)', // 空白進度條內陰影
     justifyContent: 'flex-end',

@@ -21,7 +21,7 @@ import { mockMedicalDB } from './mockMedicalDB';
 
 export default function MedicalDetailScreen() {
   const router = useRouter();
-  const { id } = useLocalSearchParams<{ id: string }>();
+  const { id, petId } = useLocalSearchParams<{ id: string, petId?: string }>();
   const { themeId, fontFamilyName } = useTheme();
   const theme = getThemeTokens(themeId);
 
@@ -68,7 +68,7 @@ export default function MedicalDetailScreen() {
       floatingAction={
         <FloatingActionBar
           actions={[
-            { id: 'back', onPress: () => router.back() },
+            { id: 'back', onPress: () => router.navigate({ pathname: '/(tabs)/pets/medical', params: { id: petId || '1' } }) },
           ]}
         />
       }
@@ -177,7 +177,7 @@ export default function MedicalDetailScreen() {
               <Pressable style={[styles.modalButton, { backgroundColor: theme.primary }]} onPress={() => {
                 // TODO: 執行刪除邏輯
                 setShowDeleteModal(false);
-                router.back();
+                router.navigate({ pathname: '/(tabs)/pets/medical', params: { id: petId || '1' } });
               }}>
                 <Text style={[styles.modalButtonText, { color: theme.background, fontFamily: fontFamilyName }]}>
                   確認

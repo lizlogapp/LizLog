@@ -100,7 +100,7 @@ export default function PetViewScreen() {
   // FloatingActionBar 動態切換
   const floatingActions: FloatingActionItem[] = showDeleteScreen
     ? [{ id: 'back' as const, onPress: () => setShowDeleteScreen(false) }]
-    : [{ id: 'back' as const, onPress: () => router.back() }];
+    : [{ id: 'back' as const, onPress: () => router.navigate('/(tabs)/pets') }];
 
   return (
     <BaseScreen

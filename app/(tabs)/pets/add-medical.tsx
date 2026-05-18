@@ -115,7 +115,7 @@ export default function AddMedicalScreen() {
   }, [id]);
 
   const handleSave = () => {
-    router.back();
+    router.navigate({ pathname: '/(tabs)/pets/medical', params: { id: petId || '1' } });
   };
 
   const openCalendar = (target: 'visit' | 'medStart' | 'medEnd') => {
@@ -147,7 +147,7 @@ export default function AddMedicalScreen() {
       floatingAction={
         <FloatingActionBar
           actions={[
-            { id: 'back', onPress: () => router.back() },
+            { id: 'back', onPress: () => router.navigate({ pathname: '/(tabs)/pets/medical', params: { id: petId || '1' } }) },
             { id: 'confirm', onPress: handleSave },
           ]}
         />

@@ -12,6 +12,7 @@ import {
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { BaseScreen } from '../../src/components/common/BaseScreen';
+import { mockTodayReminders, ReminderItem } from '../../src/data/mockDiaryData';
 import { paletteColors } from '../../src/theme/themeColorSettings';
 import {
   STATUS_BAR_HEIGHT,
@@ -54,7 +55,13 @@ export default function HomeScreen() {
     weatherIcon: any;
     imageUrl: any;
   }
-  const [latestDiary, setLatestDiary] = useState<DiaryRecord | null>(null); // 初次開啟 APP 尚無資料
+  const [latestDiary, setLatestDiary] = useState<DiaryRecord | null>({
+    id: '1',
+    day: '17',
+    month: 'JUL',
+    weatherIcon: require('../../assets/icons/weather-sunny.png'),
+    imageUrl: require('../../assets/user-uploads/lizard-001.jpg'),
+  });
 
   // 動畫相關
   const img1Opacity = useRef(new Animated.Value(0)).current;
@@ -145,10 +152,8 @@ export default function HomeScreen() {
     right: PANEL_CONTENT_MARGIN + CONTENT_PAGE_MARGIN,
   };
 
-  // State：首頁打卡項目列表
-  const [reminders, setReminders] = useState([
-    { id: '1', pet: '', title: '新增第一筆提醒', tagColor: '#FFCA29', checked: false },
-  ]);
+  // State：首頁提醒事項（從共用資料中心讀取）
+  const [reminders, setReminders] = useState<ReminderItem[]>(mockTodayReminders);
 
   const toggleReminder = (id: string) => {
     setReminders((prev) =>
@@ -219,7 +224,7 @@ export default function HomeScreen() {
           <Pressable
             onPress={() => {
               if (availablePets.length === 0) {
-                router.push('/pets/add');
+                router.push('/(tabs)/pets/add?from=home');
               } else {
                 setIsDropdownVisible(!isDropdownVisible);
               }
@@ -266,7 +271,7 @@ export default function HomeScreen() {
         <View style={[styles.sensorCardBlock, { backgroundColor: theme.background }]}>
           <View style={styles.sensorTopHalf}>
             {!isConnected ? (
-              <Pressable onPress={() => router.push('/settings')}>
+              <Pressable onPress={() => router.push('/(tabs)/settings')}>
                 <Text style={[styles.sensorText, { color: theme.text, fontFamily: fontFamilyName }]}>未連接感測器</Text>
               </Pressable>
             ) : (
@@ -308,67 +313,86 @@ export default function HomeScreen() {
           </View>
         </View>
 
-        {/* 卡片 3：提醒事項 */}
-        <View style={[styles.reminderCardBlock, { backgroundColor: theme.background }]}>
-          {reminders.map((reminder) => (
-            <View key={reminder.id} style={[styles.reminderItem, { backgroundColor: theme.background }]}>
-              {/* 拖拉與打卡 */}
-              <View style={styles.reminderLeft}>
-                <Image source={require('../../assets/icons/icon-drag.png')} style={[styles.dragIcon, { tintColor: theme.primary }]} />
-                <Pressable onPress={() => toggleReminder(reminder.id)} style={styles.checkboxContainer}>
-                  <Image
-                    source={
-                      reminder.checked
-                        ? require('../../assets/icons/checkbox-checked.png')
-                        : require('../../assets/icons/checkbox-unchecked.png')
-                    }
-                    style={[styles.checkboxIcon, { tintColor: reminder.checked ? theme.panelBackground : theme.primary }]}
-                  />
-                </Pressable>
-              </View>
-
-              {/* 寵物名與標題 */}
-              <Pressable 
-                style={styles.reminderContent}
-                onPress={() => router.push('/(tabs)/pets/reminder')}
-              >
-                {!!reminder.pet && (
-                  <Text style={[styles.reminderPet, { color: theme.text, fontFamily: fontFamilyName }]}>
-                    {reminder.pet}
-                  </Text>
-                )}
-                <Text style={[styles.reminderTitle, { color: theme.text, fontFamily: fontFamilyName }]} numberOfLines={1}>
-                  {reminder.title}
-                </Text>
-              </Pressable>
-
-              {/* 右側顏色標籤 */}
-              <Pressable onPress={() => handleTagPress(reminder.id)} style={styles.tagContainer}>
-                <Image
-                  source={require('../../assets/icons/tag-base.png')}
-                  style={[styles.reminderBarImage, { tintColor: reminder.tagColor === '#FFCA29' ? undefined : reminder.tagColor }]}
-                  resizeMode="contain"
-                />
-              </Pressable>
-            </View>
-          ))}
-        </View>
+        {/* 卡片 3：提醒事項（無資料顯示引導，有資料顯示當日提醒） */}
+        {reminders.length === 0 ? (
+          <Pressable
+            style={[styles.reminderEmptyBlock, { backgroundColor: theme.background }]}
+            onPress={() => router.push('/(tabs)/pets/reminder?from=home')}
+          >
+            <Text style={[styles.diaryText, { color: theme.primary, fontFamily: fontFamilyName }]}>
+              新增第一筆提醒
+            </Text>
+          </Pressable>
+        ) : (
+          <View style={[styles.reminderCardBlock, { backgroundColor: theme.background }]}>
+            {(() => {
+              const MAX_VISIBLE = 3;
+              const visible = reminders.slice(0, MAX_VISIBLE);
+              const overflow = reminders.length - MAX_VISIBLE;
+              return (
+                <>
+                  {visible.map((reminder) => (
+                    <View key={reminder.id} style={[styles.reminderItem, { backgroundColor: theme.background }]}>
+                      <Text style={[styles.reminderDate, { color: theme.primary, fontFamily: fontFamilyName }]}>
+                        {reminder.date}
+                      </Text>
+                      <Pressable
+                        style={styles.reminderContent}
+                        onPress={() => router.push('/(tabs)/pets/reminder?from=home')}
+                      >
+                        <Text style={[styles.reminderTitle, { color: theme.text, fontFamily: fontFamilyName }]} numberOfLines={1}>
+                          {reminder.title}
+                        </Text>
+                        {reminder.pets.length > 0 && (
+                          <Text style={[styles.reminderPet, { color: theme.accentHot, fontFamily: fontFamilyName }]} numberOfLines={1}>
+                            {reminder.pets.length > 1
+                              ? `${reminder.pets.length}隻`
+                              : reminder.pets[0].length > 8
+                                ? reminder.pets[0].slice(0, 8) + '...'
+                                : reminder.pets[0]
+                            }
+                          </Text>
+                        )}
+                      </Pressable>
+                      <Pressable onPress={() => handleTagPress(reminder.id)} style={styles.tagContainer}>
+                        <Image
+                          source={require('../../assets/icons/tag-base.png')}
+                          style={[styles.reminderBarImage, { tintColor: reminder.tagColor === '#FFCA29' ? undefined : reminder.tagColor }]}
+                          resizeMode="contain"
+                        />
+                      </Pressable>
+                    </View>
+                  ))}
+                  {overflow > 0 && (
+                    <Pressable
+                      onPress={() => router.push('/(tabs)/pets/reminder?from=home')}
+                      style={{ alignItems: 'center', paddingVertical: 4 }}
+                    >
+                      <Text style={{ color: theme.primary, fontFamily: fontFamilyName, fontSize: getFontSize(14, 'medium'), letterSpacing: 4 }}>
+                        還有 {overflow} 筆提醒
+                      </Text>
+                    </Pressable>
+                  )}
+                </>
+              );
+            })()}
+          </View>
+        )}
 
         {/* 卡片 4：新增/顯示最近一篇日記 */}
         {!latestDiary ? (
           <Pressable
             style={[styles.diaryBlock, { backgroundColor: theme.background }]}
-            onPress={() => router.push('/diary')}
+            onPress={() => router.push('/(tabs)/diary')}
           >
             <Text style={[styles.diaryText, { color: theme.primary, fontFamily: fontFamilyName }]}>
               新增第一篇日記
             </Text>
-            <Image source={require('../../assets/illustrations/lizard-head-light.png')} style={styles.diaryImage} resizeMode="contain" />
           </Pressable>
         ) : (
           <Pressable
             style={[styles.diaryBlockActive, { backgroundColor: theme.background }]}
-            onPress={() => router.push('/diary/view')}
+            onPress={() => router.push('/(tabs)/diary/view?from=home')}
           >
             {/* 左側：精緻雜誌風資訊區塊 (資料綁定) */}
             <View style={styles.diaryActiveLeft}>
@@ -530,9 +554,9 @@ const styles = StyleSheet.create({
     alignSelf: 'center',
     backgroundColor: paletteColors.RI_CHU,
     borderRadius: 16,
-    height: 160, // 必須加回固定高度，才能讓內部的 flex: 1 完美撐開上下距
+    height: 125,
     marginBottom: 16,
-    paddingVertical: 16,
+    paddingVertical: 10,
     boxShadow: 'inset 2px 2px 7px rgba(0, 0, 0, 0.25)',
   },
   sensorTopHalf: {
@@ -572,12 +596,12 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-around',
     width: '100%',
-    paddingHorizontal: 20,
-    marginTop: 8, // 保證上方數據塊不論多大，都會維持這個最小緩衝
+    paddingHorizontal: 24,
+    marginTop: 4,
   },
   actionIcon: {
-    width: 44,
-    height: 44,
+    width: 32,
+    height: 32,
     resizeMode: 'contain',
   },
 
@@ -586,15 +610,26 @@ const styles = StyleSheet.create({
     alignSelf: 'center',
     backgroundColor: paletteColors.RI_CHU,
     borderRadius: 16,
-    paddingVertical: 8,
+    paddingVertical: 6,
     paddingHorizontal: 5,
-    marginBottom: 16, // 統一間距為 16
-    gap: 8,
+    marginBottom: 16,
+    gap: 6,
+    boxShadow: 'inset 2px 2px 7px rgba(0, 0, 0, 0.25)',
+  },
+  reminderEmptyBlock: {
+    width: '96%',
+    alignSelf: 'center',
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    height: 45,
+    marginBottom: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
     boxShadow: 'inset 2px 2px 7px rgba(0, 0, 0, 0.25)',
   },
   // Reminder 單一項目
   reminderItem: {
-    height: 55,
+    height: 45,
     width: '100%',
     backgroundColor: '#FFFFFF',
     borderRadius: 16,
@@ -608,24 +643,12 @@ const styles = StyleSheet.create({
     paddingLeft: 12,
     paddingRight: 8,
   },
-  reminderLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  dragIcon: {
-    width: 24,
-    height: 24,
+  reminderDate: {
+    fontSize: getFontSize(14, 'medium'),
+    fontWeight: '600',
+    minWidth: 38,
+    textAlign: 'center',
     marginRight: 6,
-    tintColor: paletteColors.MU_CHENG, // 拖拉把手通常與主題橘色搭配
-  },
-  checkboxContainer: {
-    padding: 4,
-    marginRight: 10,
-  },
-  checkboxIcon: {
-    width: 24,
-    height: 24,
-    resizeMode: 'contain',
   },
   reminderContent: {
     flex: 1,
@@ -633,9 +656,14 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   reminderPet: {
-    fontSize: getFontSize(16, 'medium'),
-    marginRight: 10,
-    fontWeight: 'bold',
+    fontSize: getFontSize(11, 'medium'),
+    fontWeight: '600',
+    marginLeft: 6,
+    paddingHorizontal: 6,
+    paddingVertical: 1,
+    borderRadius: 8,
+    overflow: 'hidden',
+    maxWidth: 50,
   },
   reminderTitle: {
     flex: 1,
@@ -654,14 +682,14 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFFFFF',
     borderRadius: 16,
     flex: 1,
-    minHeight: 200,
+    minHeight: 60,
     width: '96%',
     alignSelf: 'center',
     padding: 20,
-    marginBottom: 0, // 設為 0，讓底部距離僅吃 ScrollView 的 16 padding，保持等距
+    marginBottom: 0,
     flexDirection: 'column',
     alignItems: 'center',
-    justifyContent: 'space-evenly',
+    justifyContent: 'center',
     boxShadow: '0px 4px 7px rgba(0, 0, 0, 0.25)',
   },
   diaryText: {
@@ -680,7 +708,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFFFFF',
     borderRadius: 16,
     flex: 1,
-    minHeight: 200, // 使用要求最小高度 200
+    minHeight: 140,
     width: '96%',
     alignSelf: 'center',
     marginBottom: 0,
@@ -689,10 +717,11 @@ const styles = StyleSheet.create({
     boxShadow: '0px 4px 7px rgba(0, 0, 0, 0.25)',
   },
   diaryActiveLeft: {
-    width: 140, // 左側日期資訊固定寬度
-    justifyContent: 'space-evenly', // 改為 space-evenly 以隨機改變空間距應依高度變化
+    width: 90,
+    justifyContent: 'center',
     alignItems: 'center',
-    paddingVertical: 24,
+    paddingVertical: 12,
+    gap: 4,
   },
   diaryActiveRight: {
     flex: 1, // 讓右側影像完全吞噬剩下的全部空間
@@ -703,14 +732,16 @@ const styles = StyleSheet.create({
     resizeMode: 'cover', // 完美覆蓋
   },
   diaryDateDay: {
-    fontSize: getFontSize(48, 'medium'), // 大字 7
+    fontSize: getFontSize(36, 'medium'),
   },
   diaryDateMonth: {
-    fontSize: getFontSize(22, 'medium'), // 小字 MON
+    fontSize: getFontSize(15, 'medium'),
+    letterSpacing: 2,
   },
   diaryWeatherIcon: {
-    width: 32,
-    height: 32,
+    width: 24,
+    height: 24,
     resizeMode: 'contain',
+    marginTop: 2,
   },
 });

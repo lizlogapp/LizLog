@@ -62,6 +62,7 @@ function TabsLayoutInner() {
           alignItems: 'center',
         },
       }}
+      initialRouteName="index"
     >
       <Tabs.Screen
         name="analytics"

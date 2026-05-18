@@ -15,7 +15,7 @@ import { getFontSize } from '../../../src/theme/typographySettings';
 import { paletteColors } from '../../../src/theme/themeColorSettings';
 import { BaseScreen } from '../../../src/components/common/BaseScreen';
 import { FloatingActionBar } from '../../../src/components/FloatingActionBar';
-import { mockReminderDB } from './mockReminderDB';
+import { mockReminderDB } from '../../../src/data/mockDiaryData';
 
 const defaultTypes = ['餵食', '換水', '清掃', '用藥', '驅蟲', '回診'];
 const weekDays = ['日', '一', '二', '三', '四', '五', '六'];
@@ -142,7 +142,7 @@ export default function AddReminderScreen() {
     };
 
     mockReminderDB[newData.id] = newData;
-    router.back();
+    router.navigate({ pathname: '/(tabs)/pets/reminder', params: { id: petId || '1' } });
   };
 
   const freqOptions: { key: Frequency; label: string }[] = [
@@ -166,7 +166,7 @@ export default function AddReminderScreen() {
       floatingAction={
         <FloatingActionBar
           actions={[
-            { id: 'back', onPress: () => router.back() },
+            { id: 'back', onPress: () => router.navigate({ pathname: '/(tabs)/pets/reminder', params: { id: petId || '1' } }) },
             { id: 'confirm', onPress: handleSave },
           ]}
         />

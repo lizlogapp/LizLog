@@ -162,7 +162,7 @@ export default function CoParentScreen() {
       floatingAction={
         <FloatingActionBar
           actions={[
-            { id: 'back', onPress: () => router.back() },
+            { id: 'back', onPress: () => router.navigate({ pathname: '/(tabs)/pets/view', params: { id } }) },
           ]}
         />
       }

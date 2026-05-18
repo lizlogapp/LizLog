@@ -6,7 +6,7 @@ import { getThemeTokens } from '../../../src/theme/themeSettings';
 import { getFontSize } from '../../../src/theme/typographySettings';
 import { FloatingActionBar } from '../../../src/components/FloatingActionBar';
 import { BaseScreen } from '../../../src/components/common/BaseScreen';
-
+import Slider from '@react-native-community/slider';
 // SVG Icons
 // @ts-ignore
 import IconTemp from '../../../assets/icons/icon-temp.svg';
@@ -64,21 +64,19 @@ export default function AddDiaryScreen() {
   const [diaryContent, setDiaryContent] = useState('');
   const [isDiaryExpanded, setIsDiaryExpanded] = useState(false);
   const [isUploadExpanded, setIsUploadExpanded] = useState(false);
+  const [appetite, setAppetite] = useState(3); // 食慾狀態，預設 3
+  const [poopState, setPoopState] = useState('無'); // 排便狀態，預設 '無'
+  const [feedState, setFeedState] = useState('無'); // 飲食狀態，預設 '無'
+  const [baskMinutes, setBaskMinutes] = useState('0'); // 日照分鐘，預設 0
+  const [bathMinutes, setBathMinutes] = useState('0'); // 泡澡分鐘，預設 0
+
+  const [temp, setTemp] = useState('31'); // 溫度預設
+  const [humid, setHumid] = useState('30'); // 濕度預設
+  const [weight, setWeight] = useState('415'); // 體重預設
+  const [length, setLength] = useState('44'); // 身長預設
 
   // 預設帶入當日日期
   const currentDate = getTodayString();
-
-  // 模擬當日資料（未來從 IOT 設備 / 資料庫取得）
-  const sensorData = {
-    temp: '31℃',
-    humid: '30%',
-    bask: '無',
-    feed: '無',
-    bath: '無',
-    poop: '無',
-    weight: '415公克',
-    length: '44公分',
-  };
 
   const togglePet = (pet: string) => {
     if (selectedPets.includes(pet)) {
@@ -91,14 +89,14 @@ export default function AddDiaryScreen() {
   };
 
   const recordItems = [
-    { icon: IconTemp, label: '溫度', value: sensorData.temp },
-    { icon: IconHumid, label: '濕度', value: sensorData.humid },
-    { icon: IconBask, label: '日照', value: sensorData.bask },
-    { icon: IconFeed, label: '飲食', value: sensorData.feed },
-    { icon: IconBath, label: '泡澡', value: sensorData.bath },
-    { icon: IconPoop, label: '排便', value: sensorData.poop },
-    { icon: IconWeight, label: '體重', value: sensorData.weight },
-    { icon: IconLength, label: '身長', value: sensorData.length },
+    { icon: IconTemp, label: '溫度', value: temp },
+    { icon: IconHumid, label: '濕度', value: humid },
+    { icon: IconBask, label: '日照', value: baskMinutes },
+    { icon: IconFeed, label: '飲食', value: feedState },
+    { icon: IconBath, label: '泡澡', value: bathMinutes },
+    { icon: IconPoop, label: '排便', value: poopState },
+    { icon: IconWeight, label: '體重', value: weight },
+    { icon: IconLength, label: '身長', value: length },
   ];
 
   return (
@@ -107,8 +105,8 @@ export default function AddDiaryScreen() {
       floatingAction={
         <FloatingActionBar
           actions={[
-            { id: 'back', onPress: () => router.back() },
-            { id: 'confirm', onPress: () => { /* TODO: 儲存日記 */ router.back(); } },
+            { id: 'back', onPress: () => router.navigate('/(tabs)/diary') },
+            { id: 'confirm', onPress: () => { /* TODO: 儲存日記 */ router.navigate('/(tabs)/diary'); } },
           ]}
         />
       }
@@ -206,8 +204,8 @@ export default function AddDiaryScreen() {
 
               {/* 簡化數據列（溫度 + 濕度 + 狀態圖標） */}
               <View style={styles.metricRow}>
-                <Text style={[styles.metricText, { color: valueColor, fontFamily: fontFamilyName }]}>{sensorData.temp}</Text>
-                <Text style={[styles.metricText, { color: valueColor, fontFamily: fontFamilyName }]}>{sensorData.humid}</Text>
+                <Text style={[styles.metricText, { color: valueColor, fontFamily: fontFamilyName }]}>{temp}℃</Text>
+                <Text style={[styles.metricText, { color: valueColor, fontFamily: fontFamilyName }]}>{humid}%</Text>
                 <View style={styles.metricIconsBlock}>
                   <Image source={require('../../../assets/icons/category-basking-default.png')} style={[styles.stateIcon, { tintColor: valueColor + '60' }]} />
                   <Image source={require('../../../assets/icons/category-food-default.png')} style={[styles.stateIcon, { tintColor: valueColor + '60' }]} />
@@ -223,14 +221,101 @@ export default function AddDiaryScreen() {
             {recordItems.map((item, idx) => {
               const IconComp = item.icon;
               return (
-                <View key={idx} style={styles.recordRow}>
-                  <IconComp width={20} height={20} color={labelColor} />
-                  <Text style={[styles.recordLabel, { color: labelColor, fontFamily: fontFamilyName }]}>
-                    {item.label}：
-                  </Text>
-                  <Text style={[styles.recordValue, { color: valueColor, fontFamily: fontFamilyName }]}>
-                    {item.value}
-                  </Text>
+                <View key={idx} style={{ gap: 8, width: '100%' }}>
+                  <View style={styles.recordRow}>
+                    <IconComp width={20} height={20} color={labelColor} />
+                    <Text style={[styles.recordLabel, { color: labelColor, fontFamily: fontFamilyName }]}>
+                      {item.label}：
+                    </Text>
+                    {item.label === '排便' ? (
+                      <View style={{ flexDirection: 'row', gap: 6, flex: 1, alignItems: 'center', justifyContent: 'flex-start' }}>
+                        {['無', '有'].map((opt) => (
+                          <Pressable
+                            key={opt}
+                            style={[
+                              { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 12, borderWidth: 1, width: 64, alignItems: 'center' },
+                              poopState === opt
+                                ? { backgroundColor: theme.accentHot + '15', borderColor: theme.accentHot }
+                                : { backgroundColor: theme.primary + '05', borderColor: theme.primary + '20' }
+                            ]}
+                            onPress={() => setPoopState(opt)}
+                          >
+                            <Text style={{ fontSize: getFontSize(13, 'medium'), fontFamily: fontFamilyName, color: poopState === opt ? theme.accentHot : theme.primary + 'A0', fontWeight: poopState === opt ? '600' : '500' }}>
+                              {opt}
+                            </Text>
+                          </Pressable>
+                        ))}
+                      </View>
+                    ) : item.label === '飲食' ? (
+                      <TextInput
+                        style={[styles.recordValue, { color: valueColor, fontFamily: fontFamilyName, flex: 1, textAlign: 'left', padding: 0, paddingLeft: 24, margin: 0, minHeight: 24 }]}
+                        value={feedState}
+                        onChangeText={setFeedState}
+                        multiline
+                        selectTextOnFocus
+                      />
+                    ) : ['泡澡', '日照', '體重', '身長', '溫度', '濕度'].includes(item.label) ? (
+                      <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }}>
+                        <TextInput
+                          style={[styles.recordValue, { color: valueColor, fontFamily: fontFamilyName, width: 64, textAlign: 'center', padding: 0, margin: 0, marginRight: 6 }]}
+                          value={
+                            item.label === '泡澡' ? bathMinutes :
+                            item.label === '日照' ? baskMinutes :
+                            item.label === '體重' ? weight :
+                            item.label === '身長' ? length :
+                            item.label === '溫度' ? temp :
+                            humid
+                          }
+                          onChangeText={
+                            item.label === '泡澡' ? setBathMinutes :
+                            item.label === '日照' ? setBaskMinutes :
+                            item.label === '體重' ? setWeight :
+                            item.label === '身長' ? setLength :
+                            item.label === '溫度' ? setTemp :
+                            setHumid
+                          }
+                          keyboardType="numeric"
+                          selectTextOnFocus
+                        />
+                        <Text style={[styles.recordValue, { color: labelColor, fontFamily: fontFamilyName }]}>
+                          {item.label === '泡澡' || item.label === '日照' ? '分鐘' :
+                           item.label === '體重' ? '公克' :
+                           item.label === '身長' ? '公分' :
+                           item.label === '溫度' ? '℃' :
+                           '%'}
+                        </Text>
+                      </View>
+                    ) : (
+                      <Text style={[styles.recordValue, { color: valueColor, fontFamily: fontFamilyName }]}>
+                        {item.value}
+                      </Text>
+                    )}
+                  </View>
+
+                  {/* 如果是飲食，新增食慾選項拉霸 */}
+                  {item.label === '飲食' && (
+                    <View style={[styles.recordRow, { marginTop: 4, marginBottom: 4, width: '100%', paddingRight: 0, marginRight: -16 }]}>
+                      {/* Icon 佔位 */}
+                      <View style={{ width: 20 }} />
+                      <Text style={[styles.recordLabel, { color: labelColor, fontFamily: fontFamilyName }]}>食慾：</Text>
+                      <View style={styles.sliderRow}>
+                        <Slider
+                          style={{ flex: 1, height: 40, marginLeft: 16, marginRight: 16 }}
+                          minimumValue={1}
+                          maximumValue={5}
+                          step={1}
+                          value={appetite}
+                          onValueChange={setAppetite}
+                          minimumTrackTintColor={appetite === 1 ? '#FF3B30' : appetite === 2 ? '#FF9500' : '#34C759'}
+                          maximumTrackTintColor={theme.primary + '30'}
+                          thumbTintColor={appetite === 1 ? '#FF3B30' : appetite === 2 ? '#FF9500' : '#34C759'}
+                        />
+                        <Text style={[styles.recordLabel, { color: labelColor, fontFamily: fontFamilyName, width: 42, textAlign: 'center' }]}>
+                          {appetite === 1 ? '差' : appetite === 2 ? '偏差' : appetite === 3 ? '普通' : appetite === 4 ? '偏好' : '好'}
+                        </Text>
+                      </View>
+                    </View>
+                  )}
                 </View>
               );
             })}
@@ -475,6 +560,57 @@ const styles = StyleSheet.create({
   },
   recordValue: {
     fontSize: getFontSize(16, 'medium'),
+  },
+  appetiteContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingLeft: 30, // 縮排對齊
+    marginTop: 4,
+    marginBottom: 4,
+  },
+  appetiteLabel: {
+    fontSize: getFontSize(14, 'medium'),
+    marginRight: 16,
+  },
+  sliderRow: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  sliderText: {
+    fontSize: getFontSize(14, 'medium'),
+  },
+  sliderTrackContainer: {
+    flex: 1,
+    height: 30,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 10,
+    marginHorizontal: 8,
+  },
+  sliderTrack: {
+    position: 'absolute',
+    left: 20,
+    right: 20,
+    height: 4,
+    borderRadius: 2,
+    top: '50%',
+    marginTop: -2,
+  },
+  sliderPoint: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    borderWidth: 2,
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
+    elevation: 2,
   },
 
   // ===== 操作按鈕卡片 =====

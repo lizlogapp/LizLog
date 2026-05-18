@@ -39,7 +39,7 @@ export default function MedicalScreen() {
       floatingAction={
         <FloatingActionBar
           actions={[
-            { id: 'back', onPress: () => router.back() },
+            { id: 'back', onPress: () => router.navigate({ pathname: '/(tabs)/pets/view', params: { id } }) },
             { id: 'add', onPress: () => router.push('/(tabs)/pets/add-medical') },
           ]}
         />
@@ -66,7 +66,7 @@ export default function MedicalScreen() {
               <Pressable
                 key={record.id}
                 style={[styles.recordCard, { backgroundColor: theme.background }]}
-                onPress={() => router.push({ pathname: '/(tabs)/pets/medical-detail', params: { id: record.id } })}
+                onPress={() => router.push({ pathname: '/(tabs)/pets/medical-detail', params: { id: record.id, petId: id } })}
               >
                 {/* 左側動態顏色裝飾條 */}
                 <View style={[styles.cardSideBar, { backgroundColor: record.tagColor }]} />
