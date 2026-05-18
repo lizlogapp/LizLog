@@ -1,4 +1,4 @@
-import { useRouter } from 'expo-router';
+import { useRouter, useLocalSearchParams } from 'expo-router';
 import React, { useState } from 'react';
 import { View, Text, StyleSheet, Pressable, ScrollView, Image, TextInput } from 'react-native';
 import { useTheme } from '../../../src/theme/ThemeContext';
@@ -46,6 +46,8 @@ const getTodayString = () => {
  */
 export default function AddDiaryScreen() {
   const router = useRouter();
+  const { id } = useLocalSearchParams<{ id?: string }>();
+  const isEditing = !!id;
   const { themeId, fontFamilyName } = useTheme();
   const theme = getThemeTokens(themeId);
 
@@ -59,9 +61,9 @@ export default function AddDiaryScreen() {
   const [isPetDropdownVisible, setIsPetDropdownVisible] = useState(false);
 
   // 可編輯欄位
-  const [title, setTitle] = useState('未命名標題');
+  const [title, setTitle] = useState(isEditing ? '初次探索！家旁邊的新公園草地' : '未命名標題');
   const [isEditingTitle, setIsEditingTitle] = useState(false);
-  const [diaryContent, setDiaryContent] = useState('');
+  const [diaryContent, setDiaryContent] = useState(isEditing ? '今天第一次帶 Delete 還有 Enter 去家裡旁邊剛整修好的新公園，沒想到兩隻都對草地超級好奇！原本以為 Delete 會比較膽小，結果牠竟然主動往前爬，反而是一向活潑的 Enter 一直躲在我的陰影下不肯出來。天氣雖然有點熱，但看到牠們在陽光下顏色變得好鮮豔，覺得這趟出門真的太值得了。下次也許可以帶點小點心來試試看牠們在戶外的食慾。' : '');
   const [isDiaryExpanded, setIsDiaryExpanded] = useState(false);
   const [isUploadExpanded, setIsUploadExpanded] = useState(false);
   const [appetite, setAppetite] = useState(3); // 食慾狀態，預設 3
@@ -105,8 +107,21 @@ export default function AddDiaryScreen() {
       floatingAction={
         <FloatingActionBar
           actions={[
-            { id: 'back', onPress: () => router.navigate('/(tabs)/diary') },
-            { id: 'confirm', onPress: () => { /* TODO: 儲存日記 */ router.navigate('/(tabs)/diary'); } },
+            { id: 'back', onPress: () => {
+              if (isEditing && id) {
+                router.navigate({ pathname: '/(tabs)/diary/view', params: { id } });
+              } else {
+                router.navigate('/(tabs)/diary');
+              }
+            }},
+            { id: 'confirm', onPress: () => { 
+              // TODO: 儲存日記
+              if (isEditing && id) {
+                router.navigate({ pathname: '/(tabs)/diary/view', params: { id } });
+              } else {
+                router.navigate('/(tabs)/diary');
+              }
+            }},
           ]}
         />
       }
@@ -654,6 +669,7 @@ const styles = StyleSheet.create({
     flex: 1,
     minHeight: 200,
     padding: 0,
+    textAlign: 'justify',
   },
 
   // ===== 上傳展開卡片 =====

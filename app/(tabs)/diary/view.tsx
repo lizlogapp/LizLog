@@ -128,7 +128,7 @@ export default function DiaryViewScreen() {
               // 返回層級：日記檢視 -> 日記列表
               router.navigate('/(tabs)/diary');
             }},
-            { id: 'edit', onPress: () => { /* TODO: 進入編輯模式 */ } },
+            { id: 'edit', onPress: () => router.push({ pathname: '/(tabs)/diary/add', params: { id: id || '1' } }) },
           ]}
         />
       }
@@ -459,6 +459,7 @@ const styles = StyleSheet.create({
   contentBody: {
     fontSize: getFontSize(15, 'medium'),
     lineHeight: 24,
+    textAlign: 'justify',
   },
 
   // ===== 狀態紀錄卡片 =====

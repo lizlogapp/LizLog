@@ -579,7 +579,9 @@ export default function AnalyticsScreen() {
                     style={[styles.chartFooterButton, { backgroundColor: theme.background, borderColor: 'transparent', shadowColor: '#000000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.25, shadowRadius: 7, elevation: 4 }]}
                     onPress={() => Alert.alert('提示', '詳細數據清單與報表功能建置中...')}
                   >
-                    <Text style={[styles.chartFooterButtonText, { color: theme.primary, fontFamily: fontFamilyName }]}>今日濕度趨勢</Text>
+                    <Text style={[styles.chartFooterButtonText, { color: theme.primary, fontFamily: fontFamilyName }]}>
+                      {btn.text.includes('變化圖') ? `查看${btn.text.replace('變化圖', '')}詳細數據` : `查看${btn.text.replace('日曆', '')}詳細紀錄`}
+                    </Text>
                   </Pressable>
                 </View>
               )}
