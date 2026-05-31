@@ -44,7 +44,7 @@
 - [x] 確認 README.md 與 DEVELOPMENT_WORKFLOW.md 無誤
 - [x] 基本視覺系統設定
 - [x] App 骨架與 Expo Router 路由建立
-- [ ] Firebase 初始化、Auth 與 Firestore 讀寫層
+- [x] Firebase 初始化、Auth 與 Firestore 讀寫層 (完成 Google 與信箱密碼登入)
 - [ ] 今日狀態（提醒/快速紀錄）實作
 - [ ] 寵物管理（寵物檔案）實作
 - [ ] 分析（體重曲線/環境監測）實作
