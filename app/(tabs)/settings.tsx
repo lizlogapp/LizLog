@@ -2,6 +2,8 @@ import React, { useState } from 'react';
 import { View, Text, StyleSheet, ScrollView, Switch, Pressable, Modal, TextInput } from 'react-native';
 import LogoIcon from '../../assets/branding/logos/logo-icon.svg';
 import { useRouter } from 'expo-router';
+import { signOut } from 'firebase/auth';
+import { auth } from '../../src/config/firebase';
 import { useTheme } from '../../src/theme/ThemeContext';
 import { getThemeTokens, ThemeId } from '../../src/theme/themeSettings';
 import { paletteColors } from '../../src/theme/themeColorSettings';
@@ -169,7 +171,16 @@ export default function SettingsScreen() {
 
             <Pressable 
               style={[styles.actionButton, { backgroundColor: theme.background }]}
-              onPress={() => router.replace('/login')}
+              onPress={async () => {
+                try {
+                  await signOut(auth);
+                  // 由於 _layout.tsx 有監聽 auth 狀態，自動會把我們導回 /login
+                } catch (error) {
+                  import('react-native').then(({ Alert }) => {
+                    Alert.alert('錯誤', '登出失敗，請稍後再試');
+                  });
+                }
+              }}
             >
               <Text style={[styles.actionButtonText, { color: theme.primary, fontFamily: fontFamilyName }]}>
                 登出

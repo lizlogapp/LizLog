@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -9,8 +9,18 @@ import {
   Pressable,
   KeyboardAvoidingView,
   Platform,
+  Alert,
+  ActivityIndicator,
+  ScrollView,
 } from 'react-native';
 import { useRouter } from 'expo-router';
+import {
+  signInWithEmailAndPassword,
+  createUserWithEmailAndPassword,
+  GoogleAuthProvider,
+  signInWithCredential,
+} from 'firebase/auth';
+import { auth } from '../src/config/firebase';
 import { useTheme } from '../src/theme/ThemeContext';
 import { getThemeTokens } from '../src/theme/themeSettings';
 import {
@@ -22,12 +32,20 @@ import {
 } from '../src/theme/layoutSettings';
 import { paletteColors } from '../src/theme/themeColorSettings';
 import { fontFamilies, getFontSize } from '../src/theme/typographySettings';
+import * as Google from 'expo-auth-session/providers/google';
+import * as WebBrowser from 'expo-web-browser';
+
+// 確保 OAuth 重導向後能正確關閉瀏覽器視窗
+WebBrowser.maybeCompleteAuthSession();
 
 const { width: W, height: H } = Dimensions.get('window');
 const PAGE_LEFT = PANEL_CONTENT_MARGIN + CONTENT_PAGE_MARGIN;
 const PAGE_TOP = STATUS_BAR_HEIGHT + PANEL_CONTENT_MARGIN + CONTENT_PAGE_MARGIN;
 const PAGE_WIDTH = W - (PANEL_CONTENT_MARGIN + CONTENT_PAGE_MARGIN) * 2;
 const PAGE_HEIGHT = H - STATUS_BAR_HEIGHT - TAB_BAR_HEIGHT - (PANEL_CONTENT_MARGIN + CONTENT_PAGE_MARGIN) * 2;
+
+// Google OAuth Web Client ID (從 Firebase 控制台取得)
+const GOOGLE_WEB_CLIENT_ID = '670714384705-co1kq6ahjop7ussdp6ve0h9ug6kv69am.apps.googleusercontent.com';
 
 export default function LoginScreen() {
   const { themeId, fontFamilyName } = useTheme();
@@ -36,10 +54,83 @@ export default function LoginScreen() {
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
+  const [isGoogleLoading, setIsGoogleLoading] = useState(false);
 
-  const handleLogin = () => {
-    // 稍後實接 Firebase Auth，目前暫時引導至主畫面
-    router.replace('/(tabs)');
+  // Google OAuth 設定（使用 useIdTokenAuthRequest 取得 id_token 來搭配 Firebase）
+  const [request, response, promptAsync] = Google.useIdTokenAuthRequest({
+    clientId: GOOGLE_WEB_CLIENT_ID,
+  });
+
+  // 監聽 Google 登入結果
+  useEffect(() => {
+    if (response?.type === 'success') {
+      const { id_token } = response.params;
+      handleGoogleFirebaseSignIn(id_token);
+    } else if (response?.type === 'error') {
+      setIsGoogleLoading(false);
+      Alert.alert('錯誤', 'Google 登入失敗，請稍後再試');
+    } else if (response?.type === 'dismiss') {
+      setIsGoogleLoading(false);
+    }
+  }, [response]);
+
+  const handleGoogleFirebaseSignIn = async (idToken: string) => {
+    try {
+      setIsGoogleLoading(true);
+      const credential = GoogleAuthProvider.credential(idToken);
+      await signInWithCredential(auth, credential);
+      // 成功後 _layout.tsx 會監聽 auth state 改變並自動導航
+    } catch (error: any) {
+      console.error('Google sign-in error:', error);
+      Alert.alert('錯誤', 'Google 帳號登入失敗，請稍後再試');
+    } finally {
+      setIsGoogleLoading(false);
+    }
+  };
+
+  const handleAuthError = (error: any) => {
+    let errorMessage = '發生錯誤，請稍後再試';
+    if (error.code === 'auth/email-already-in-use') {
+      errorMessage = '該電子郵件已被註冊過';
+    } else if (error.code === 'auth/invalid-email') {
+      errorMessage = '電子郵件格式錯誤';
+    } else if (error.code === 'auth/invalid-credential') {
+      errorMessage = '帳號或密碼錯誤';
+    } else if (error.code === 'auth/weak-password') {
+      errorMessage = '密碼強度太弱 (至少需要 6 個字元)';
+    }
+    Alert.alert('錯誤', errorMessage);
+  };
+
+  const handleLogin = async () => {
+    if (!email || !password) {
+      Alert.alert('提示', '請輸入帳號與密碼');
+      return;
+    }
+    setIsLoading(true);
+    try {
+      await signInWithEmailAndPassword(auth, email, password);
+    } catch (error) {
+      handleAuthError(error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleRegister = async () => {
+    if (!email || !password) {
+      Alert.alert('提示', '請輸入帳號與密碼來註冊');
+      return;
+    }
+    setIsLoading(true);
+    try {
+      await createUserWithEmailAndPassword(auth, email, password);
+    } catch (error) {
+      handleAuthError(error);
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const pageStyle = {
@@ -50,97 +141,138 @@ export default function LoginScreen() {
     height: PAGE_HEIGHT,
   };
 
+  const anyLoading = isLoading || isGoogleLoading;
+
   return (
     <KeyboardAvoidingView
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       style={styles.container}
     >
       <View style={[styles.page, pageStyle]}>
-
-        {/* Logo 區塊 */}
-        <View style={styles.logoContainer}>
-          <Image
-            source={require('../assets/branding/logos/logo-square-with-text.png')}
-            style={styles.logoImage}
-            resizeMode="contain"
-          />
-        </View>
-
-        {/* 帳密登入卡片 (Inner Card) */}
-        <View style={styles.innerCard}>
-          {/* 帳號 */}
-          <View style={styles.inputRow}>
-            <Text style={[styles.inputLabel, { color: theme.primary, fontFamily: fontFamilyName }]}>
-              帳號
-            </Text>
-            <TextInput
-              style={[styles.textInput, { fontFamily: fontFamilyName }]}
-              value={email}
-              onChangeText={setEmail}
-              keyboardType="email-address"
-              autoCapitalize="none"
+        <ScrollView
+          contentContainerStyle={styles.scrollContent}
+          showsVerticalScrollIndicator={false}
+          bounces={false}
+        >
+          {/* Logo 區塊 */}
+          <View style={styles.logoContainer}>
+            <Image
+              source={require('../assets/branding/logos/logo-square-with-text.png')}
+              style={styles.logoImage}
+              resizeMode="contain"
             />
           </View>
 
-          {/* 密碼 */}
-          <View style={styles.inputRow}>
-            <Text style={[styles.inputLabel, { color: theme.primary, fontFamily: fontFamilyName }]}>
-              密碼
-            </Text>
-            <TextInput
-              style={[styles.textInput, { fontFamily: fontFamilyName }]}
-              value={password}
-              onChangeText={setPassword}
-              secureTextEntry
-            />
-          </View>
-
-          {/* 忘記密碼 */}
-          <View style={styles.forgotPasswordRow}>
-            <Pressable>
-              <Text style={[styles.forgotText, { color: theme.primary, fontFamily: fontFamilyName }]}>
-                忘記密碼？
+          {/* 帳密登入卡片 */}
+          <View style={styles.innerCard}>
+            {/* 帳號 */}
+            <View style={styles.inputRow}>
+              <Text style={[styles.inputLabel, { color: theme.primary, fontFamily: fontFamilyName }]}>
+                帳號
               </Text>
-            </Pressable>
-          </View>
-
-          {/* 登入按鈕 */}
-          <View style={styles.loginButtonRow}>
-            <Pressable
-              style={({ pressed }) => [styles.pillButton, pressed && { opacity: 0.8 }]}
-              onPress={handleLogin}
-            >
-              <Text style={[styles.pillButtonText, { color: theme.primary, fontFamily: fontFamilyName }]}>
-                登入
-              </Text>
-            </Pressable>
-          </View>
-
-          {/* 註冊帳號按鈕 */}
-          <View style={styles.registerRow}>
-            <Pressable
-              style={({ pressed }) => [styles.pillButton, pressed && { opacity: 0.8 }]}
-            >
-              <Text style={[styles.pillButtonText, { color: theme.primary, fontFamily: fontFamilyName }]}>
-                註冊帳號
-              </Text>
-            </Pressable>
-          </View>
-        </View>
-
-        {/* 快速登入卡片 (SSO Card) */}
-        <View style={[styles.innerCard, styles.ssoCard]}>
-          <View style={styles.ssoButtonsRow}>
-            <Pressable style={styles.ssoIconButton}>
-              <Image
-                source={require('../assets/icons/icon-google.png')}
-                style={styles.ssoIconImage}
-                resizeMode="contain"
+              <TextInput
+                style={[styles.textInput, { fontFamily: fontFamilyName }]}
+                value={email}
+                onChangeText={setEmail}
+                keyboardType="email-address"
+                autoCapitalize="none"
+                editable={!anyLoading}
+                placeholder="請輸入 Email"
+                placeholderTextColor="#C0C0C0"
               />
+            </View>
+
+            {/* 密碼 */}
+            <View style={styles.inputRow}>
+              <Text style={[styles.inputLabel, { color: theme.primary, fontFamily: fontFamilyName }]}>
+                密碼
+              </Text>
+              <TextInput
+                style={[styles.textInput, { fontFamily: fontFamilyName }]}
+                value={password}
+                onChangeText={setPassword}
+                secureTextEntry
+                editable={!anyLoading}
+                placeholder="請輸入密碼"
+                placeholderTextColor="#C0C0C0"
+              />
+            </View>
+
+            {/* 忘記密碼 */}
+            <View style={styles.forgotPasswordRow}>
+              <Pressable disabled={anyLoading}>
+                <Text style={[styles.forgotText, { color: theme.primary, fontFamily: fontFamilyName }]}>
+                  忘記密碼？
+                </Text>
+              </Pressable>
+            </View>
+
+            {/* 登入 & 註冊按鈕 */}
+            <View style={styles.actionRow}>
+              <Pressable
+                style={({ pressed }) => [
+                  styles.pillButton,
+                  pressed && { opacity: 0.8 },
+                  anyLoading && { opacity: 0.5 }
+                ]}
+                onPress={handleLogin}
+                disabled={anyLoading}
+              >
+                {isLoading ? (
+                  <ActivityIndicator color={theme.primary} />
+                ) : (
+                  <Text style={[styles.pillButtonText, { color: theme.primary, fontFamily: fontFamilyName }]}>
+                    登入
+                  </Text>
+                )}
+              </Pressable>
+
+              <Pressable
+                style={({ pressed }) => [
+                  styles.pillButton,
+                  pressed && { opacity: 0.8 },
+                  anyLoading && { opacity: 0.5 }
+                ]}
+                onPress={handleRegister}
+                disabled={anyLoading}
+              >
+                <Text style={[styles.pillButtonText, { color: theme.primary, fontFamily: fontFamilyName }]}>
+                  註冊帳號
+                </Text>
+              </Pressable>
+            </View>
+          </View>
+
+          {/* 快速登入區塊 (符合截圖) */}
+          <View style={styles.quickLoginCard}>
+            <Text style={[styles.quickLoginLabel, { color: theme.primary, fontFamily: fontFamilyName }]}>
+              快速登入
+            </Text>
+            <Pressable
+              style={({ pressed }) => [
+                styles.googleSquareButton,
+                pressed && { opacity: 0.85 },
+                anyLoading && { opacity: 0.5 },
+              ]}
+              onPress={() => {
+                setIsGoogleLoading(true);
+                promptAsync();
+              }}
+              disabled={!request || anyLoading}
+            >
+              {isGoogleLoading ? (
+                <ActivityIndicator color={theme.primary} />
+              ) : (
+                <Image
+                  source={require('../assets/icons/icon-google.png')}
+                  style={styles.googleIconOnly}
+                  resizeMode="contain"
+                />
+              )}
             </Pressable>
           </View>
-        </View>
 
+        </ScrollView>
       </View>
     </KeyboardAvoidingView>
   );
@@ -158,115 +290,128 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.25,
     shadowRadius: 7,
     elevation: 7,
+  },
+  scrollContent: {
     alignItems: 'center',
-    paddingVertical: 20, // 再次縮減 padding 以節省垂直空間
+    paddingVertical: 16,
+    paddingBottom: 32,
   },
   logoContainer: {
     width: '100%',
-    height: 80,
+    height: 120,
     justifyContent: 'center',
     alignItems: 'center',
-    marginTop: 24,    // 明確增加 Logo 頂部到螢幕的呼吸空間
-    marginBottom: 36, // 大幅撐開 Logo 和下方帳號區塊的距離，達成「帳號往下移」效果
+    marginTop: 24,
+    marginBottom: 20,
   },
   logoImage: {
-    width: 90, // 縮小圖片尺寸
-    height: 90,
+    width: 120,
+    height: 120,
   },
   innerCard: {
     width: '85%',
-    backgroundColor: paletteColors.RI_CHU,
-    borderRadius: 12,
-    padding: 20, // 卡片內部留白縮緊
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    padding: 20,
     shadowColor: '#000000',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.1,
-    shadowRadius: 8,
-    elevation: 4,
-    marginBottom: 16, // 縮小卡片間距
-    // 微小邊界營造擬物/浮動感
+    shadowRadius: 12,
+    elevation: 5,
     borderWidth: 1,
-    borderColor: '#F2F2F2',
+    borderColor: '#EFEFEF',
   },
   inputRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 16, // 縮小輸入框列距
+    marginBottom: 14,
   },
   inputLabel: {
-    fontSize: getFontSize(18, 'medium'), // 原本 20，降至 18，與登入鍵同字級
+    fontSize: getFontSize(18, 'medium'),
     width: 60,
   },
   textInput: {
     flex: 1,
-    height: 44,
+    height: 42,
     borderWidth: 1,
-    borderColor: '#EFEFEF',
+    borderColor: '#E8E8E8',
     borderRadius: 8,
     paddingHorizontal: 12,
     fontSize: getFontSize(16, 'medium'),
     color: '#333333',
-    backgroundColor: '#FAFAFA',
+    backgroundColor: '#FCFCFC',
   },
   forgotPasswordRow: {
     alignItems: 'flex-end',
-    marginBottom: 16, // 縮小間距
+    marginBottom: 18,
     marginRight: 4,
   },
-  loginButtonRow: {
-    alignItems: 'center', // 保證 W (水平) 絕對置中
-    marginBottom: 16, // 縮小間距
+  forgotText: {
+    fontSize: getFontSize(14, 'medium'),
+  },
+  actionRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    gap: 12,
+    marginTop: 6,
   },
   pillButton: {
-    minWidth: 140, // 強制保證最小寬度，讓短字數的「登入」與長字數的「註冊帳號」寬高完全一致
-    paddingVertical: 10,
-    paddingHorizontal: 24,
-    borderRadius: 24,
-    backgroundColor: paletteColors.RI_CHU,
+    flex: 1,
+    height: 46,
+    borderRadius: 14,
+    backgroundColor: '#FFFFFF',
     borderWidth: 1,
-    borderColor: '#EFEFEF',
+    borderColor: '#E8E8E8',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 4,
-    elevation: 2,
+    shadowOpacity: 0.06,
+    shadowRadius: 6,
+    elevation: 3,
     justifyContent: 'center',
     alignItems: 'center',
   },
   pillButtonText: {
     fontSize: getFontSize(18, 'medium'),
   },
-  forgotText: {
-    fontSize: getFontSize(14, 'medium'), // 要求調降忘記密碼字級
-  },
-  registerRow: {
+  quickLoginCard: {
+    width: '85%',
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    paddingVertical: 14,
+    paddingHorizontal: 20,
+    marginTop: 18,
     alignItems: 'center',
-  },
-  ssoCard: {
-    padding: 20, // 配合 innerCard 同步縮小留白
-    alignItems: 'center',
-  },
-  ssoButtonsRow: {
-    flexDirection: 'row',
-    gap: 16, // 縮短圖示間距
-  },
-  ssoIconButton: {
-    width: 50,
-    height: 50,
-    backgroundColor: paletteColors.RI_CHU,
-    borderRadius: 12,
+    justifyContent: 'center',
+    shadowColor: '#000000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.1,
+    shadowRadius: 12,
+    elevation: 5,
     borderWidth: 1,
     borderColor: '#EFEFEF',
+  },
+  quickLoginLabel: {
+    fontSize: getFontSize(14, 'medium'),
+    marginBottom: 10,
+    textAlign: 'center',
+  },
+  googleSquareButton: {
+    width: 48,
+    height: 48,
+    borderRadius: 10,
+    backgroundColor: '#FFFFFF',
     justifyContent: 'center',
     alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#E8E8E8',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 4,
-    elevation: 2,
+    shadowOpacity: 0.08,
+    shadowRadius: 6,
+    elevation: 3,
   },
-  ssoIconImage: {
-    width: 32,
-    height: 32,
+  googleIconOnly: {
+    width: 26,
+    height: 26,
   },
 });

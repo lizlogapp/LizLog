@@ -1,6 +1,6 @@
 import React, { useEffect } from 'react';
 import * as NavigationBar from 'expo-navigation-bar';
-import { Stack } from 'expo-router';
+import { Stack, useRouter, useSegments } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { ThemeProvider as NavigationThemeProvider } from '@react-navigation/native';
 import {
@@ -12,6 +12,7 @@ import {
 } from 'react-native';
 import { ThemeProvider, useTheme } from '../src/theme/ThemeContext';
 import { AppLoadProvider } from '../src/contexts/AppLoadContext';
+import { AuthProvider, useAuth } from '../src/contexts/AuthContext';
 import { backgroundImages } from '../src/theme/backgroundImageSettings';
 import { ThemeId, paletteColors } from '../src/theme/themeColorSettings';
 import { STATUS_BAR_HEIGHT, TAB_BAR_HEIGHT } from '../src/theme/layoutSettings';
@@ -30,6 +31,23 @@ function RootLayoutInner() {
   const bg = backgroundImages[themeId];
   const overlayColor =
     themeId === ThemeId.RI_CHU_THEME ? paletteColors.RI_CHU : paletteColors.MU_CHENG;
+
+  const { user, isLoading } = useAuth();
+  const segments = useSegments();
+  const router = useRouter();
+
+  useEffect(() => {
+    if (isLoading) return;
+    
+    // root 頁面 (空白) 或 login 頁面
+    const inAuthGroup = segments[0] === 'login';
+
+    if (!user && !inAuthGroup) {
+      router.replace('/login');
+    } else if (user && inAuthGroup) {
+      router.replace('/(tabs)');
+    }
+  }, [user, isLoading, segments]);
 
   useEffect(() => {
     if (Platform.OS !== 'android') return;
@@ -105,15 +123,17 @@ export default function RootLayout() {
   return (
     <NavigationThemeProvider value={transparentNavTheme}>
       <ThemeProvider>
-        <AppLoadProvider
-          init={
-            // 可在此加入字型、Firebase 等初始化，例：
-            // async () => { await Font.loadAsync(...); await initFirebase(); }
-            undefined
-          }
-        >
-          <RootLayoutInner />
-        </AppLoadProvider>
+        <AuthProvider>
+          <AppLoadProvider
+            init={
+              // 可在此加入字型、Firebase 等初始化，例：
+              // async () => { await Font.loadAsync(...); await initFirebase(); }
+              undefined
+            }
+          >
+            <RootLayoutInner />
+          </AppLoadProvider>
+        </AuthProvider>
       </ThemeProvider>
     </NavigationThemeProvider>
   );

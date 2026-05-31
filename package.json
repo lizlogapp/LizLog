@@ -9,13 +9,18 @@
     "web": "expo start --web"
   },
   "dependencies": {
+    "@react-native-async-storage/async-storage": "^3.1.1",
     "@react-native-community/slider": "5.0.1",
     "expo": "~54.0.0",
+    "expo-auth-session": "~7.0.11",
     "expo-constants": "~18.0.13",
+    "expo-crypto": "~15.0.9",
     "expo-linking": "~8.0.11",
     "expo-navigation-bar": "~5.0.10",
     "expo-router": "~6.0.23",
     "expo-status-bar": "~3.0.9",
+    "expo-web-browser": "~15.0.11",
+    "firebase": "^12.14.0",
     "lucide-react-native": "^0.577.0",
     "react": "19.1.0",
     "react-dom": "19.1.0",

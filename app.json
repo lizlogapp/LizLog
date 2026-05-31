@@ -23,8 +23,10 @@
     "web": {
       "favicon": "./assets/branding/logos/logo-image-only.png"
     },
+    "scheme": "lizlog",
     "plugins": [
-      "expo-router"
+      "expo-router",
+      "expo-web-browser"
     ]
   }
 }
