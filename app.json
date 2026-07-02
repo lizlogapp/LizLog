@@ -1,0 +1,32 @@
+{
+  "expo": {
+    "name": "蜥日日記",
+    "slug": "lizlog",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/branding/logos/logo-image-only.png",
+    "userInterfaceStyle": "light",
+    "splash": {
+      "image": "./assets/branding/logos/logo-image-only.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#FFFEFA"
+    },
+    "ios": {
+      "supportsTablet": true
+    },
+    "android": {
+      "adaptiveIcon": {
+        "backgroundColor": "#FFFEFA",
+        "foregroundImage": "./assets/branding/logos/logo-image-only.png"
+      }
+    },
+    "web": {
+      "favicon": "./assets/branding/logos/logo-image-only.png"
+    },
+    "scheme": "lizlog",
+    "plugins": [
+      "expo-router",
+      "expo-web-browser"
+    ]
+  }
+}
