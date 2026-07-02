@@ -296,6 +296,7 @@ export default function DiaryScreen() {
       </View>
 
       {/* 主要內容區塊 */}
+      {diariesToShow.length > 0 ? (
       <ScrollView 
         contentContainerStyle={styles.centerContent}
         showsVerticalScrollIndicator={false}
