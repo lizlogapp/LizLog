@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -18,12 +18,15 @@ import { paletteColors } from '../../../src/theme/themeColorSettings';
 import { BaseScreen } from '../../../src/components/common/BaseScreen';
 import { FloatingActionBar } from '../../../src/components/FloatingActionBar';
 import { mockPetDB, updatePetData } from './mockPetDB';
+import { useAuth } from '../../../src/contexts/AuthContext';
+import { petService } from '../../../src/services/firestoreService';
 
 export default function AddPetScreen() {
   const router = useRouter();
   const { id, from } = useLocalSearchParams<{ id?: string; from?: string }>();
-  const { themeId, fontFamilyName } = useTheme();
+  const { themeId, fontFamilyName, isDemoMode } = useTheme();
   const theme = getThemeTokens(themeId);
+  const { user } = useAuth();
 
   const isEditing = !!id;
   const existingPet = isEditing && id ? mockPetDB[id] : null;
@@ -74,16 +77,37 @@ export default function AddPetScreen() {
                 }
                 
                 if (isEditing && id) {
-                  updatePetData(id, {
-                    name,
-                    species,
-                    birthDate: birthday,
-                    homeDate,
-                    gender,
-                    tag,
-                  });
+                  if (isDemoMode) {
+                    updatePetData(id, {
+                      name,
+                      species,
+                      birthDate: birthday,
+                      homeDate,
+                      gender,
+                      tag,
+                    });
+                  } else if (user) {
+                    petService.update(user.uid, id, {
+                      name,
+                      species,
+                      birthDate: birthday,
+                      homeDate,
+                      gender,
+                      tag,
+                    }).catch(e => Alert.alert('錯誤', '更新失敗'));
+                  }
                   Alert.alert('成功', `已更新寵物：${name}`);
                 } else {
+                  if (!isDemoMode && user) {
+                    petService.add(user.uid, {
+                      name,
+                      species,
+                      birthDate: birthday,
+                      homeDate,
+                      gender,
+                      tag,
+                    }).catch(e => Alert.alert('錯誤', '新增失敗'));
+                  }
                   Alert.alert('成功', `已新增寵物：${name}`);
                 }
                 

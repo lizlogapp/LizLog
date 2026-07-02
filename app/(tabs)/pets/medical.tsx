@@ -16,21 +16,28 @@ import { BaseScreen } from '../../../src/components/common/BaseScreen';
 import { FloatingActionBar } from '../../../src/components/FloatingActionBar';
 import LizardIllustration from '../../../assets/illustrations/lizard-6.svg';
 import { mockMedicalDB } from './mockMedicalDB';
+import { useAuth } from '../../../src/contexts/AuthContext';
+import { medicalService } from '../../../src/services/firestoreService';
 
 export default function MedicalScreen() {
   const router = useRouter();
   const { id } = useLocalSearchParams<{ id: string }>();
-  const { themeId, fontFamilyName } = useTheme();
+  const { themeId, fontFamilyName, isDemoMode } = useTheme();
   const theme = getThemeTokens(themeId);
+  const { user } = useAuth();
 
   const [records, setRecords] = useState<any[]>([]);
 
   useFocusEffect(
     useCallback(() => {
-      // 轉換 DB 物件為陣列供列表顯示
-      const dataArray = Object.values(mockMedicalDB);
-      setRecords(dataArray);
-    }, [])
+      if (isDemoMode) {
+        setRecords(Object.values(mockMedicalDB));
+      } else if (user) {
+        medicalService.getAll(user.uid).then(firestoreRecords => {
+          setRecords(firestoreRecords);
+        });
+      }
+    }, [isDemoMode, user])
   );
 
   return (

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -17,6 +17,8 @@ import { paletteColors } from '../../../src/theme/themeColorSettings';
 import { BaseScreen } from '../../../src/components/common/BaseScreen';
 import { FloatingActionBar, FloatingActionItem } from '../../../src/components/FloatingActionBar';
 import { mockPetDB, deletePetData } from './mockPetDB';
+import { useAuth } from '../../../src/contexts/AuthContext';
+import { petService, PetDoc } from '../../../src/services/firestoreService';
 
 function calcAge(birthDateStr: string): string {
   const birthDate = new Date(birthDateStr.replace(/\//g, '-'));
@@ -48,8 +50,33 @@ export default function PetViewScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const { themeId, fontFamilyName, isDemoMode } = useTheme();
   const theme = getThemeTokens(themeId);
+  const { user } = useAuth();
 
-  const pet = isDemoMode ? mockPetDB[id || '1'] : null;
+  // Firestore 寵物資料
+  const [firestorePet, setFirestorePet] = useState<(PetDoc & { id: string }) | null>(null);
+
+  useEffect(() => {
+    if (isDemoMode || !user || !id) return;
+    petService.getById(user.uid, id).then(setFirestorePet);
+  }, [isDemoMode, user, id]);
+
+  // 將 Firestore 資料轉換為頁面所需格式
+  const mockPet = isDemoMode ? mockPetDB[id || '1'] : null;
+  const pet = isDemoMode ? mockPet : (firestorePet ? {
+    id: firestorePet.id,
+    name: firestorePet.name,
+    species: firestorePet.species,
+    birthDate: firestorePet.birthDate,
+    homeDate: firestorePet.homeDate,
+    gender: firestorePet.gender,
+    tag: firestorePet.tag || '',
+    imageUri: firestorePet.imageUrl ? { uri: firestorePet.imageUrl } : require('../../../assets/illustrations/illustration-lizard-01.png'),
+    weight: firestorePet.weight || '-',
+    length: firestorePet.length || '-',
+    nextReminder: firestorePet.nextReminder || '無',
+    reminderNote: firestorePet.reminderNote || '',
+    lastVisit: firestorePet.lastVisit || '無紀錄',
+  } : null);
 
   // 刪除確認狀態
   const [showDeleteScreen, setShowDeleteScreen] = useState(false);
@@ -70,7 +97,11 @@ export default function PetViewScreen() {
   };
 
   const handleDeletedClose = () => {
-    deletePetData(id || '1');
+    if (isDemoMode) {
+      deletePetData(id || '1');
+    } else if (user && id) {
+      petService.delete(user.uid, id);
+    }
     setShowDeletedConfirm(false);
     router.replace('/(tabs)/pets');
   };

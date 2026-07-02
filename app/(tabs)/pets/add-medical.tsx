@@ -16,6 +16,8 @@ import { getFontSize } from '../../../src/theme/typographySettings';
 import { paletteColors } from '../../../src/theme/themeColorSettings';
 import { BaseScreen } from '../../../src/components/common/BaseScreen';
 import { FloatingActionBar } from '../../../src/components/FloatingActionBar';
+import { useAuth } from '../../../src/contexts/AuthContext';
+import { medicalService } from '../../../src/services/firestoreService';
 
 const getDaysInMonth = (y: number, m: number) => new Date(y, m, 0).getDate();
 const getFirstDayOfMonth = (y: number, m: number) => new Date(y, m - 1, 1).getDay();
@@ -62,9 +64,10 @@ const mockDB: Record<string, any> = {
 
 export default function AddMedicalScreen() {
   const router = useRouter();
-  const { id, petId } = useLocalSearchParams<{ id: string; petId?: string }>(); // maybe recordId if editing
-  const { themeId, fontFamilyName } = useTheme();
+  const { petId, id } = useLocalSearchParams<{ petId: string; id?: string }>();
+  const { themeId, fontFamilyName, isDemoMode } = useTheme();
   const theme = getThemeTokens(themeId);
+  const { user } = useAuth();
 
   const [title, setTitle] = useState('');
   // Visit section
@@ -115,7 +118,53 @@ export default function AddMedicalScreen() {
   }, [id]);
 
   const handleSave = () => {
-    router.navigate({ pathname: '/(tabs)/pets/medical', params: { id: petId || '1' } });
+    const newData = {
+      petId: petId || '1',
+      title,
+      date: visitDate,
+      type: '就診',
+      hospital,
+      note: reason,
+      tagColor: paletteColors.MENG_HUANG,
+      visit: {
+        date: visitDate,
+        hospital,
+        doctor,
+        reason,
+        diagnosis,
+        advice: advice.split('\n').filter(Boolean),
+        imageUrls: [],
+      },
+      medication: {
+        startDate: medStartDate,
+        endDate: medEndDate,
+        medicine,
+        method,
+        frequency,
+        dosage,
+        note: medNote.split('\n').filter(Boolean),
+      },
+    };
+
+    if (isDemoMode) {
+      if (id) {
+        mockDB[id] = { ...mockDB[id], ...newData };
+      } else {
+        const newId = Date.now().toString();
+        mockDB[newId] = newData;
+      }
+      router.navigate({ pathname: '/(tabs)/pets/medical', params: { id: petId || '1' } });
+    } else if (user) {
+      if (id) {
+        medicalService.update(user.uid, id, newData).then(() => {
+          router.navigate({ pathname: '/(tabs)/pets/medical', params: { id: petId || '1' } });
+        });
+      } else {
+        medicalService.add(user.uid, newData).then(() => {
+          router.navigate({ pathname: '/(tabs)/pets/medical', params: { id: petId || '1' } });
+        });
+      }
+    }
   };
 
   const openCalendar = (target: 'visit' | 'medStart' | 'medEnd') => {

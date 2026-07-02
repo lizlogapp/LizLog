@@ -12,8 +12,10 @@ import {
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { BaseScreen } from '../../src/components/common/BaseScreen';
-import { mockTodayReminders, ReminderItem } from '../../src/data/mockDiaryData';
+import { mockTodayReminders, ReminderItem, petIdToName } from '../../src/data/mockDiaryData';
 import { paletteColors } from '../../src/theme/themeColorSettings';
+import { useAuth } from '../../src/contexts/AuthContext';
+import { diaryService, petService, reminderService } from '../../src/services/firestoreService';
 import {
   STATUS_BAR_HEIGHT,
   TAB_BAR_HEIGHT,
@@ -40,6 +42,7 @@ export default function HomeScreen() {
   const { themeId, fontFamilyName, isDemoMode } = useTheme();
   const theme = getThemeTokens(themeId);
   const router = useRouter();
+  const { user } = useAuth();
 
   const [loadingComplete, setLoadingComplete] = useState(true);
   const [availablePets, setAvailablePets] = useState<string[]>(['DELETE', 'CTRL', 'ENTER', 'ALT']); // 模擬寵物名單
@@ -63,6 +66,8 @@ export default function HomeScreen() {
     imageUrl: require('../../assets/user-uploads/lizard-001.jpg'),
   });
 
+  const [reminders, setReminders] = useState<ReminderItem[]>(mockTodayReminders);
+
   useEffect(() => {
     if (isDemoMode) {
       setAvailablePets(['DELETE', 'CTRL', 'ENTER', 'ALT']);
@@ -76,6 +81,49 @@ export default function HomeScreen() {
       });
       setReminders(mockTodayReminders);
       setIsConnected(true);
+    } else if (user) {
+      // 讀取真實資料
+      petService.getAll(user.uid).then(pets => {
+        setAvailablePets(pets.map(p => p.name));
+        if (pets.length > 0) {
+          setCurrentPetName(pets[0].name);
+        } else {
+          setCurrentPetName('未設定');
+        }
+      });
+      
+      diaryService.getAll(user.uid).then(diaries => {
+        if (diaries.length > 0) {
+          const latest = diaries[0];
+          const d = new Date(latest.date);
+          const monthNames = ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC'];
+          setLatestDiary({
+            id: latest.id,
+            day: String(d.getDate()).padStart(2, '0'),
+            month: monthNames[d.getMonth()],
+            weatherIcon: latest.weatherIcon === 'sunny' ? require('../../assets/icons/weather-sunny.png') : require('../../assets/icons/weather-cloudy.png'),
+            imageUrl: latest.imageUrl ? { uri: latest.imageUrl } : null,
+          });
+        } else {
+          setLatestDiary(null);
+        }
+      });
+
+      reminderService.getAll(user.uid).then(fsReminders => {
+        const active = fsReminders.filter(r => r.isOn);
+        const today = new Date();
+        const dateStr = `${today.getMonth() + 1}/${today.getDate()}`;
+        setReminders(active.map(r => ({
+          id: r.id,
+          pets: r.pets, // 可能需要把 ID 轉成名字，這裡先簡化
+          title: r.type + (r.note ? `（${r.note}）` : ''),
+          date: dateStr,
+          tagColor: r.tagColor,
+          checked: false,
+        })));
+      });
+
+      setIsConnected(true); // TODO: Replace with actual device connection state
     } else {
       setAvailablePets([]);
       setCurrentPetName('未設定');
@@ -83,7 +131,7 @@ export default function HomeScreen() {
       setReminders([]);
       setIsConnected(false);
     }
-  }, [isDemoMode]);
+  }, [isDemoMode, user]);
 
 
 
@@ -95,9 +143,6 @@ export default function HomeScreen() {
     left: PANEL_CONTENT_MARGIN + CONTENT_PAGE_MARGIN,
     right: PANEL_CONTENT_MARGIN + CONTENT_PAGE_MARGIN,
   };
-
-  // State：首頁提醒事項（從共用資料中心讀取）
-  const [reminders, setReminders] = useState<ReminderItem[]>(mockTodayReminders);
 
   const toggleReminder = (id: string) => {
     setReminders((prev) =>

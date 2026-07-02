@@ -13,6 +13,8 @@ import {
   mockFeedDataMap, mockLatestStatus, mockDiaryRecord,
   getMockPoopEvents, getMockMoltEvents, appetiteToLabel,
 } from '../../src/data/mockDiaryData';
+import { useAuth } from '../../src/contexts/AuthContext';
+import { diaryService, petService } from '../../src/services/firestoreService';
 
 // 引入從 temp 新增進來的 SVG 圖示
 // 引入從 temp 新增進來並翻成英文避免組件撞名的 SVG 圖示
@@ -39,6 +41,7 @@ export default function AnalyticsScreen() {
   const { themeId, fontFamilyName, isDemoMode } = useTheme();
   const theme = getThemeTokens(themeId);
   const router = useRouter();
+  const { user } = useAuth();
 
   // 延用與首頁相同的寵物切換狀態
   const [availablePets, setAvailablePets] = useState<string[]>(isDemoMode ? ['DELETE', 'CTRL', 'ENTER', 'ALT'] : []);
@@ -49,13 +52,31 @@ export default function AnalyticsScreen() {
   const [activeChartTab, setActiveChartTab] = useState<string>('週');
   const [calendarDate, setCalendarDate] = useState<Date>(new Date());
 
-  // 所有圖表資料已從 src/data/mockDiaryData.ts 統一匯入
-  const latestStatus = isDemoMode ? mockLatestStatus : {
+  // 這裡之後可以加入 useEffect 讀取 Firestore 資料
+  React.useEffect(() => {
+    if (!isDemoMode && user) {
+      petService.getAll(user.uid).then(pets => {
+        setAvailablePets(pets.map(p => p.name));
+        if (pets.length > 0) {
+          setCurrentPetName(pets[0].name);
+        } else {
+          setCurrentPetName('未設定');
+        }
+      });
+      // 可以進一步加入抓取日誌並轉換成統計數據的邏輯
+    } else if (isDemoMode) {
+      setAvailablePets(['DELETE', 'CTRL', 'ENTER', 'ALT']);
+      setCurrentPetName('DELETE');
+    }
+  }, [isDemoMode, user]);
+
+  const latestDiary = isDemoMode ? mockDiaryRecord : {
     temp: { current: '-', avg: '-', high: '-', low: '-', updatedAt: '-' },
     humid: { current: '-', avg: '-', high: '-', low: '-', updatedAt: '-' },
     bask: { value: '-', updatedAt: '-' },
     feed: { value: '-', updatedAt: '-' },
     bath: { value: '-', updatedAt: '-' },
+
     poop: { value: '-', updatedAt: '-' },
     weight: { value: '-', updatedAt: '-' },
     length: { value: '-', updatedAt: '-' },

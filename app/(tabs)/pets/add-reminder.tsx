@@ -16,6 +16,8 @@ import { paletteColors } from '../../../src/theme/themeColorSettings';
 import { BaseScreen } from '../../../src/components/common/BaseScreen';
 import { FloatingActionBar } from '../../../src/components/FloatingActionBar';
 import { mockReminderDB } from '../../../src/data/mockDiaryData';
+import { useAuth } from '../../../src/contexts/AuthContext';
+import { reminderService, petService, PetDoc } from '../../../src/services/firestoreService';
 
 const defaultTypes = ['餵食', '換水', '清掃', '用藥', '驅蟲', '回診'];
 const weekDays = ['日', '一', '二', '三', '四', '五', '六'];
@@ -23,8 +25,8 @@ type Frequency = 'once' | 'daily' | 'everyN' | 'weekly';
 
 const tagColors = ['#FF6B6B', '#FF9F43', '#FFD239', '#5CD85A', '#4DB8FF', '#B072FF', '#8E8E93'];
 
-// 模擬寵物名單（未來從 context / Supabase 取得）
-const petList = [
+// 模擬寵物名單（Demo 模式）
+const mockPetList = [
   { id: '1', name: 'DELETE' },
   { id: '2', name: 'CTRL' },
   { id: '3', name: 'ENTER' },
@@ -37,11 +39,24 @@ const getFirstDayOfMonth = (y: number, m: number) => new Date(y, m - 1, 1).getDa
 export default function AddReminderScreen() {
   const router = useRouter();
   const { id, reminderId } = useLocalSearchParams<{ id: string; reminderId: string }>();
-  const { themeId, fontFamilyName } = useTheme();
+  const { themeId, fontFamilyName, isDemoMode } = useTheme();
   const theme = getThemeTokens(themeId);
+  const { user } = useAuth();
 
-  // 寵物
-  const currentPet = petList.find(p => p.id === (id || '1')) || petList[0];
+  // 寵物名單
+  const [petList, setPetList] = useState<{ id: string; name: string }[]>(mockPetList);
+
+  useEffect(() => {
+    if (isDemoMode) {
+      setPetList(mockPetList);
+    } else if (user) {
+      petService.getAll(user.uid).then(pets => {
+        setPetList(pets.map(p => ({ id: p.id, name: p.name })));
+      });
+    }
+  }, [isDemoMode, user]);
+
+  const currentPet = petList.find(p => p.id === (id || '1')) || petList[0] || { id: id || '1', name: 'Pet' };
   const [selectedPets, setSelectedPets] = useState<string[]>([currentPet.id]);
 
   const togglePet = (petId: string) => {
@@ -127,7 +142,7 @@ export default function AddReminderScreen() {
     }
 
     const newData = {
-      id: reminderId || Date.now().toString(),
+      petId: id || selectedPets[0] || '1',
       type: finalType,
       freq: finalFreq,
       frequencyType: frequency,
@@ -141,8 +156,21 @@ export default function AddReminderScreen() {
       tagColor,
     };
 
-    mockReminderDB[newData.id] = newData;
-    router.navigate({ pathname: '/(tabs)/pets/reminder', params: { id: id || '1' } });
+    if (isDemoMode) {
+      const mockData = { id: reminderId || Date.now().toString(), ...newData };
+      mockReminderDB[mockData.id] = mockData;
+      router.navigate({ pathname: '/(tabs)/pets/reminder', params: { id: id || '1' } });
+    } else if (user) {
+      if (reminderId) {
+        reminderService.update(user.uid, reminderId, newData).then(() => {
+          router.navigate({ pathname: '/(tabs)/pets/reminder', params: { id: id || '1' } });
+        });
+      } else {
+        reminderService.add(user.uid, newData).then(() => {
+          router.navigate({ pathname: '/(tabs)/pets/reminder', params: { id: id || '1' } });
+        });
+      }
+    }
   };
 
   const freqOptions: { key: Frequency; label: string }[] = [

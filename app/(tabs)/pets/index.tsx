@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -13,6 +13,8 @@ import { getThemeTokens } from '../../../src/theme/themeSettings';
 import { getFontSize } from '../../../src/theme/typographySettings';
 import { paletteColors } from '../../../src/theme/themeColorSettings';
 import { BaseScreen } from '../../../src/components/common/BaseScreen';
+import { useAuth } from '../../../src/contexts/AuthContext';
+import { petService, PetDoc } from '../../../src/services/firestoreService';
 // @ts-ignore
 import LogoIcon from '../../../assets/branding/logos/logo-icon.svg';
 
@@ -76,8 +78,29 @@ export default function PetsScreen() {
   const router = useRouter();
   const { themeId, fontFamilyName, isDemoMode } = useTheme();
   const theme = getThemeTokens(themeId);
+  const { user } = useAuth();
 
-  const petsToShow = isDemoMode ? mockPets : [];
+  // Firestore 即時寵物列表
+  const [firestorePets, setFirestorePets] = useState<(PetDoc & { id: string })[]>([]);
+
+  useEffect(() => {
+    if (isDemoMode || !user) return;
+    const unsubscribe = petService.onPetsChanged(user.uid, (pets) => {
+      setFirestorePets(pets);
+    });
+    return () => unsubscribe();
+  }, [isDemoMode, user]);
+
+  // 將 Firestore 資料轉換為畫面所需格式
+  const firestorePetData: PetData[] = firestorePets.map(p => ({
+    id: p.id,
+    name: p.name,
+    species: p.species,
+    birthDate: new Date(p.birthDate.replace(/\//g, '-')),
+    imageUri: p.imageUrl ? { uri: p.imageUrl } : null,
+  }));
+
+  const petsToShow = isDemoMode ? mockPets : firestorePetData;
 
   return (
     <BaseScreen scrollable={false}>

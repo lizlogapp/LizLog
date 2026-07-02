@@ -18,12 +18,15 @@ import { FloatingActionBar } from '../../../src/components/FloatingActionBar';
 // @ts-ignore
 import LizardIllustration from '../../../assets/illustrations/lizard-6.svg';
 import { mockReminderDB, petIdToName } from '../../../src/data/mockDiaryData';
+import { useAuth } from '../../../src/contexts/AuthContext';
+import { reminderService } from '../../../src/services/firestoreService';
 
 export default function ReminderScreen() {
   const router = useRouter();
   const { id, from } = useLocalSearchParams<{ id: string; from?: string }>();
   const { themeId, fontFamilyName, isDemoMode } = useTheme();
   const theme = getThemeTokens(themeId);
+  const { user } = useAuth();
 
   // 提醒資料（從共用資料中心讀取）
   const [reminders, setReminders] = useState<any[]>([]);
@@ -35,17 +38,33 @@ export default function ReminderScreen() {
           const petNames = r.pets.map((pid: string) => petIdToName[pid] || pid);
           return { ...r, petsListDisplay: petNames };
         }));
+      } else if (user) {
+        // 從 Firestore 讀取提醒
+        reminderService.getAll(user.uid).then(firestoreReminders => {
+          setReminders(firestoreReminders.map(r => ({
+            ...r,
+            petsListDisplay: r.pets || [],
+          })));
+        });
       } else {
         setReminders([]);
       }
-    }, [isDemoMode])
+    }, [isDemoMode, user])
   );
 
   const toggleReminder = (rId: string) => {
-    if (mockReminderDB[rId]) {
-      mockReminderDB[rId].isOn = !mockReminderDB[rId].isOn;
-      // Trigger a re-render
-      setReminders(prev => prev.map(r => r.id === rId ? { ...r, isOn: mockReminderDB[rId].isOn } : r));
+    if (isDemoMode) {
+      if (mockReminderDB[rId]) {
+        mockReminderDB[rId].isOn = !mockReminderDB[rId].isOn;
+        setReminders(prev => prev.map(r => r.id === rId ? { ...r, isOn: mockReminderDB[rId].isOn } : r));
+      }
+    } else if (user) {
+      const reminder = reminders.find(r => r.id === rId);
+      if (reminder) {
+        const newIsOn = !reminder.isOn;
+        reminderService.update(user.uid, rId, { isOn: newIsOn });
+        setReminders(prev => prev.map(r => r.id === rId ? { ...r, isOn: newIsOn } : r));
+      }
     }
   };
 
@@ -141,7 +160,11 @@ export default function ReminderScreen() {
                       <Pressable 
                         style={[styles.actionButton, !reminder.isOn && styles.actionButtonOff, { backgroundColor: theme.background }]} 
                         onPress={() => {
-                          delete mockReminderDB[reminder.id];
+                          if (isDemoMode) {
+                            delete mockReminderDB[reminder.id];
+                          } else if (user) {
+                            reminderService.delete(user.uid, reminder.id);
+                          }
                           setReminders(prev => prev.filter(r => r.id !== reminder.id));
                         }}
                       >
