@@ -318,7 +318,7 @@ export default function DiaryScreen() {
               <View style={styles.diaryImageContainer}>
                 <Image source={diary.image} style={styles.diaryImage} />
                 <View style={styles.petTagsContainer}>
-                  {diary.pets.map((pet, idx) => (
+                  {diary.pets.map((pet: any, idx: number) => (
                     <View key={idx} style={[styles.petTag, { backgroundColor: theme.accentDawn }]}>
                       <Text style={[styles.petTagText, { color: theme.primary, fontFamily: fontFamilyName }]}>{pet.name}</Text>
                     </View>
@@ -328,7 +328,7 @@ export default function DiaryScreen() {
             ) : (
               <View style={[styles.noImageTagsContainer, { backgroundColor: theme.accentDawn }]}>
                 <Text style={[styles.noImageTagText, { color: theme.primary, fontFamily: fontFamilyName }]}>
-                  {diary.pets.map(p => p.name).join(' ')}
+                  {diary.pets.map((p: any) => p.name).join(' ')}
                 </Text>
               </View>
             )}
@@ -345,7 +345,7 @@ export default function DiaryScreen() {
 
               {/* 寵物數據列 (依照標記數量渲染) */}
               <View style={styles.metricsWrapper}>
-                {diary.pets.map((pet, idx) => (
+                {diary.pets.map((pet: any, idx: number) => (
                   <View key={idx} style={styles.metricRow}>
                     <Text style={[styles.metricText, { color: theme.primary, fontFamily: fontFamilyName }]}>{pet.temp}</Text>
                     <Text style={[styles.metricText, { color: theme.primary, fontFamily: fontFamilyName }]}>{pet.humid}</Text>

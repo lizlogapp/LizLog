@@ -39,7 +39,7 @@ function RootLayoutInner() {
   useEffect(() => {
     if (isLoading) return;
     
-    const isRoot = segments.length === 0 || segments[0] === '' || segments[0] === 'index';
+    const isRoot = (segments.length as number) === 0 || segments[0] === '' || segments[0] === 'index';
     const inAuthGroup = segments[0] === 'login' || isRoot;
 
     if (!user && !inAuthGroup) {

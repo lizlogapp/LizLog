@@ -125,7 +125,7 @@ export default function AddMedicalScreen() {
       type: '就診',
       hospital,
       note: reason,
-      tagColor: paletteColors.MENG_HUANG,
+      tagColor: paletteColors.NUAN_YANG,
       visit: {
         date: visitDate,
         hospital,

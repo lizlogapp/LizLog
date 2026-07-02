@@ -70,7 +70,7 @@ export default function AnalyticsScreen() {
     }
   }, [isDemoMode, user]);
 
-  const latestDiary = isDemoMode ? mockDiaryRecord : {
+  const latestStatus = isDemoMode ? mockLatestStatus : {
     temp: { current: '-', avg: '-', high: '-', low: '-', updatedAt: '-' },
     humid: { current: '-', avg: '-', high: '-', low: '-', updatedAt: '-' },
     bask: { value: '-', updatedAt: '-' },
