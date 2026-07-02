@@ -13,7 +13,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { BaseScreen } from '../../src/components/common/BaseScreen';
-import { mockTodayReminders, ReminderItem, petIdToName } from '../../src/data/mockDiaryData';
+import { ReminderItem, petIdToName } from '../../src/data/mockDiaryData';
 import { paletteColors } from '../../src/theme/themeColorSettings';
 import { useAuth } from '../../src/contexts/AuthContext';
 import { diaryService, petService, reminderService } from '../../src/services/firestoreService';
@@ -49,10 +49,10 @@ export default function HomeScreen() {
   const { user } = useAuth();
 
   const [loadingComplete, setLoadingComplete] = useState(true);
-  const [availablePets, setAvailablePets] = useState<string[]>(['DELETE', 'CTRL', 'ENTER', 'ALT']); // 模擬寵物名單
-  const [currentPetName, setCurrentPetName] = useState<string>('DELETE'); // 預設選中 DELETE 供預覽
+  const [availablePets, setAvailablePets] = useState<string[]>([]); // 預設空陣列
+  const [currentPetName, setCurrentPetName] = useState<string>('未設定'); // 預設未設定
   const [isDropdownVisible, setIsDropdownVisible] = useState<boolean>(false); // 控制下拉選單顯示
-  const [isConnected, setIsConnected] = useState<boolean>(isDemoMode); // 根據 Demo 模式決定預設狀態
+  const [isConnected, setIsConnected] = useState<boolean>(false); // 預設未連線
 
   // 模擬未來從資料庫撈取的「最新一筆日記」物件
   interface DiaryRecord {
@@ -62,40 +62,19 @@ export default function HomeScreen() {
     weatherIcon: any;
     imageUrl: any;
   }
-  const [latestDiary, setLatestDiary] = useState<DiaryRecord | null>({
-    id: '1',
-    day: '17',
-    month: 'JUL',
-    weatherIcon: require('../../assets/icons/weather-sunny.png'),
-    imageUrl: require('../../assets/user-uploads/lizard-001.jpg'),
-  });
+  const [latestDiary, setLatestDiary] = useState<DiaryRecord | null>(null); // 預設空
 
-  const [reminders, setReminders] = useState<ReminderItem[]>(mockTodayReminders);
+  const [reminders, setReminders] = useState<ReminderItem[]>([]); // 預設空陣列
 
   useEffect(() => {
-    if (isDemoMode) {
-      setAvailablePets(['DELETE', 'CTRL', 'ENTER', 'ALT']);
-      setCurrentPetName('DELETE');
-      setLatestDiary({
-        id: '1',
-        day: '17',
-        month: 'JUL',
-        weatherIcon: require('../../assets/icons/weather-sunny.png'),
-        imageUrl: require('../../assets/user-uploads/lizard-001.jpg'),
-      });
-      setReminders(mockTodayReminders);
-      setIsConnected(true);
-    } else if (user) {
-      // 讀取真實資料
+    if (user) {
+      // Load pets
       petService.getAll(user.uid).then(pets => {
         setAvailablePets(pets.map(p => p.name));
-        if (pets.length > 0) {
-          setCurrentPetName(pets[0].name);
-        } else {
-          setCurrentPetName('未設定');
-        }
+        setCurrentPetName(pets.length > 0 ? pets[0].name : '未設定');
       });
-      
+
+      // Load latest diary
       diaryService.getAll(user.uid).then(diaries => {
         if (diaries.length > 0) {
           const latest = diaries[0];
@@ -113,21 +92,20 @@ export default function HomeScreen() {
         }
       });
 
+      // Load reminders
       reminderService.getAll(user.uid).then(fsReminders => {
         const active = fsReminders.filter(r => r.isOn);
         const today = new Date();
         const dateStr = `${today.getMonth() + 1}/${today.getDate()}`;
         setReminders(active.map(r => ({
           id: r.id,
-          pets: r.pets, // 可能需要把 ID 轉成名字，這裡先簡化
+          pets: r.pets,
           title: r.type + (r.note ? `（${r.note}）` : ''),
           date: dateStr,
           tagColor: r.tagColor,
           checked: false,
         })));
       });
-
-      setIsConnected(true); // TODO: Replace with actual device connection state
     } else {
       setAvailablePets([]);
       setCurrentPetName('未設定');

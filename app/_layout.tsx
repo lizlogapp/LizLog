@@ -10,6 +10,7 @@ import {
   View,
   Dimensions,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ThemeProvider, useTheme } from '../src/theme/ThemeContext';
 import { AppLoadProvider } from '../src/contexts/AppLoadContext';
 import { AuthProvider, useAuth } from '../src/contexts/AuthContext';
@@ -29,6 +30,7 @@ const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 function RootLayoutInner() {
   const { themeId } = useTheme();
   const bg = backgroundImages[themeId];
+  const insets = useSafeAreaInsets();
   const overlayColor =
     themeId === ThemeId.RI_CHU_THEME ? paletteColors.RI_CHU : paletteColors.MU_CHENG;
 
@@ -80,8 +82,8 @@ function RootLayoutInner() {
         style={[
           styles.panel,
           {
-            top: 70,
-            bottom: 70,
+            top: STATUS_BAR_HEIGHT,
+            bottom: TAB_BAR_HEIGHT + insets.bottom,
             backgroundColor: overlayColor,
           },
         ]}
