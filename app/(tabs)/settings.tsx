@@ -115,16 +115,19 @@ export default function SettingsScreen() {
               </Text>
             </Pressable>
           </View>
-          <View style={styles.row}>
-            <Text style={[styles.label, { color: theme.primary, fontFamily: fontFamilyName }]}>演示數據模式</Text>
-            <Switch
-              trackColor={{ false: '#E0E0E0', true: theme.primary }}
-              thumbColor={'#FFFFFF'}
-              onValueChange={setIsDemoMode}
-              value={isDemoMode}
-              style={{ transform: [{ scaleX: 0.8 }, { scaleY: 0.8 }] }}
-            />
-          </View>
+          {/* 只對官方帳號顯示 Demo 模式切換 */}
+          {auth.currentUser?.email === 'lizlogapp@gmail.com' && (
+            <View style={styles.row}>
+              <Text style={[styles.label, { color: theme.primary, fontFamily: fontFamilyName }]}>演示數據模式</Text>
+              <Switch
+                trackColor={{ false: '#E0E0E0', true: theme.primary }}
+                thumbColor={'#FFFFFF'}
+                onValueChange={setIsDemoMode}
+                value={isDemoMode}
+                style={{ transform: [{ scaleX: 0.8 }, { scaleY: 0.8 }] }}
+              />
+            </View>
+          )}
 
           {/* Buttons */}
           <View style={styles.buttonContainer}>

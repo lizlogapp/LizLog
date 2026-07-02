@@ -7,6 +7,7 @@ import {
   Pressable,
   TextInput,
   Modal,
+  Alert,
 } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useTheme } from '../../../src/theme/ThemeContext';
@@ -44,20 +45,33 @@ export default function AddReminderScreen() {
   const { user } = useAuth();
 
   // 寵物名單
-  const [petList, setPetList] = useState<{ id: string; name: string }[]>(mockPetList);
+  const [petList, setPetList] = useState<{ id: string; name: string }[]>(isDemoMode ? mockPetList : []);
+  const [selectedPets, setSelectedPets] = useState<string[]>(id ? [id] : (isDemoMode ? [mockPetList[0].id] : []));
 
   useEffect(() => {
     if (isDemoMode) {
       setPetList(mockPetList);
+      if (selectedPets.length === 0) {
+        const defaultPet = mockPetList.find(p => p.id === id) || mockPetList[0];
+        setSelectedPets([defaultPet.id]);
+      }
     } else if (user) {
       petService.getAll(user.uid).then(pets => {
-        setPetList(pets.map(p => ({ id: p.id, name: p.name })));
+        if (pets.length === 0) {
+          Alert.alert('提示', '目前尚無寵物資料，請先新增寵物', [
+            { text: '確定', onPress: () => router.replace('/(tabs)/pets') }
+          ]);
+        } else {
+          setPetList(pets.map(p => ({ id: p.id, name: p.name })));
+          // 如果沒有選擇任何寵物，或者選擇了預設假資料的 ID，則重新選擇
+          if (selectedPets.length === 0 || selectedPets[0] === '1') {
+            const defaultPet = pets.find(p => p.id === id) || pets[0];
+            setSelectedPets([defaultPet.id]);
+          }
+        }
       });
     }
-  }, [isDemoMode, user]);
-
-  const currentPet = petList.find(p => p.id === (id || '1')) || petList[0] || { id: id || '1', name: 'Pet' };
-  const [selectedPets, setSelectedPets] = useState<string[]>([currentPet.id]);
+  }, [isDemoMode, user, id]);
 
   const togglePet = (petId: string) => {
     setSelectedPets(prev =>
