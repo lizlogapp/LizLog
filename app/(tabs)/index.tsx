@@ -34,12 +34,13 @@ const { width: W, height: H } = Dimensions.get('window');
 const PAGE_LEFT = PANEL_CONTENT_MARGIN + CONTENT_PAGE_MARGIN;
 const PAGE_TOP = STATUS_BAR_HEIGHT + PANEL_CONTENT_MARGIN + CONTENT_PAGE_MARGIN;
 const PAGE_WIDTH = W - (PANEL_CONTENT_MARGIN + CONTENT_PAGE_MARGIN) * 2;
+const PAGE_HEIGHT = H - STATUS_BAR_HEIGHT - TAB_BAR_HEIGHT - (PANEL_CONTENT_MARGIN + CONTENT_PAGE_MARGIN) * 2;
 
 const IMAGE_PADDING = 64;
 
 export default function HomeScreen() {
   const insets = useSafeAreaInsets();
-  const PAGE_HEIGHT = H - STATUS_BAR_HEIGHT - TAB_BAR_HEIGHT - insets.bottom - (PANEL_CONTENT_MARGIN + CONTENT_PAGE_MARGIN) * 2;
+  const DYNAMIC_PAGE_HEIGHT = H - STATUS_BAR_HEIGHT - TAB_BAR_HEIGHT - insets.bottom - (PANEL_CONTENT_MARGIN + CONTENT_PAGE_MARGIN) * 2;
 
   const { isReady } = useAppLoad();
   const { themeId, fontFamilyName, isDemoMode } = useTheme();
