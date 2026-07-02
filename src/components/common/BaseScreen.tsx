@@ -1,5 +1,6 @@
 import React, { ReactNode } from 'react';
 import { View, ScrollView, StyleProp, ViewStyle, ScrollViewProps } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { STATUS_BAR_HEIGHT, TAB_BAR_HEIGHT } from '../../theme/layoutSettings';
 
 interface BaseScreenProps extends ScrollViewProps {
@@ -28,6 +29,8 @@ export function BaseScreen({
   contentStyle,
   ...rest
 }: BaseScreenProps) {
+  const insets = useSafeAreaInsets();
+
   return (
     <View style={{ flex: 1, backgroundColor: 'transparent' }}>
       {/* 
@@ -39,7 +42,7 @@ export function BaseScreen({
         style={{
           position: 'absolute',
           top: STATUS_BAR_HEIGHT,
-          bottom: TAB_BAR_HEIGHT,
+          bottom: TAB_BAR_HEIGHT + insets.bottom,
           left: 0,
           right: 0,
         }}

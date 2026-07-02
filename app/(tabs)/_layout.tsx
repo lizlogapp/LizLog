@@ -1,5 +1,6 @@
 import React from 'react';
 import { View, StyleSheet } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Tabs } from 'expo-router';
 import { getThemeTokens } from '../../src/theme/themeSettings';
 import { useTheme } from '../../src/theme/ThemeContext';
@@ -15,6 +16,7 @@ import SettingsIcon from '../../assets/tab-bar/settings-default.svg';
 function TabsLayoutInner() {
   const { themeId } = useTheme();
   const theme = getThemeTokens(themeId);
+  const insets = useSafeAreaInsets();
 
   // Helper renderer to encapsulate active logic
   const renderIcon = (IconComponent: React.FC<any>, focused: boolean) => {
@@ -51,9 +53,9 @@ function TabsLayoutInner() {
           elevation: 0,
           borderTopWidth: 0,
           zIndex: 100,
-          height: TAB_BAR_HEIGHT,
+          height: TAB_BAR_HEIGHT + insets.bottom,
           paddingTop: 11,
-          paddingBottom: 11,
+          paddingBottom: 11 + insets.bottom,
           paddingHorizontal: 28,
         },
         tabBarItemStyle: {

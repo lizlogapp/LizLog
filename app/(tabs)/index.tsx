@@ -10,6 +10,7 @@ import {
   ScrollView,
   Pressable,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { BaseScreen } from '../../src/components/common/BaseScreen';
 import { mockTodayReminders, ReminderItem, petIdToName } from '../../src/data/mockDiaryData';
@@ -33,11 +34,13 @@ const { width: W, height: H } = Dimensions.get('window');
 const PAGE_LEFT = PANEL_CONTENT_MARGIN + CONTENT_PAGE_MARGIN;
 const PAGE_TOP = STATUS_BAR_HEIGHT + PANEL_CONTENT_MARGIN + CONTENT_PAGE_MARGIN;
 const PAGE_WIDTH = W - (PANEL_CONTENT_MARGIN + CONTENT_PAGE_MARGIN) * 2;
-const PAGE_HEIGHT = H - STATUS_BAR_HEIGHT - TAB_BAR_HEIGHT - (PANEL_CONTENT_MARGIN + CONTENT_PAGE_MARGIN) * 2;
 
 const IMAGE_PADDING = 64;
 
 export default function HomeScreen() {
+  const insets = useSafeAreaInsets();
+  const PAGE_HEIGHT = H - STATUS_BAR_HEIGHT - TAB_BAR_HEIGHT - insets.bottom - (PANEL_CONTENT_MARGIN + CONTENT_PAGE_MARGIN) * 2;
+
   const { isReady } = useAppLoad();
   const { themeId, fontFamilyName, isDemoMode } = useTheme();
   const theme = getThemeTokens(themeId);
@@ -139,7 +142,7 @@ export default function HomeScreen() {
     backgroundColor: paletteColors.RI_CHU,
     position: 'absolute' as const,
     top: STATUS_BAR_HEIGHT + PANEL_CONTENT_MARGIN + CONTENT_PAGE_MARGIN,
-    bottom: TAB_BAR_HEIGHT + PANEL_CONTENT_MARGIN + CONTENT_PAGE_MARGIN,
+    bottom: TAB_BAR_HEIGHT + insets.bottom + PANEL_CONTENT_MARGIN + CONTENT_PAGE_MARGIN,
     left: PANEL_CONTENT_MARGIN + CONTENT_PAGE_MARGIN,
     right: PANEL_CONTENT_MARGIN + CONTENT_PAGE_MARGIN,
   };

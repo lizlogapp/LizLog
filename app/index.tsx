@@ -7,6 +7,7 @@ import {
   Dimensions,
   Pressable,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { useTheme } from '../src/theme/ThemeContext';
 import { getThemeTokens } from '../src/theme/themeSettings';
@@ -24,7 +25,6 @@ const { width: W, height: H } = Dimensions.get('window');
 const PAGE_LEFT = PANEL_CONTENT_MARGIN + CONTENT_PAGE_MARGIN;
 const PAGE_TOP = STATUS_BAR_HEIGHT + PANEL_CONTENT_MARGIN + CONTENT_PAGE_MARGIN;
 const PAGE_WIDTH = W - (PANEL_CONTENT_MARGIN + CONTENT_PAGE_MARGIN) * 2;
-const PAGE_HEIGHT = H - STATUS_BAR_HEIGHT - TAB_BAR_HEIGHT - (PANEL_CONTENT_MARGIN + CONTENT_PAGE_MARGIN) * 2;
 
 const onboardingSteps = [
   {
@@ -45,6 +45,8 @@ const onboardingSteps = [
 ];
 
 export default function OnboardingScreen() {
+  const insets = useSafeAreaInsets();
+  const PAGE_HEIGHT = H - STATUS_BAR_HEIGHT - TAB_BAR_HEIGHT - insets.bottom - (PANEL_CONTENT_MARGIN + CONTENT_PAGE_MARGIN) * 2;
   const { themeId, fontFamilyName } = useTheme();
   const theme = getThemeTokens(themeId);
   const router = useRouter();
