@@ -20,6 +20,9 @@ import {
   Timestamp,
   QuerySnapshot,
   DocumentData,
+  collectionGroup,
+  where,
+  limit,
 } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { db, storage } from '../config/firebase';
@@ -40,8 +43,20 @@ export interface PetDoc {
   nextReminder?: string;
   reminderNote?: string;
   lastVisit?: string;
+  ownerId?: string;
+  coParents?: { uid: string; name: string; isMainOwner: boolean; permission?: 'edit' | 'view'; muteReminders?: boolean }[];
   createdAt?: any;
   updatedAt?: any;
+}
+
+export interface InviteDoc {
+  id?: string;
+  code: string;
+  petId: string;
+  ownerId: string;
+  expiresAt: any;
+  permission: 'edit' | 'view';
+  createdAt?: any;
 }
 
 export interface ReminderDoc {
@@ -150,27 +165,44 @@ function getUserDoc(userId: string, collectionName: string, docId: string) {
 // ===== 寵物服務 =====
 
 export const petService = {
-  /** 取得所有寵物 */
+  /** 取得所有寵物 (包含自己擁有的與別人分享的) */
   async getAll(userId: string): Promise<(PetDoc & { id: string })[]> {
-    const q = query(
-      getUserCollection(userId, 'pets'),
-      orderBy('createdAt', 'desc')
+    // 取得自己的寵物
+    const q1 = query(getUserCollection(userId, 'pets'), orderBy('createdAt', 'desc'));
+    const snap1 = await getDocs(q1);
+    const ownPets = snapshotToArray<PetDoc>(snap1);
+
+    // 取得別人分享的寵物 (利用 collectionGroup)
+    // 注意: 這需要 Firestore 建立複合索引 (pets 集合的 coParents 欄位)
+    // 在這裡我們先使用前端過濾，若沒有設定 collectionGroup 索引的話
+    const q2 = query(collectionGroup(db, 'pets'));
+    const snap2 = await getDocs(q2);
+    const sharedPets = snapshotToArray<PetDoc>(snap2).filter(pet => 
+      pet.ownerId !== userId && 
+      pet.coParents?.some(cp => cp.uid === userId)
     );
-    const snapshot = await getDocs(q);
-    return snapshotToArray<PetDoc>(snapshot);
+
+    return [...ownPets, ...sharedPets];
   },
 
-  /** 即時監聽寵物列表變更 */
+  /** 即時監聽寵物列表變更 (這裡為了簡化，僅監聽自己的寵物集合。若要監聽所有，需結合多個 onSnapshot) */
   onPetsChanged(
     userId: string,
     callback: (pets: (PetDoc & { id: string })[]) => void
   ) {
-    const q = query(
-      getUserCollection(userId, 'pets'),
-      orderBy('createdAt', 'desc')
-    );
-    return onSnapshot(q, (snapshot) => {
-      callback(snapshotToArray<PetDoc>(snapshot));
+    const q = query(getUserCollection(userId, 'pets'), orderBy('createdAt', 'desc'));
+    return onSnapshot(q, async (snapshot) => {
+      const ownPets = snapshotToArray<PetDoc>(snapshot);
+      
+      // 簡單起見，當自己的寵物變更時，順便重新拉取一次分享的寵物
+      const q2 = query(collectionGroup(db, 'pets'));
+      const snap2 = await getDocs(q2);
+      const sharedPets = snapshotToArray<PetDoc>(snap2).filter(pet => 
+        pet.ownerId !== userId && 
+        pet.coParents?.some(cp => cp.uid === userId)
+      );
+
+      callback([...ownPets, ...sharedPets]);
     });
   },
 
@@ -183,10 +215,12 @@ export const petService = {
   },
 
   /** 新增寵物 */
-  async add(userId: string, data: Omit<PetDoc, 'id'>): Promise<string> {
+  async add(userId: string, data: Omit<PetDoc, 'id'>, userName: string = '主人'): Promise<string> {
     const colRef = getUserCollection(userId, 'pets');
     const docRef = await addDoc(colRef, {
       ...data,
+      ownerId: userId,
+      coParents: [{ uid: userId, name: userName, isMainOwner: true }],
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
     });
@@ -221,28 +255,36 @@ export const petService = {
 // ===== 提醒服務 =====
 
 export const reminderService = {
-  /** 取得使用者所有提醒 */
-  async getAll(userId: string): Promise<(ReminderDoc & { id: string })[]> {
-    const q = query(
-      getUserCollection(userId, 'reminders'),
-      orderBy('createdAt', 'desc')
-    );
-    const snapshot = await getDocs(q);
-    return snapshotToArray<ReminderDoc>(snapshot);
+  /** 取得多個使用者所有提醒 */
+  async getAll(ownerIds: string[]): Promise<(ReminderDoc & { id: string })[]> {
+    const promises = ownerIds.map(async (uid) => {
+      const q = query(getUserCollection(uid, 'reminders'), orderBy('createdAt', 'desc'));
+      const snapshot = await getDocs(q);
+      return snapshotToArray<ReminderDoc>(snapshot);
+    });
+    const results = await Promise.all(promises);
+    return results.flat().sort((a, b) => b.createdAt - a.createdAt);
   },
 
-  /** 即時監聽提醒列表變更 */
+  /** 即時監聽多個使用者提醒列表變更 */
   onRemindersChanged(
-    userId: string,
+    ownerIds: string[],
     callback: (reminders: (ReminderDoc & { id: string })[]) => void
   ) {
-    const q = query(
-      getUserCollection(userId, 'reminders'),
-      orderBy('createdAt', 'desc')
-    );
-    return onSnapshot(q, (snapshot) => {
-      callback(snapshotToArray<ReminderDoc>(snapshot));
+    const unsubscribes: (() => void)[] = [];
+    const allReminders = new Map<string, (ReminderDoc & { id: string })[]>();
+    
+    ownerIds.forEach(uid => {
+      const q = query(getUserCollection(uid, 'reminders'), orderBy('createdAt', 'desc'));
+      const unsub = onSnapshot(q, (snapshot) => {
+        allReminders.set(uid, snapshotToArray<ReminderDoc>(snapshot));
+        const merged = Array.from(allReminders.values()).flat().sort((a, b) => b.createdAt - a.createdAt);
+        callback(merged);
+      });
+      unsubscribes.push(unsub);
     });
+    
+    return () => unsubscribes.forEach(unsub => unsub());
   },
 
   /** 新增提醒 */
@@ -275,28 +317,44 @@ export const reminderService = {
 // ===== 醫護服務 =====
 
 export const medicalService = {
-  /** 取得使用者所有醫護紀錄 */
-  async getAll(userId: string): Promise<(MedicalDoc & { id: string })[]> {
-    const q = query(
-      getUserCollection(userId, 'medical'),
-      orderBy('createdAt', 'desc')
-    );
-    const snapshot = await getDocs(q);
-    return snapshotToArray<MedicalDoc>(snapshot);
+  /** 取得多個使用者所有醫護紀錄 */
+  async getAll(ownerIds: string[]): Promise<(MedicalDoc & { id: string })[]> {
+    const promises = ownerIds.map(async (uid) => {
+      const q = query(getUserCollection(uid, 'medical'), orderBy('createdAt', 'desc'));
+      const snapshot = await getDocs(q);
+      return snapshotToArray<MedicalDoc>(snapshot);
+    });
+    const results = await Promise.all(promises);
+    return results.flat().sort((a, b) => b.createdAt - a.createdAt);
   },
 
-  /** 即時監聽醫護列表 */
+  /** 即時監聽多個使用者醫護列表 */
   onMedicalChanged(
-    userId: string,
+    ownerIds: string[],
     callback: (records: (MedicalDoc & { id: string })[]) => void
   ) {
-    const q = query(
-      getUserCollection(userId, 'medical'),
-      orderBy('createdAt', 'desc')
-    );
-    return onSnapshot(q, (snapshot) => {
-      callback(snapshotToArray<MedicalDoc>(snapshot));
+    const unsubscribes: (() => void)[] = [];
+    const allRecords = new Map<string, (MedicalDoc & { id: string })[]>();
+    
+    ownerIds.forEach(uid => {
+      const q = query(getUserCollection(uid, 'medical'), orderBy('createdAt', 'desc'));
+      const unsub = onSnapshot(q, (snapshot) => {
+        allRecords.set(uid, snapshotToArray<MedicalDoc>(snapshot));
+        const merged = Array.from(allRecords.values()).flat().sort((a, b) => b.createdAt - a.createdAt);
+        callback(merged);
+      });
+      unsubscribes.push(unsub);
     });
+    
+    return () => unsubscribes.forEach(unsub => unsub());
+  },
+
+  /** 取得單一醫護紀錄 */
+  async getById(userId: string, medicalId: string): Promise<(MedicalDoc & { id: string }) | null> {
+    const docRef = getUserDoc(userId, 'medical', medicalId);
+    const docSnap = await getDoc(docRef);
+    if (!docSnap.exists()) return null;
+    return { id: docSnap.id, ...docSnap.data() } as MedicalDoc & { id: string };
   },
 
   /** 新增醫護紀錄 */
@@ -329,28 +387,37 @@ export const medicalService = {
 // ===== 日記服務 =====
 
 export const diaryService = {
-  /** 取得所有日記 */
-  async getAll(userId: string): Promise<(DiaryDoc & { id: string })[]> {
-    const q = query(
-      getUserCollection(userId, 'diaries'),
-      orderBy('date', 'desc')
-    );
-    const snapshot = await getDocs(q);
-    return snapshotToArray<DiaryDoc>(snapshot);
+  /** 取得多個使用者所有日記 */
+  async getAll(ownerIds: string[]): Promise<(DiaryDoc & { id: string })[]> {
+    const promises = ownerIds.map(async (uid) => {
+      const q = query(getUserCollection(uid, 'diaries'), orderBy('date', 'desc'));
+      const snapshot = await getDocs(q);
+      return snapshotToArray<DiaryDoc>(snapshot);
+    });
+    const results = await Promise.all(promises);
+    return results.flat().sort((a, b) => b.date.localeCompare(a.date));
   },
 
-  /** 即時監聽日記列表 */
+  /** 即時監聽多個使用者日記列表 */
   onDiariesChanged(
-    userId: string,
+    ownerIds: string[],
     callback: (diaries: (DiaryDoc & { id: string })[]) => void
   ) {
-    const q = query(
-      getUserCollection(userId, 'diaries'),
-      orderBy('date', 'desc')
-    );
-    return onSnapshot(q, (snapshot) => {
-      callback(snapshotToArray<DiaryDoc>(snapshot));
+    const unsubscribes: (() => void)[] = [];
+    const allDiaries = new Map<string, (DiaryDoc & { id: string })[]>();
+    
+    ownerIds.forEach(uid => {
+      const q = query(getUserCollection(uid, 'diaries'), orderBy('date', 'desc'));
+      const unsub = onSnapshot(q, (snapshot) => {
+        allDiaries.set(uid, snapshotToArray<DiaryDoc>(snapshot));
+        // Merge and sort
+        const merged = Array.from(allDiaries.values()).flat().sort((a, b) => b.date.localeCompare(a.date));
+        callback(merged);
+      });
+      unsubscribes.push(unsub);
     });
+    
+    return () => unsubscribes.forEach(unsub => unsub());
   },
 
   /** 新增日記 */
@@ -387,4 +454,72 @@ export const diaryService = {
     await uploadBytes(storageRef, blob);
     return await getDownloadURL(storageRef);
   },
+};
+
+// ===== 邀請服務 (共育) =====
+
+export const inviteService = {
+  /** 產生邀請碼 */
+  async createInvite(petId: string, ownerId: string, permission: 'edit' | 'view' = 'edit'): Promise<string> {
+    const code = Math.random().toString(36).substring(2, 8).toUpperCase();
+    const invitesCol = collection(db, 'invites');
+    
+    // 設定 7 天後過期
+    const expiresAt = new Date();
+    expiresAt.setDate(expiresAt.getDate() + 7);
+
+    await addDoc(invitesCol, {
+      code,
+      petId,
+      ownerId,
+      permission,
+      expiresAt: Timestamp.fromDate(expiresAt),
+      createdAt: serverTimestamp(),
+    });
+    return code;
+  },
+
+  /** 使用邀請碼 */
+  async consumeInvite(code: string, userId: string, userName: string): Promise<{ success: boolean; message: string }> {
+    const invitesCol = collection(db, 'invites');
+    const q = query(invitesCol, where('code', '==', code.toUpperCase()), limit(1));
+    const snap = await getDocs(q);
+    
+    if (snap.empty) {
+      return { success: false, message: '無效的邀請碼或邀請碼已過期' };
+    }
+
+    const inviteDoc = snap.docs[0];
+    const data = inviteDoc.data() as InviteDoc;
+
+    if (data.expiresAt.toDate() < new Date()) {
+      return { success: false, message: '邀請碼已過期' };
+    }
+
+    // 將使用者加入寵物的 coParents 陣列
+    const petRef = getUserDoc(data.ownerId, 'pets', data.petId);
+    const petSnap = await getDoc(petRef);
+    
+    if (!petSnap.exists()) {
+      return { success: false, message: '找不到該寵物資料' };
+    }
+
+    const petData = petSnap.data() as PetDoc;
+    const coParents = petData.coParents || [];
+    
+    if (coParents.some(cp => cp.uid === userId)) {
+      return { success: false, message: '您已經是該寵物的共同飼育者' };
+    }
+
+    const permission = data.permission || 'edit';
+
+    coParents.push({ uid: userId, name: userName, isMainOwner: false, permission, muteReminders: false });
+    
+    await updateDoc(petRef, { coParents });
+
+    // 使用完畢後刪除邀請碼
+    await deleteDoc(inviteDoc.ref);
+
+    return { success: true, message: '成功加入共同飼育！' };
+  }
 };

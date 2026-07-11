@@ -7,14 +7,8 @@ import { getThemeTokens } from '../../src/theme/themeSettings';
 
 import { getFontSize } from '../../src/theme/typographySettings';
 import { BaseScreen } from '../../src/components/common/BaseScreen';
-import {
-  mockTempDataMap, mockHumidDataMap, mockBaskDataMap,
-  mockWeightDataMap, mockLengthDataMap, mockBathDataMap,
-  mockFeedDataMap, mockLatestStatus, mockDiaryRecord,
-  getMockPoopEvents, getMockMoltEvents, appetiteToLabel,
-} from '../../src/data/mockDiaryData';
 import { useAuth } from '../../src/contexts/AuthContext';
-import { diaryService, petService } from '../../src/services/firestoreService';
+import { diaryService, petService, DiaryDoc } from '../../src/services/firestoreService';
 
 // 引入從 temp 新增進來的 SVG 圖示
 // 引入從 temp 新增進來並翻成英文避免組件撞名的 SVG 圖示
@@ -44,43 +38,80 @@ export default function AnalyticsScreen() {
   const { user } = useAuth();
 
   // 延用與首頁相同的寵物切換狀態
-  const [availablePets, setAvailablePets] = useState<string[]>(isDemoMode ? ['DELETE', 'CTRL', 'ENTER', 'ALT'] : []);
-  const [currentPetName, setCurrentPetName] = useState<string>(isDemoMode ? 'DELETE' : '未設定');
+  const [availablePets, setAvailablePets] = useState<string[]>([]);
+  const [currentPetName, setCurrentPetName] = useState<string>('未設定');
   const [isDropdownVisible, setIsDropdownVisible] = useState<boolean>(false);
   const [isRecordsExpanded, setIsRecordsExpanded] = useState<boolean>(false);
   const [expandedChart, setExpandedChart] = useState<string | null>(null);
   const [activeChartTab, setActiveChartTab] = useState<string>('週');
   const [calendarDate, setCalendarDate] = useState<Date>(new Date());
+  const [diaryEntries, setDiaryEntries] = useState<(DiaryDoc & { id: string })[]>([]);
 
-  // 這裡之後可以加入 useEffect 讀取 Firestore 資料
   React.useEffect(() => {
-    if (!isDemoMode && user) {
-      petService.getAll(user.uid).then(pets => {
-        setAvailablePets(pets.map(p => p.name));
-        if (pets.length > 0) {
-          setCurrentPetName(pets[0].name);
-        } else {
-          setCurrentPetName('未設定');
-        }
+    if (!user) return;
+    petService.getAll(user.uid).then(pets => {
+      setAvailablePets(pets.map(p => p.name));
+      if (pets.length > 0) {
+        setCurrentPetName(pets[0].name);
+      } else {
+        setCurrentPetName('未設定');
+      }
+
+      const ownerIds = Array.from(new Set(pets.map(p => p.ownerId || user.uid)));
+      if (ownerIds.length === 0) ownerIds.push(user.uid);
+      
+      diaryService.getAll(ownerIds).then(entries => {
+        setDiaryEntries(entries);
       });
-      // 可以進一步加入抓取日誌並轉換成統計數據的邏輯
-    } else if (isDemoMode) {
-      setAvailablePets(['DELETE', 'CTRL', 'ENTER', 'ALT']);
-      setCurrentPetName('DELETE');
+    });
+  }, [user]);
+
+  // 從日記資料運算最新狀態
+  const computeLatestStatus = () => {
+    const petEntries = diaryEntries.filter(e => 
+      e.pets?.some(p => p.name === currentPetName)
+    );
+    if (petEntries.length === 0) {
+      return {
+        temp: { current: '-', avg: '-', high: '-', low: '-', updatedAt: '-' },
+        humid: { current: '-', avg: '-', high: '-', low: '-', updatedAt: '-' },
+        bask: { value: '-', updatedAt: '-' },
+        feed: { value: '-', updatedAt: '-' },
+        bath: { value: '-', updatedAt: '-' },
+        poop: { value: '-', updatedAt: '-' },
+        weight: { value: '-', updatedAt: '-' },
+        length: { value: '-', updatedAt: '-' },
+      };
     }
-  }, [isDemoMode, user]);
-
-  const latestStatus = isDemoMode ? mockLatestStatus : {
-    temp: { current: '-', avg: '-', high: '-', low: '-', updatedAt: '-' },
-    humid: { current: '-', avg: '-', high: '-', low: '-', updatedAt: '-' },
-    bask: { value: '-', updatedAt: '-' },
-    feed: { value: '-', updatedAt: '-' },
-    bath: { value: '-', updatedAt: '-' },
-
-    poop: { value: '-', updatedAt: '-' },
-    weight: { value: '-', updatedAt: '-' },
-    length: { value: '-', updatedAt: '-' },
+    const latest = petEntries[0]; // 已依 date desc 排序
+    const petData = latest.pets?.find(p => p.name === currentPetName);
+    const temps = petEntries.map(e => parseFloat(e.pets?.find(p => p.name === currentPetName)?.temp || '0')).filter(v => v > 0);
+    const humids = petEntries.map(e => parseFloat(e.pets?.find(p => p.name === currentPetName)?.humid || '0')).filter(v => v > 0);
+    return {
+      temp: {
+        current: petData?.temp || '-',
+        avg: temps.length > 0 ? (temps.reduce((a,b)=>a+b,0)/temps.length).toFixed(1) : '-',
+        high: temps.length > 0 ? Math.max(...temps).toString() : '-',
+        low: temps.length > 0 ? Math.min(...temps).toString() : '-',
+        updatedAt: latest.date || '-',
+      },
+      humid: {
+        current: petData?.humid || '-',
+        avg: humids.length > 0 ? (humids.reduce((a,b)=>a+b,0)/humids.length).toFixed(1) : '-',
+        high: humids.length > 0 ? Math.max(...humids).toString() : '-',
+        low: humids.length > 0 ? Math.min(...humids).toString() : '-',
+        updatedAt: latest.date || '-',
+      },
+      bask: { value: petData?.states?.bask ? '已曬曬' : '未曬曬', updatedAt: latest.date || '-' },
+      feed: { value: petData?.states?.feed ? '已餵食' : '未餵食', updatedAt: latest.date || '-' },
+      bath: { value: petData?.states?.bath ? '已泡澡' : '未泡澡', updatedAt: latest.date || '-' },
+      poop: { value: petData?.states?.poop ? '已排便' : '未排便', updatedAt: latest.date || '-' },
+      weight: { value: latest.records?.weight || '-', updatedAt: latest.date || '-' },
+      length: { value: latest.records?.length || '-', updatedAt: latest.date || '-' },
+    };
   };
+
+  const latestStatus = computeLatestStatus();
 
   const chartButtons = [
     { text: '溫度變化圖', Icon: IconTemp },
@@ -310,26 +341,8 @@ export default function AnalyticsScreen() {
           const displayTab = availableTabs.includes(activeChartTab) ? activeChartTab : '週';
           
           let currentMockData: any[] = [];
-          if (isDemoMode) {
-            if (btn.text === '溫度變化圖') {
-              currentMockData = mockTempDataMap[displayTab as keyof typeof mockTempDataMap] || mockTempDataMap['週'];
-            } else if (btn.text === '濕度變化圖') {
-              currentMockData = mockHumidDataMap[displayTab as keyof typeof mockHumidDataMap] || mockHumidDataMap['週'];
-            } else if (btn.text === '日照變化圖') {
-              currentMockData = mockBaskDataMap[displayTab as keyof typeof mockBaskDataMap] || mockBaskDataMap['週'];
-            } else if (btn.text === '泡澡變化圖') {
-              currentMockData = mockBathDataMap[displayTab as keyof typeof mockBathDataMap] || mockBathDataMap['週'];
-            } else if (btn.text === '飲食變化圖') {
-              currentMockData = mockFeedDataMap[displayTab as keyof typeof mockFeedDataMap] || mockFeedDataMap['週'];
-            } else if (btn.text === '體重變化圖') {
-              currentMockData = mockWeightDataMap[displayTab as keyof typeof mockWeightDataMap] || mockWeightDataMap['週'];
-            } else if (btn.text === '身長變化圖') {
-              currentMockData = mockLengthDataMap[displayTab as keyof typeof mockLengthDataMap] || mockLengthDataMap['週'];
-            } else {
-              // 其他圖表的暫時回退邏輯
-              currentMockData = mockHumidDataMap['週'];
-            }
-          }
+          // 圖表資料暫時為空，待日後 IoT 感測器串接後可提供即時數據
+          // 目前圖表區域會顯示為空白
 
           // 預先計算每個點的高度比例，用於折線圖或長條圖
           const processedData = currentMockData.map((data: any) => {
@@ -417,9 +430,22 @@ export default function AnalyticsScreen() {
                       const currentDay = today.getDate();
 
                       // 從共用資料中心取得事件日期
-                      const eventDays = !isDemoMode ? [] : (btn.text === '排便日曆'
-                        ? getMockPoopEvents(calMonth)
-                        : getMockMoltEvents(calMonth));
+                      // 從日記數據計算事件日期
+                      const eventDays: number[] = [];
+                      const stateKey = btn.text === '排便日曆' ? 'poop' : 'bath'; // 蓛皮目前尚無專屬欄位，暫用 bath 替代
+                      diaryEntries.forEach(entry => {
+                        const petData = entry.pets?.find(p => p.name === currentPetName);
+                        if (petData?.states?.[stateKey as keyof typeof petData.states]) {
+                          // 解析日期字串
+                          const dateMatch = entry.date?.match(/(\d{4})\/(\d{2})\/(\d{2})/);
+                          if (dateMatch) {
+                            const [, yr, mo, dy] = dateMatch;
+                            if (parseInt(yr) === calYear && parseInt(mo) === calMonth) {
+                              eventDays.push(parseInt(dy));
+                            }
+                          }
+                        }
+                      });
                       const bgColor = theme.secondary;
 
                       return (

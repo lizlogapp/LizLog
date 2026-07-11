@@ -16,53 +16,39 @@ import { getFontSize } from '../../../src/theme/typographySettings';
 import { paletteColors } from '../../../src/theme/themeColorSettings';
 import { BaseScreen } from '../../../src/components/common/BaseScreen';
 import { FloatingActionBar } from '../../../src/components/FloatingActionBar';
-
-const mockPets: Record<string, string> = {
-  '1': 'DELETE',
-  '2': 'CTRL',
-  '3': 'ENTER',
-  '4': 'ALT',
-};
-
-// 模擬當前登入使用者
-const CURRENT_USER_ID = 'ya_lady';
-
-// 模擬每個寵物的飼育名單庫 (鴉小姐是 DELETE/CTRL 的主人，是 ENTER/ALT 的共同飼育者)
-const initialMockData: Record<string, any[]> = {
-  '1': [ // DELETE
-    { id: 'ya_lady', name: '鴉小姐', isMainOwner: true },
-    { id: 'duck_lady', name: '鴨小姐', isMainOwner: false },
-  ],
-  '2': [ // CTRL
-    { id: 'ya_lady', name: '鴉小姐', isMainOwner: true },
-    { id: 'magpie_sir', name: '鵲先生', isMainOwner: false },
-    { id: 'goose_lady', name: '鵝小姐', isMainOwner: false },
-  ],
-  '3': [ // ENTER
-    { id: 'goose_lady', name: '鵝小姐', isMainOwner: true },
-    { id: 'ya_lady', name: '鴉小姐', isMainOwner: false },
-  ],
-  '4': [ // ALT
-    { id: 'magpie_sir', name: '鵲先生', isMainOwner: true },
-    { id: 'ya_lady', name: '鴉小姐', isMainOwner: false },
-  ]
-};
+import { useAuth } from '../../../src/contexts/AuthContext';
+import { petService, inviteService, PetDoc } from '../../../src/services/firestoreService';
 
 export default function CoParentScreen() {
   const router = useRouter();
-  const { id } = useLocalSearchParams<{ id: string }>();
+  const { id, ownerId } = useLocalSearchParams<{ id: string, ownerId?: string }>();
   const { themeId, fontFamilyName } = useTheme();
   const theme = getThemeTokens(themeId);
+  const { user } = useAuth();
 
   const currentPetId = id || '1';
-  const currentPetName = mockPets[currentPetId] || 'DELETE';
 
-  const [members, setMembers] = useState(initialMockData[currentPetId] || []);
+  const [pet, setPet] = useState<(PetDoc & { id: string }) | null>(null);
+  const [members, setMembers] = useState<any[]>([]);
+  const [inviteCode, setInviteCode] = useState<string>('');
+  const [invitePermission, setInvitePermission] = useState<'edit' | 'view'>('edit');
 
-  const currentUserRole = members.find(m => m.id === CURRENT_USER_ID);
+  React.useEffect(() => {
+    if (!user || !id) return;
+    const resolvedOwnerId = ownerId || user.uid;
+    petService.getById(resolvedOwnerId, id).then(doc => {
+      if (doc) {
+        setPet(doc);
+        setMembers(doc.coParents || [{ uid: resolvedOwnerId, name: '主人', isMainOwner: true }]);
+      }
+    });
+  }, [user, id, ownerId]);
+
+  const currentPetName = pet?.name || '';
+  const currentUserRole = members.find(m => m.uid === user?.uid);
   const amIMainOwner = currentUserRole?.isMainOwner;
 
-  // 邀請成員彈窗 (顯示 QR / URL)
+  // 邀請成員彈窗
   const [showInviteModal, setShowInviteModal] = useState(false);
 
   // 刪除成員彈窗
@@ -72,23 +58,45 @@ export default function CoParentScreen() {
   // 退出飼育彈窗
   const [showLeaveModal, setShowLeaveModal] = useState(false);
 
-  const confirmDelete = () => {
-    if (memberToDelete) {
-      setMembers(prev => prev.filter(m => m.id !== memberToDelete));
+  const handleCreateInvite = async () => {
+    if (!user || !pet) return;
+    const resolvedOwnerId = ownerId || user.uid;
+    const code = await inviteService.createInvite(pet.id, resolvedOwnerId, invitePermission);
+    setInviteCode(code);
+    setShowInviteModal(true);
+  };
+
+  const toggleMute = async (memberId: string, currentMute: boolean) => {
+    if (!user || !pet) return;
+    const resolvedOwnerId = ownerId || user.uid;
+    const newMembers = members.map(m => m.uid === memberId ? { ...m, muteReminders: !currentMute } : m);
+    await petService.update(resolvedOwnerId, pet.id, { coParents: newMembers });
+    setMembers(newMembers);
+  };
+
+  const confirmDelete = async () => {
+    if (memberToDelete && user && pet) {
+      const resolvedOwnerId = ownerId || user.uid;
+      const newMembers = members.filter(m => m.uid !== memberToDelete);
+      await petService.update(resolvedOwnerId, pet.id, { coParents: newMembers });
+      setMembers(newMembers);
       setMemberToDelete(null);
       setShowDeleteModal(false);
     }
   };
 
-  const confirmLeave = () => {
-    setMembers(prev => prev.filter(m => m.id !== CURRENT_USER_ID));
-    setShowLeaveModal(false);
-    // 實務上可能會導回首頁或寵物列表
-    router.replace('/');
+  const confirmLeave = async () => {
+    if (user && pet) {
+      const resolvedOwnerId = ownerId || user.uid;
+      const newMembers = members.filter(m => m.uid !== user.uid);
+      await petService.update(resolvedOwnerId, pet.id, { coParents: newMembers });
+      setShowLeaveModal(false);
+      router.replace('/(tabs)/pets');
+    }
   };
 
-  const renderCard = (member: typeof members[0]) => {
-    const isMe = member.id === CURRENT_USER_ID;
+  const renderCard = (member: any) => {
+    const isMe = member.uid === user?.uid;
     
     let actionButton = null;
 
@@ -97,20 +105,32 @@ export default function CoParentScreen() {
       actionButton = (
         <Pressable 
           style={[styles.actionButton, { backgroundColor: paletteColors.MU_CHENG }]} 
-          onPress={() => setShowInviteModal(true)}
+          onPress={() => {
+            setInviteCode('');
+            setInvitePermission('edit');
+            setShowInviteModal(true);
+          }}
         >
           <Text style={styles.addIconText}>+</Text>
         </Pressable>
       );
     } else if (isMe && !amIMainOwner) {
-      // 我是共同飼育者，在我的卡片顯示退出按鈕
+      // 我是共同飼育者，在我的卡片顯示退出按鈕與勿擾按鈕
       actionButton = (
-        <Pressable 
-          style={[styles.actionButton, { backgroundColor: '#FFFEFA' }]} 
-          onPress={() => setShowLeaveModal(true)}
-        >
-          <Image source={require('../../../assets/icons/icon-delete.png')} style={[styles.deleteIcon, { tintColor: paletteColors.XUAN_RI }]} />
-        </Pressable>
+        <View style={{ position: 'absolute', right: '4%', bottom: '12%', flexDirection: 'row', gap: 12 }}>
+          <Pressable 
+            style={[styles.smallActionButton, { backgroundColor: member.muteReminders ? paletteColors.XUAN_RI : '#FFFEFA' }]} 
+            onPress={() => toggleMute(member.uid, member.muteReminders)}
+          >
+            <Image source={require('../../../assets/icons/icon-alert.png')} style={[styles.smallIcon, { tintColor: member.muteReminders ? '#FFFFFF' : paletteColors.XUAN_RI }]} />
+          </Pressable>
+          <Pressable 
+            style={[styles.smallActionButton, { backgroundColor: '#FFFEFA' }]} 
+            onPress={() => setShowLeaveModal(true)}
+          >
+            <Image source={require('../../../assets/icons/icon-delete.png')} style={[styles.smallIcon, { tintColor: paletteColors.XUAN_RI }]} />
+          </Pressable>
+        </View>
       );
     } else if (!isMe && amIMainOwner) {
       // 我是主飼主，看別人的卡片可以刪除
@@ -118,7 +138,7 @@ export default function CoParentScreen() {
         <Pressable 
           style={[styles.actionButton, { backgroundColor: paletteColors.MU_CHENG }]} 
           onPress={() => {
-            setMemberToDelete(member.id);
+            setMemberToDelete(member.uid);
             setShowDeleteModal(true);
           }}
         >
@@ -129,15 +149,15 @@ export default function CoParentScreen() {
     // 如果 (!isMe && !amIMainOwner) -> 我是共同飼育，看別人的卡片 -> 不顯示任何按鈕
 
     return (
-      <View key={member.id} style={styles.cardContainer}>
+      <View key={member.uid} style={styles.cardContainer}>
         {/* SVG 形狀背景 (包含精確設定的 drop shadow) */}
         <Svg width="100%" height="100%" viewBox="0 0 358 208" style={StyleSheet.absoluteFill}>
           <Defs>
-            <Filter id={`card-shadow-${member.id}`} x="-20" y="-20" width="400" height="250">
+            <Filter id={`card-shadow-${member.uid}`} x="-20" y="-20" width="400" height="250">
               <FeDropShadow dx="0" dy="4" stdDeviation="2" floodColor="#000000" floodOpacity="0.25" />
             </Filter>
           </Defs>
-          <Path d="M339 0C347.284 0 354 6.71573 354 15V85C354 93.2843 347.284 100 339 100H269C260.716 100 254 106.716 254 115V185C254 185.129 253.998 185.258 253.995 185.387C253.79 193.492 247.155 200 239 200H19C10.7157 200 4 193.284 4 185V15C4 6.71573 10.7157 0 19 0H339Z" fill="#FFFEFA" filter={`url(#card-shadow-${member.id})`} />
+          <Path d="M339 0C347.284 0 354 6.71573 354 15V85C354 93.2843 347.284 100 339 100H269C260.716 100 254 106.716 254 115V185C254 185.129 253.998 185.258 253.995 185.387C253.79 193.492 247.155 200 239 200H19C10.7157 200 4 193.284 4 185V15C4 6.71573 10.7157 0 19 0H339Z" fill="#FFFEFA" filter={`url(#card-shadow-${member.uid})`} />
         </Svg>
 
         {/* 卡片文字區 */}
@@ -146,7 +166,7 @@ export default function CoParentScreen() {
             {member.name}
           </Text>
           <Text style={[styles.cardRole, { color: paletteColors.MU_CHENG, fontFamily: fontFamilyName }]}>
-            {member.isMainOwner ? `${currentPetName}的主人` : `共同照顧 ${currentPetName}`}
+            {member.isMainOwner ? `${currentPetName}的主人` : `共同照顧 ${currentPetName} ${member.permission === 'view' ? '(僅瀏覽)' : '(可編輯)'}`}
           </Text>
         </View>
 
@@ -162,7 +182,7 @@ export default function CoParentScreen() {
       floatingAction={
         <FloatingActionBar
           actions={[
-            { id: 'back', onPress: () => router.navigate({ pathname: '/(tabs)/pets/view', params: { id } }) },
+             { id: 'back', onPress: () => router.navigate({ pathname: '/(tabs)/pets/view', params: { id, ownerId } }) },
           ]}
         />
       }
@@ -176,7 +196,7 @@ export default function CoParentScreen() {
         </View>
       </ScrollView>
 
-      {/* ========== 邀請成員 Modal (URL/QRCode) ========== */}
+      {/* ========== 邀請成員 Modal (邀請碼) ========== */}
       <Modal visible={showInviteModal} transparent animationType="fade" onRequestClose={() => setShowInviteModal(false)}>
         <Pressable style={styles.modalOverlay} onPress={() => setShowInviteModal(false)}>
           <Pressable style={styles.modalContent} onPress={e => e.stopPropagation()}>
@@ -184,32 +204,58 @@ export default function CoParentScreen() {
               邀請共同飼育人
             </Text>
             <Text style={[styles.modalSubtitle, { color: paletteColors.XUAN_RI + '80', fontFamily: fontFamilyName }]}>
-              邀請親友一起照顧 {currentPetName}！請分享以下連結或讓對方掃描條碼加入。
+              邀請親友一起照顧 {currentPetName}！請分享以下邀請碼給對方。
             </Text>
             
             <View style={styles.qrCodePlaceholder}>
-              <Text style={[styles.qrCodeText, { color: paletteColors.XUAN_RI + '50', fontFamily: fontFamilyName }]}>
-                [ QR Code 佔位圖 ]
+              <Text style={[{ color: theme.primary, fontFamily: fontFamilyName, fontSize: 32, letterSpacing: 4 }]}>
+                {inviteCode ? inviteCode : '產生中'}
+              </Text>
+              <Text style={[styles.qrCodeText, { color: paletteColors.XUAN_RI + '50', fontFamily: fontFamilyName, marginTop: 8 }]}>
+                (有效期限：7天)
               </Text>
             </View>
 
-            <View style={styles.urlBox}>
-              <Text style={[styles.urlText, { color: theme.primary, fontFamily: fontFamilyName }]} numberOfLines={1}>
-                https://lizard.app/invite/abc123xyz
-              </Text>
-            </View>
+            {/* 權限選擇區 (只有還沒產生邀請碼時才能選) */}
+            {!inviteCode && (
+              <View style={styles.permissionContainer}>
+                <Text style={[styles.permissionLabel, { color: theme.primary, fontFamily: fontFamilyName }]}>賦予權限：</Text>
+                <View style={styles.radioGroup}>
+                  <Pressable style={styles.radioOption} onPress={() => setInvitePermission('edit')}>
+                    <View style={[styles.radioOuter, { borderColor: theme.primary }]}>
+                      {invitePermission === 'edit' && <View style={[styles.radioInner, { backgroundColor: theme.primary }]} />}
+                    </View>
+                    <Text style={[styles.radioText, { color: theme.primary, fontFamily: fontFamilyName }]}>可編輯</Text>
+                  </Pressable>
+                  <Pressable style={styles.radioOption} onPress={() => setInvitePermission('view')}>
+                    <View style={[styles.radioOuter, { borderColor: theme.primary }]}>
+                      {invitePermission === 'view' && <View style={[styles.radioInner, { backgroundColor: theme.primary }]} />}
+                    </View>
+                    <Text style={[styles.radioText, { color: theme.primary, fontFamily: fontFamilyName }]}>僅瀏覽</Text>
+                  </Pressable>
+                </View>
+              </View>
+            )}
 
             <View style={styles.modalButtonRow}>
-              <Pressable style={[styles.modalButton, styles.modalCancelButton, { borderColor: theme.primary }]} onPress={() => setShowInviteModal(false)}>
+              <Pressable style={[styles.modalButton, styles.modalCancelButton, { borderColor: theme.primary }]} onPress={() => { setShowInviteModal(false); setInviteCode(''); }}>
                 <Text style={[styles.modalButtonText, { color: theme.primary, fontFamily: fontFamilyName }]}>
                   關閉
                 </Text>
               </Pressable>
-              <Pressable style={[styles.modalButton, { backgroundColor: theme.primary }]} onPress={() => setShowInviteModal(false)}>
-                <Text style={[styles.modalButtonText, { color: '#FFFFFF', fontFamily: fontFamilyName }]}>
-                  複製連結
-                </Text>
-              </Pressable>
+              {inviteCode ? (
+                <Pressable style={[styles.modalButton, { backgroundColor: theme.primary }]} onPress={() => { setShowInviteModal(false); setInviteCode(''); }}>
+                  <Text style={[styles.modalButtonText, { color: '#FFFFFF', fontFamily: fontFamilyName }]}>
+                    完成
+                  </Text>
+                </Pressable>
+              ) : (
+                <Pressable style={[styles.modalButton, { backgroundColor: theme.primary }]} onPress={handleCreateInvite}>
+                  <Text style={[styles.modalButtonText, { color: '#FFFFFF', fontFamily: fontFamilyName }]}>
+                    產生邀請碼
+                  </Text>
+                </Pressable>
+              )}
             </View>
           </Pressable>
         </Pressable>
@@ -380,19 +426,6 @@ const styles = StyleSheet.create({
   qrCodeText: {
     fontSize: getFontSize(14, 'medium'),
   },
-  urlBox: {
-    width: '100%',
-    backgroundColor: 'rgba(0,0,0,0.03)',
-    borderRadius: 8,
-    paddingVertical: 12,
-    paddingHorizontal: 16,
-    marginBottom: 24,
-    alignItems: 'center',
-  },
-  urlText: {
-    fontSize: getFontSize(14, 'medium'),
-    fontWeight: '300',
-  },
   modalButtonRow: {
     flexDirection: 'row',
     gap: 16,
@@ -413,4 +446,55 @@ const styles = StyleSheet.create({
     fontSize: getFontSize(18, 'medium'),
     fontWeight: '300',
   },
+  permissionContainer: {
+    width: '100%',
+    marginBottom: 24,
+    alignItems: 'center',
+  },
+  permissionLabel: {
+    fontSize: getFontSize(16, 'medium'),
+    marginBottom: 8,
+  },
+  radioGroup: {
+    flexDirection: 'row',
+    gap: 16,
+  },
+  radioOption: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  radioOuter: {
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    borderWidth: 2,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  radioInner: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+  },
+  radioText: {
+    fontSize: getFontSize(16, 'medium'),
+  },
+  smallActionButton: {
+    width: 48,
+    height: 48,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#000000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 2,
+    elevation: 2,
+  },
+  smallIcon: {
+    width: 24,
+    height: 24,
+    resizeMode: 'contain',
+  }
 });

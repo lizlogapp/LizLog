@@ -17,9 +17,8 @@ import { getFontSize } from '../../../src/theme/typographySettings';
 import { paletteColors } from '../../../src/theme/themeColorSettings';
 import { BaseScreen } from '../../../src/components/common/BaseScreen';
 import { FloatingActionBar } from '../../../src/components/FloatingActionBar';
-import { mockPetDB, updatePetData } from './mockPetDB';
 import { useAuth } from '../../../src/contexts/AuthContext';
-import { petService } from '../../../src/services/firestoreService';
+import { petService, PetDoc } from '../../../src/services/firestoreService';
 
 export default function AddPetScreen() {
   const router = useRouter();
@@ -29,14 +28,28 @@ export default function AddPetScreen() {
   const { user } = useAuth();
 
   const isEditing = !!id;
-  const existingPet = isEditing && id ? mockPetDB[id] : null;
 
-  const [name, setName] = useState(existingPet?.name || '');
-  const [species, setSpecies] = useState(existingPet?.species || '鬆獅蜥');
-  const [birthday, setBirthday] = useState(existingPet?.birthDate || '');
-  const [homeDate, setHomeDate] = useState(existingPet?.homeDate || '');
-  const [gender, setGender] = useState(existingPet?.gender || '');
-  const [tag, setTag] = useState(existingPet?.tag || '');
+  const [name, setName] = useState('');
+  const [species, setSpecies] = useState('鬆獅蜥');
+  const [birthday, setBirthday] = useState('');
+  const [homeDate, setHomeDate] = useState('');
+  const [gender, setGender] = useState('');
+  const [tag, setTag] = useState('');
+
+  useEffect(() => {
+    if (isEditing && id && user) {
+      petService.getById(user.uid, id).then(doc => {
+        if (doc) {
+          setName(doc.name || '');
+          setSpecies(doc.species || '鬆獅蜥');
+          setBirthday(doc.birthDate || '');
+          setHomeDate(doc.homeDate || '');
+          setGender(doc.gender || '');
+          setTag(doc.tag || '');
+        }
+      });
+    }
+  }, [isEditing, id, user]);
 
   const [showDatePicker, setShowDatePicker] = useState<{ visible: boolean; target: 'birthday' | 'homeDate' | null }>({
     visible: false,
@@ -76,17 +89,8 @@ export default function AddPetScreen() {
                   return;
                 }
                 
-                if (isEditing && id) {
-                  if (isDemoMode) {
-                    updatePetData(id, {
-                      name,
-                      species,
-                      birthDate: birthday,
-                      homeDate,
-                      gender,
-                      tag,
-                    });
-                  } else if (user) {
+                if (isEditing && typeof id === 'string') {
+                  if (user) {
                     petService.update(user.uid, id, {
                       name,
                       species,
@@ -98,7 +102,7 @@ export default function AddPetScreen() {
                   }
                   Alert.alert('成功', `已更新寵物：${name}`);
                 } else {
-                  if (!isDemoMode && user) {
+                  if (user) {
                     petService.add(user.uid, {
                       name,
                       species,

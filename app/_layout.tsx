@@ -10,7 +10,7 @@ import {
   View,
   Dimensions,
 } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useSafeAreaInsets, SafeAreaProvider, initialWindowMetrics } from 'react-native-safe-area-context';
 import { ThemeProvider, useTheme } from '../src/theme/ThemeContext';
 import { AppLoadProvider } from '../src/contexts/AppLoadContext';
 import { AuthProvider, useAuth } from '../src/contexts/AuthContext';
@@ -127,21 +127,23 @@ const transparentNavTheme = {
 
 export default function RootLayout() {
   return (
-    <NavigationThemeProvider value={transparentNavTheme}>
-      <ThemeProvider>
-        <AuthProvider>
-          <AppLoadProvider
-            init={
-              // 可在此加入字型、Firebase 等初始化，例：
-              // async () => { await Font.loadAsync(...); await initFirebase(); }
-              undefined
-            }
-          >
-            <RootLayoutInner />
-          </AppLoadProvider>
-        </AuthProvider>
-      </ThemeProvider>
-    </NavigationThemeProvider>
+    <SafeAreaProvider initialMetrics={initialWindowMetrics}>
+      <NavigationThemeProvider value={transparentNavTheme}>
+        <ThemeProvider>
+          <AuthProvider>
+            <AppLoadProvider
+              init={
+                // 可在此加入字型、Firebase 等初始化，例：
+                // async () => { await Font.loadAsync(...); await initFirebase(); }
+                undefined
+              }
+            >
+              <RootLayoutInner />
+            </AppLoadProvider>
+          </AuthProvider>
+        </ThemeProvider>
+      </NavigationThemeProvider>
+    </SafeAreaProvider>
   );
 }
 

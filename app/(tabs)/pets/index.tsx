@@ -18,45 +18,15 @@ import { petService, PetDoc } from '../../../src/services/firestoreService';
 // @ts-ignore
 import LogoIcon from '../../../assets/branding/logos/logo-icon.svg';
 
-// 模擬寵物資料（未來從 Supabase 取得）
+// 將從 Firestore 取得的資料轉換格式
 interface PetData {
   id: string;
   name: string;
   species: string;
   birthDate: Date;
   imageUri: any | null; // null 表示無照片，顯示預設 logo
+  ownerId: string;
 }
-
-const mockPets: PetData[] = [
-  {
-    id: '1',
-    name: 'DELETE',
-    species: '鬆獅蜥',
-    birthDate: new Date('2022-07-01'),
-    imageUri: require('../../../assets/user-uploads/lizard-001.jpg'),
-  },
-  {
-    id: '2',
-    name: 'CTRL',
-    species: '鬆獅蜥',
-    birthDate: new Date('2024-12-01'),
-    imageUri: require('../../../assets/user-uploads/lizard-003.jpg'),
-  },
-  {
-    id: '3',
-    name: 'ENTER',
-    species: '鬆獅蜥',
-    birthDate: new Date('2024-02-01'),
-    imageUri: require('../../../assets/user-uploads/lizard-005.jpg'),
-  },
-  {
-    id: '4',
-    name: 'ALT',
-    species: '鬆獅蜥',
-    birthDate: new Date('2023-10-01'),
-    imageUri: require('../../../assets/user-uploads/lizard-007.jpg'),
-  },
-];
 
 /**
  * 計算年齡，回傳格式：「2歲 10個月」或「5個月」
@@ -84,23 +54,22 @@ export default function PetsScreen() {
   const [firestorePets, setFirestorePets] = useState<(PetDoc & { id: string })[]>([]);
 
   useEffect(() => {
-    if (isDemoMode || !user) return;
+    if (!user) return;
     const unsubscribe = petService.onPetsChanged(user.uid, (pets) => {
       setFirestorePets(pets);
     });
     return () => unsubscribe();
-  }, [isDemoMode, user]);
+  }, [user]);
 
   // 將 Firestore 資料轉換為畫面所需格式
-  const firestorePetData: PetData[] = firestorePets.map(p => ({
+  const petsToShow: PetData[] = firestorePets.map(p => ({
     id: p.id,
     name: p.name,
     species: p.species,
     birthDate: new Date(p.birthDate.replace(/\//g, '-')),
     imageUri: p.imageUrl ? { uri: p.imageUrl } : null,
+    ownerId: p.ownerId || (user ? user.uid : ''),
   }));
-
-  const petsToShow = isDemoMode ? mockPets : firestorePetData;
 
   return (
     <BaseScreen scrollable={false}>
@@ -119,7 +88,7 @@ export default function PetsScreen() {
               { opacity: pressed ? 0.85 : 1 },
             ]}
             onPress={() => {
-              router.push({ pathname: '/(tabs)/pets/view', params: { id: pet.id } });
+              router.push({ pathname: '/(tabs)/pets/view', params: { id: pet.id, ownerId: pet.ownerId } });
             }}
           >
             {/* 左側拖曳圖示 */}
@@ -172,6 +141,20 @@ export default function PetsScreen() {
         >
           <Text style={[styles.addButtonText, { color: theme.primary, fontFamily: fontFamilyName }]}>
             新增寵物　＋
+          </Text>
+        </Pressable>
+
+        {/* 輸入邀請碼按鈕 */}
+        <Pressable
+          style={({ pressed }) => [
+            styles.addButton,
+            { backgroundColor: theme.background, borderColor: theme.primary, borderWidth: 1 },
+            { opacity: pressed ? 0.7 : 1 },
+          ]}
+          onPress={() => router.push('/(tabs)/pets/join')}
+        >
+          <Text style={[styles.addButtonText, { color: theme.primary, fontFamily: fontFamilyName }]}>
+            輸入共同飼育邀請碼
           </Text>
         </Pressable>
       </ScrollView>

@@ -16,7 +16,6 @@ import { getFontSize } from '../../../src/theme/typographySettings';
 import { paletteColors } from '../../../src/theme/themeColorSettings';
 import { BaseScreen } from '../../../src/components/common/BaseScreen';
 import { FloatingActionBar, FloatingActionItem } from '../../../src/components/FloatingActionBar';
-import { mockPetDB, deletePetData } from './mockPetDB';
 import { useAuth } from '../../../src/contexts/AuthContext';
 import { petService, PetDoc } from '../../../src/services/firestoreService';
 
@@ -47,7 +46,7 @@ const menuItems = [
 
 export default function PetViewScreen() {
   const router = useRouter();
-  const { id } = useLocalSearchParams<{ id: string }>();
+  const { id, ownerId } = useLocalSearchParams<{ id: string, ownerId?: string }>();
   const { themeId, fontFamilyName, isDemoMode } = useTheme();
   const theme = getThemeTokens(themeId);
   const { user } = useAuth();
@@ -56,13 +55,19 @@ export default function PetViewScreen() {
   const [firestorePet, setFirestorePet] = useState<(PetDoc & { id: string }) | null>(null);
 
   useEffect(() => {
-    if (isDemoMode || !user || !id) return;
-    petService.getById(user.uid, id).then(setFirestorePet);
-  }, [isDemoMode, user, id]);
+    if (!user || !id) return;
+    const resolvedOwnerId = ownerId || user.uid;
+    petService.getById(resolvedOwnerId, id).then(setFirestorePet);
+  }, [user, id, ownerId]);
+
+  const canEdit = React.useMemo(() => {
+    if (!user || !firestorePet) return false;
+    const myRole = firestorePet.coParents?.find(cp => cp.uid === user.uid);
+    return !!myRole && (myRole.isMainOwner || myRole.permission !== 'view');
+  }, [user, firestorePet]);
 
   // 將 Firestore 資料轉換為頁面所需格式
-  const mockPet = isDemoMode ? mockPetDB[id || '1'] : null;
-  const pet = isDemoMode ? mockPet : (firestorePet ? {
+  const pet = firestorePet ? {
     id: firestorePet.id,
     name: firestorePet.name,
     species: firestorePet.species,
@@ -75,8 +80,9 @@ export default function PetViewScreen() {
     length: firestorePet.length || '-',
     nextReminder: firestorePet.nextReminder || '無',
     reminderNote: firestorePet.reminderNote || '',
-    lastVisit: firestorePet.lastVisit || '無紀錄',
-  } : null);
+    lastVisit: firestorePet.lastVisit || '',
+    ownerId: firestorePet.ownerId || (user ? user.uid : ''),
+  } : null;
 
   // 刪除確認狀態
   const [showDeleteScreen, setShowDeleteScreen] = useState(false);
@@ -97,9 +103,7 @@ export default function PetViewScreen() {
   };
 
   const handleDeletedClose = () => {
-    if (isDemoMode) {
-      deletePetData(id || '1');
-    } else if (user && id) {
+    if (user && id) {
       petService.delete(user.uid, id);
     }
     setShowDeletedConfirm(false);
@@ -223,25 +227,28 @@ export default function PetViewScreen() {
               ]}
               onPress={() => {
                 if (item.id === 'reminder') {
-                  router.push({ pathname: '/(tabs)/pets/reminder', params: { id } });
+                  router.push({ pathname: '/(tabs)/pets/reminder', params: { id, ownerId: pet?.ownerId, canEdit: canEdit.toString() } });
                 } else if (item.id === 'medical') {
-                  router.push({ pathname: '/(tabs)/pets/medical', params: { id } });
+                  router.push({ pathname: '/(tabs)/pets/medical', params: { id, ownerId: pet?.ownerId, canEdit: canEdit.toString() } });
                 } else if (item.id === 'coparent') {
-                  router.push({ pathname: '/(tabs)/pets/co-parent', params: { id } });
+                  router.push({ pathname: '/(tabs)/pets/co-parent', params: { id, ownerId: pet?.ownerId } });
                 } else if (item.id === 'edit') {
-                  router.push({ pathname: '/(tabs)/pets/add', params: { id } });
+                  if (!canEdit) return;
+                  router.push({ pathname: '/(tabs)/pets/add', params: { id, ownerId: pet?.ownerId } });
                 } else if (item.id === 'delete') {
+                  if (!canEdit) return;
                   setDeleteInputName('');
                   setShowDeleteScreen(true);
                 }
               }}
+              disabled={!canEdit && (item.id === 'edit' || item.id === 'delete')}
             >
               <Image
                 source={item.icon}
-                style={[styles.menuIcon, { tintColor: theme.primary }]}
+                style={[styles.menuIcon, { tintColor: (!canEdit && (item.id === 'edit' || item.id === 'delete')) ? theme.primary + '50' : theme.primary }]}
                 resizeMode="contain"
               />
-              <Text style={[styles.menuLabel, { color: theme.primary, fontFamily: fontFamilyName }]}>
+              <Text style={[styles.menuLabel, { color: (!canEdit && (item.id === 'edit' || item.id === 'delete')) ? theme.primary + '50' : theme.primary, fontFamily: fontFamilyName }]}>
                 {item.label}
               </Text>
             </Pressable>

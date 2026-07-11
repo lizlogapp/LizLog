@@ -8,6 +8,8 @@ import { FloatingActionBar } from '../../../src/components/FloatingActionBar';
 import { BaseScreen } from '../../../src/components/common/BaseScreen';
 import Slider from '@react-native-community/slider';
 import { addFeedData } from '../../../src/data/mockDiaryData';
+import { useAuth } from '../../../src/contexts/AuthContext';
+import { diaryService, petService, DiaryDoc } from '../../../src/services/firestoreService';
 // SVG Icons
 // @ts-ignore
 import IconTemp from '../../../assets/icons/icon-temp.svg';
@@ -51,22 +53,23 @@ export default function AddDiaryScreen() {
   const isEditing = !!id;
   const { themeId, fontFamilyName } = useTheme();
   const theme = getThemeTokens(themeId);
+  const { user } = useAuth();
 
   // 色彩定義
   const labelColor = theme.primary;           // 色票/主色 用於標籤文字（溫度：、濕度：等）
   const valueColor = theme.accentHot;    // 顏色/標準色/輔色-烈日 用於可編輯數據
 
   // 寵物選單狀態
-  const [availablePets] = useState<string[]>(['DELETE', 'CTRL', 'ENTER', 'ALT']);
-  const [selectedPets, setSelectedPets] = useState<string[]>(['DELETE']);
+  const [availablePets, setAvailablePets] = useState<string[]>([]);
+  const [petOwnerMap, setPetOwnerMap] = useState<Record<string, string>>({});
+  const [selectedPets, setSelectedPets] = useState<string[]>([]);
   const [isPetDropdownVisible, setIsPetDropdownVisible] = useState(false);
 
   // 可編輯欄位
-  const [title, setTitle] = useState(isEditing ? '初次探索！家旁邊的新公園草地' : '未命名標題');
+  const [title, setTitle] = useState('');
   const [isEditingTitle, setIsEditingTitle] = useState(false);
-  const initialDiaryContent = isEditing ? '今天第一次帶 Delete 還有 Enter 去家裡旁邊剛整修好的新公園，沒想到兩隻都對草地超級好奇！原本以為 Delete 會比較膽小，結果牠竟然主動往前爬，反而是一向活潑的 Enter 一直躲在我的陰影下不肯出來。天氣雖然有點熱，但看到牠們在陽光下顏色變得好鮮豔，覺得這趟出門真的太值得了。下次也許可以帶點小點心來試試看牠們在戶外的食慾。' : '';
-  const [diaryContent, setDiaryContent] = useState(initialDiaryContent);
-  const [isDiaryExpanded, setIsDiaryExpanded] = useState(initialDiaryContent.length > 0);
+  const [diaryContent, setDiaryContent] = useState('');
+  const [isDiaryExpanded, setIsDiaryExpanded] = useState(false);
   const [isUploadExpanded, setIsUploadExpanded] = useState(false);
   const [appetite, setAppetite] = useState(0); // 食慾狀態，預設 0 (未檢測)
   const [poopState, setPoopState] = useState('無'); // 排便狀態，預設 '無'
@@ -80,7 +83,60 @@ export default function AddDiaryScreen() {
   const [length, setLength] = useState('44'); // 身長預設
 
   // 預設帶入當日日期
-  const currentDate = getTodayString();
+  const [currentDate, setCurrentDate] = useState(getTodayString());
+  const [isoDate, setIsoDate] = useState(new Date().toISOString());
+
+  React.useEffect(() => {
+    if (!user) return;
+    petService.getAll(user.uid).then(pets => {
+      const writablePets = pets.filter(p => {
+        const myRole = p.coParents?.find(cp => cp.uid === user.uid);
+        return myRole && (myRole.isMainOwner || myRole.permission !== 'view');
+      });
+      const names = writablePets.map(p => p.name);
+      
+      const ownerMap: Record<string, string> = {};
+      writablePets.forEach(p => {
+        ownerMap[p.name] = p.ownerId || user.uid;
+      });
+      setPetOwnerMap(ownerMap);
+      setAvailablePets(names);
+
+      if (!isEditing && names.length > 0 && selectedPets.length === 0) {
+        setSelectedPets([names[0]]);
+      }
+    });
+
+    if (isEditing && id && typeof id === 'string') {
+      diaryService.getAll([user.uid]).then(diaries => {
+        const doc = diaries.find(d => d.id === id);
+        if (doc) {
+          setTitle(doc.title || '');
+          setDiaryContent(doc.content || '');
+          setIsDiaryExpanded(!!doc.content);
+          setIsoDate(doc.date);
+          const dDate = new Date(doc.date);
+          const days = ['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT'];
+          setCurrentDate(`${days[dDate.getDay()]}  ${dDate.getMonth() + 1}/${dDate.getDate()}/${dDate.getFullYear()}`);
+          
+          if (doc.pets && doc.pets.length > 0) {
+            setSelectedPets(doc.pets.map(p => p.name));
+          }
+          if (doc.records) {
+            if (doc.records.temp) setTemp(doc.records.temp);
+            if (doc.records.humid) setHumid(doc.records.humid);
+            if (doc.records.weight) setWeight(doc.records.weight);
+            if (doc.records.length) setLength(doc.records.length);
+            if (doc.records.bask) setBaskMinutes(doc.records.bask);
+            if (doc.records.bath) setBathMinutes(doc.records.bath);
+            if (doc.records.poop) setPoopState(doc.records.poop);
+            if (doc.records.feed) setFeedState(doc.records.feed);
+            if (doc.records.appetite !== undefined) setAppetite(doc.records.appetite);
+          }
+        }
+      });
+    }
+  }, [user, isEditing, id]);
 
   const togglePet = (pet: string) => {
     if (selectedPets.includes(pet)) {
@@ -117,15 +173,39 @@ export default function AddDiaryScreen() {
               }
             }},
             { id: 'confirm', onPress: () => { 
-              // TODO: 儲存日記
+              if (!user) return;
+              
+              const newData: Omit<DiaryDoc, 'id'> = {
+                date: isoDate,
+                title: title || '未命名標題',
+                weatherIcon: 'weather-sunny',
+                content: diaryContent,
+                pets: selectedPets.map(name => ({
+                  name,
+                  temp,
+                  humid,
+                  states: { bask: parseInt(baskMinutes)>0, feed: feedState!=='無', bath: parseInt(bathMinutes)>0, poop: poopState==='有' }
+                })),
+                records: {
+                  temp, humid, weight, length, bask: baskMinutes, bath: bathMinutes, poop: poopState, feed: feedState, appetite
+                }
+              };
+
               if (appetite > 0) {
                 const now = new Date();
                 addFeedData(`${now.getMonth()+1}/${now.getDate()}`, appetite);
               }
-              if (isEditing && id) {
-                router.navigate({ pathname: '/(tabs)/diary/view', params: { id } });
+
+              const targetOwnerId = selectedPets.length > 0 ? petOwnerMap[selectedPets[0]] || user.uid : user.uid;
+
+              if (isEditing && typeof id === 'string') {
+                diaryService.update(targetOwnerId, id, newData).then(() => {
+                  router.navigate({ pathname: '/(tabs)/diary/view', params: { id } });
+                });
               } else {
-                router.navigate('/(tabs)/diary');
+                diaryService.add(targetOwnerId, newData).then(() => {
+                  router.navigate('/(tabs)/diary');
+                });
               }
             }},
           ]}

@@ -1,8 +1,8 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, Switch, Pressable, Modal, TextInput } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, Switch, Pressable, Modal, TextInput, Alert } from 'react-native';
 import LogoIcon from '../../assets/branding/logos/logo-icon.svg';
 import { useRouter } from 'expo-router';
-import { signOut } from 'firebase/auth';
+import { signOut, deleteUser } from 'firebase/auth';
 import { auth } from '../../src/config/firebase';
 import { useTheme } from '../../src/theme/ThemeContext';
 import { getThemeTokens, ThemeId } from '../../src/theme/themeSettings';
@@ -181,6 +181,40 @@ export default function SettingsScreen() {
                 </View>
               </View>
             )}
+
+            <Pressable 
+              style={[styles.actionButton, { backgroundColor: theme.background }]}
+              onPress={() => {
+                Alert.alert(
+                  '刪除帳號',
+                  '您確定要永久刪除此帳號嗎？此操作無法復原，所有資料（包含寵物與日記）都會被清空。',
+                  [
+                    { text: '取消', style: 'cancel' },
+                    { 
+                      text: '確認刪除', 
+                      style: 'destructive',
+                      onPress: async () => {
+                        try {
+                          if (auth.currentUser) {
+                            await deleteUser(auth.currentUser);
+                          }
+                        } catch (error: any) {
+                          if (error.code === 'auth/requires-recent-login') {
+                            Alert.alert('安全性提示', '基於安全考量，請先「登出」並「重新登入」後，再次執行刪除帳號。');
+                          } else {
+                            Alert.alert('錯誤', '刪除帳號失敗，請稍後再試');
+                          }
+                        }
+                      }
+                    }
+                  ]
+                );
+              }}
+            >
+              <Text style={[styles.actionButtonText, { color: '#FF3B30', fontFamily: fontFamilyName }]}>
+                刪除帳號
+              </Text>
+            </Pressable>
 
             <Pressable 
               style={[styles.actionButton, { backgroundColor: theme.background }]}

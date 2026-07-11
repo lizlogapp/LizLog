@@ -31,15 +31,30 @@ export default function DiaryScreen() {
 
   useEffect(() => {
     if (isDemoMode || !user) return;
-    const unsubscribeDiaries = diaryService.onDiariesChanged(user.uid, (diaries) => {
-      setFirestoreDiaries(diaries);
-    });
     
+    let unsubscribeDiaries: (() => void) | null = null;
+    let isActive = true;
+
     petService.getAll(user.uid).then(pets => {
+      if (!isActive) return;
       setAvailablePets(pets.map(p => p.name));
+      
+      const ownerIds = Array.from(new Set(pets.map(p => p.ownerId || user.uid)));
+      if (ownerIds.length === 0) {
+        ownerIds.push(user.uid);
+      }
+
+      unsubscribeDiaries = diaryService.onDiariesChanged(ownerIds, (diaries) => {
+        if (isActive) {
+          setFirestoreDiaries(diaries);
+        }
+      });
     });
 
-    return () => unsubscribeDiaries();
+    return () => {
+      isActive = false;
+      if (unsubscribeDiaries) unsubscribeDiaries();
+    };
   }, [isDemoMode, user]);
 
   // 模擬四張不同組合的卡片資料
@@ -374,6 +389,7 @@ export default function DiaryScreen() {
           <Image 
             source={require('../../../assets/illustrations/illustration-lizard-02.png')} 
             style={{ width: 120, height: 120, resizeMode: 'contain', opacity: 0.6, marginTop: 20 }} 
+            fadeDuration={0}
           />
         </View>
       )}

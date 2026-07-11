@@ -15,7 +15,8 @@ import { getFontSize } from '../../../src/theme/typographySettings';
 import { paletteColors } from '../../../src/theme/themeColorSettings';
 import { BaseScreen } from '../../../src/components/common/BaseScreen';
 import { FloatingActionBar } from '../../../src/components/FloatingActionBar';
-import { mockMedicalDB } from './mockMedicalDB';
+import { useAuth } from '../../../src/contexts/AuthContext';
+import { medicalService, MedicalDoc } from '../../../src/services/firestoreService';
 
 
 
@@ -27,16 +28,25 @@ export default function MedicalDetailScreen() {
 
   const [showDeleteModal, setShowDeleteModal] = useState(false);
 
-  // In real app, fetch based on id.
-  const data = mockMedicalDB[id || '1'] || mockMedicalDB['1'];
-
-  const [tagColor, setTagColor] = useState(data.tagColor || '#FF6B6B');
+  const { user } = useAuth();
+  const [data, setData] = useState<(MedicalDoc & { id: string }) | null>(null);
+  const [tagColor, setTagColor] = useState('#FF6B6B');
   const availableColors = ['#FF6B6B', '#FF9F43', '#FFD239', '#5CD85A', '#4DB8FF', '#B072FF', '#8E8E93'];
 
   useEffect(() => {
-    // 寫入回 mockMedicalDB，讓返回上一頁時列表可以讀取新顏色
-    if (mockMedicalDB[data.id]) {
-      mockMedicalDB[data.id].tagColor = tagColor;
+    if (!user || !id) return;
+    medicalService.getById(user.uid, id).then(doc => {
+      if (doc) {
+        setData(doc);
+        setTagColor(doc.tagColor || '#FF6B6B');
+      }
+    });
+  }, [user, id]);
+
+  useEffect(() => {
+    if (data && user && tagColor !== data.tagColor) {
+      medicalService.update(user.uid, id, { tagColor }).catch(e => console.log('Tag color update failed', e));
+      setData(prev => prev ? { ...prev, tagColor } : null);
     }
   }, [tagColor]);
 
@@ -61,6 +71,23 @@ export default function MedicalDetailScreen() {
       </View>
     </View>
   );
+
+  if (!data) {
+    return (
+      <BaseScreen
+        scrollable={false}
+        floatingAction={
+          <FloatingActionBar
+            actions={[{ id: 'back', onPress: () => router.navigate({ pathname: '/(tabs)/pets/medical', params: { id: petId || '1' } }) }]}
+          />
+        }
+      >
+        <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+          <Text style={{ color: theme.primary, fontFamily: fontFamilyName }}>載入中...</Text>
+        </View>
+      </BaseScreen>
+    );
+  }
 
   return (
     <BaseScreen
@@ -94,58 +121,64 @@ export default function MedicalDetailScreen() {
           <View style={[styles.divider, { backgroundColor: theme.primary }]} />
 
           {/* Visit Section */}
-          <View style={styles.section}>
-            <Text style={[styles.sectionTitle, { color: theme.primary, fontFamily: fontFamilyName }]}>就診</Text>
+          {data.visit && (
+            <View style={styles.section}>
+              <Text style={[styles.sectionTitle, { color: theme.primary, fontFamily: fontFamilyName }]}>就診</Text>
 
-            {renderRow('日期', data.visit.date)}
-            {renderRow('地點', data.visit.hospital)}
-            {renderRow('醫師', data.visit.doctor)}
-            {renderRow('原因', data.visit.reason)}
-            {renderRow('診斷', data.visit.diagnosis)}
-            {renderRow('醫囑', (
-              <View>
-                {data.visit.advice.map((item: string, index: number) => (
-                  <Text key={index} style={[styles.rowText, { color: theme.text, fontFamily: fontFamilyName, marginBottom: 4 }]}>
-                    {item}
-                  </Text>
-                ))}
-              </View>
-            ))}
+              {renderRow('日期', data.visit.date)}
+              {renderRow('地點', data.visit.hospital)}
+              {renderRow('醫師', data.visit.doctor)}
+              {renderRow('原因', data.visit.reason)}
+              {renderRow('診斷', data.visit.diagnosis)}
+              {data.visit.advice && data.visit.advice.length > 0 && renderRow('醫囑', (
+                <View>
+                  {data.visit.advice.map((item: string, index: number) => (
+                    <Text key={index} style={[styles.rowText, { color: theme.text, fontFamily: fontFamilyName, marginBottom: 4 }]}>
+                      {item}
+                    </Text>
+                  ))}
+                </View>
+              ))}
 
-            {/* Images */}
-            {data.visit.images && data.visit.images.length > 0 && (
-              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.imageScrollContainer}>
-                {data.visit.images.map((img: any, idx: number) => (
-                  <View key={idx} style={styles.imageContainer}>
-                    <Image source={img} style={styles.attachedImage} resizeMode="cover" />
-                  </View>
-                ))}
-              </ScrollView>
-            )}
-          </View>
+              {/* Images */}
+              {data.visit.imageUrls && data.visit.imageUrls.length > 0 && (
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.imageScrollContainer}>
+                  {data.visit.imageUrls.map((imgUrl: string, idx: number) => (
+                    <View key={idx} style={styles.imageContainer}>
+                      <Image source={{ uri: imgUrl }} style={styles.attachedImage} resizeMode="cover" />
+                    </View>
+                  ))}
+                </ScrollView>
+              )}
+            </View>
+          )}
 
-          <View style={[styles.divider, { backgroundColor: theme.primary }]} />
+          {data.visit && data.medication && (
+            <View style={[styles.divider, { backgroundColor: theme.primary }]} />
+          )}
 
           {/* Medication Section */}
-          <View style={styles.section}>
-            <Text style={[styles.sectionTitle, { color: theme.primary, fontFamily: fontFamilyName }]}>用藥</Text>
+          {data.medication && (
+            <View style={styles.section}>
+              <Text style={[styles.sectionTitle, { color: theme.primary, fontFamily: fontFamilyName }]}>用藥</Text>
 
-            {renderRow('起始', data.medication.startDate)}
-            {renderRow('結束', data.medication.endDate)}
-            {renderRow('藥品', data.medication.medicine)}
-            {renderRow('方式', data.medication.method)}
-            {renderRow('頻率', data.medication.frequency)}
-            {renderRow('劑量', data.medication.dosage)}
-            {renderRow('備註', (
-              <View>
-                {data.medication.note.map((item: string, index: number) => (
-                  <Text key={index} style={[styles.rowText, { color: theme.text, fontFamily: fontFamilyName, marginBottom: 4 }]}>
-                    {item}
-                  </Text>
-                ))}
-              </View>
-            ))}
-          </View>
+              {renderRow('起始', data.medication.startDate)}
+              {renderRow('結束', data.medication.endDate)}
+              {renderRow('藥品', data.medication.medicine)}
+              {renderRow('方式', data.medication.method)}
+              {renderRow('頻率', data.medication.frequency)}
+              {renderRow('劑量', data.medication.dosage)}
+              {data.medication.note && data.medication.note.length > 0 && renderRow('備註', (
+                <View>
+                  {data.medication.note.map((item: string, index: number) => (
+                    <Text key={index} style={[styles.rowText, { color: theme.text, fontFamily: fontFamilyName, marginBottom: 4 }]}>
+                      {item}
+                    </Text>
+                  ))}
+                </View>
+              ))}
+            </View>
+          )}
 
           {/* Bottom Actions */}
           <View style={styles.actionSection}>
@@ -175,9 +208,12 @@ export default function MedicalDetailScreen() {
               </Pressable>
               
               <Pressable style={[styles.modalButton, { backgroundColor: theme.primary }]} onPress={() => {
-                // TODO: 執行刪除邏輯
-                setShowDeleteModal(false);
-                router.navigate({ pathname: '/(tabs)/pets/medical', params: { id: petId || '1' } });
+                if (user && id) {
+                  medicalService.delete(user.uid, id).then(() => {
+                    setShowDeleteModal(false);
+                    router.navigate({ pathname: '/(tabs)/pets/medical', params: { id: petId || '1' } });
+                  });
+                }
               }}>
                 <Text style={[styles.modalButtonText, { color: theme.background, fontFamily: fontFamilyName }]}>
                   確認

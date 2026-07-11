@@ -17,13 +17,13 @@ import { BaseScreen } from '../../../src/components/common/BaseScreen';
 import { FloatingActionBar } from '../../../src/components/FloatingActionBar';
 // @ts-ignore
 import LizardIllustration from '../../../assets/illustrations/lizard-6.svg';
-import { mockReminderDB, petIdToName } from '../../../src/data/mockDiaryData';
 import { useAuth } from '../../../src/contexts/AuthContext';
 import { reminderService } from '../../../src/services/firestoreService';
 
 export default function ReminderScreen() {
   const router = useRouter();
-  const { id, from } = useLocalSearchParams<{ id: string; from?: string }>();
+  const { id, ownerId, canEdit: canEditStr } = useLocalSearchParams<{ id: string, ownerId?: string, canEdit?: string }>();
+  const canEdit = canEditStr !== 'false';
   const { themeId, fontFamilyName, isDemoMode } = useTheme();
   const theme = getThemeTokens(themeId);
   const { user } = useAuth();
@@ -31,38 +31,27 @@ export default function ReminderScreen() {
   // 提醒資料（從共用資料中心讀取）
   const [reminders, setReminders] = useState<any[]>([]);
 
-  useFocusEffect(
-    useCallback(() => {
-      if (isDemoMode) {
-        setReminders(Object.values(mockReminderDB).map(r => {
-          const petNames = r.pets.map((pid: string) => petIdToName[pid] || pid);
-          return { ...r, petsListDisplay: petNames };
-        }));
-      } else if (user) {
-        // 從 Firestore 讀取提醒
-        reminderService.getAll(user.uid).then(firestoreReminders => {
-          setReminders(firestoreReminders.map(r => ({
-            ...r,
-            petsListDisplay: r.pets || [],
-          })));
-        });
-      } else {
-        setReminders([]);
-      }
-    }, [isDemoMode, user])
-  );
+  React.useEffect(() => {
+    if (!user || !id) return;
+    const resolvedOwnerId = ownerId || user.uid;
+    const unsubscribe = reminderService.onRemindersChanged([resolvedOwnerId], (firestoreReminders) => {
+      // 過濾出屬於目前這隻寵物的提醒
+      const petReminders = firestoreReminders.filter(r => r.petId === id || (r.pets && r.pets.includes(id)));
+      setReminders(petReminders.map(r => ({
+        ...r,
+        petsListDisplay: r.pets || [],
+      })));
+    });
+    return () => unsubscribe();
+  }, [user, id, ownerId]);
 
   const toggleReminder = (rId: string) => {
-    if (isDemoMode) {
-      if (mockReminderDB[rId]) {
-        mockReminderDB[rId].isOn = !mockReminderDB[rId].isOn;
-        setReminders(prev => prev.map(r => r.id === rId ? { ...r, isOn: mockReminderDB[rId].isOn } : r));
-      }
-    } else if (user) {
+    if (user) {
       const reminder = reminders.find(r => r.id === rId);
       if (reminder) {
         const newIsOn = !reminder.isOn;
-        reminderService.update(user.uid, rId, { isOn: newIsOn });
+        const resolvedOwnerId = ownerId || user.uid;
+        reminderService.update(resolvedOwnerId, rId, { isOn: newIsOn });
         setReminders(prev => prev.map(r => r.id === rId ? { ...r, isOn: newIsOn } : r));
       }
     }
@@ -79,9 +68,9 @@ export default function ReminderScreen() {
               router.navigate({ pathname: '/(tabs)/pets/view', params: { id } });
             }},
             { id: 'add', onPress: () => {
-              router.push({ pathname: '/(tabs)/pets/add-reminder', params: { id } });
+              if (canEdit) router.push({ pathname: '/(tabs)/pets/add-reminder', params: { id } });
             }},
-          ]}
+          ].filter(action => action.id !== 'add' || canEdit)}
         />
       }
     >
@@ -102,6 +91,7 @@ export default function ReminderScreen() {
             <Image 
               source={require('../../../assets/illustrations/illustration-lizard-03.png')} 
               style={{ width: 120, height: 120, resizeMode: 'contain', opacity: 0.6, marginTop: 20 }} 
+              fadeDuration={0}
             />
           </View>
         ) : (
@@ -123,6 +113,7 @@ export default function ReminderScreen() {
                       onValueChange={() => toggleReminder(reminder.id)}
                       trackColor={{ false: '#d9d9d9', true: theme.primary }}
                       thumbColor="#FFFFFF"
+                      disabled={!canEdit}
                     />
                   </View>
 
@@ -151,25 +142,27 @@ export default function ReminderScreen() {
                     
                     {/* 操作按鈕 */}
                     <View style={styles.cardActions}>
-                      <Pressable 
-                        style={[styles.actionButton, !reminder.isOn && styles.actionButtonOff, { backgroundColor: theme.background }]} 
-                        onPress={() => router.push({ pathname: '/(tabs)/pets/add-reminder', params: { reminderId: reminder.id, petId: id } })}
-                      >
-                        <Image source={require('../../../assets/icons/icon-edit.png')} style={[styles.actionIcon, { tintColor: theme.primary }]} />
-                      </Pressable>
-                      <Pressable 
-                        style={[styles.actionButton, !reminder.isOn && styles.actionButtonOff, { backgroundColor: theme.background }]} 
-                        onPress={() => {
-                          if (isDemoMode) {
-                            delete mockReminderDB[reminder.id];
-                          } else if (user) {
-                            reminderService.delete(user.uid, reminder.id);
-                          }
-                          setReminders(prev => prev.filter(r => r.id !== reminder.id));
-                        }}
-                      >
-                        <Image source={require('../../../assets/icons/icon-delete.png')} style={[styles.actionIcon, { tintColor: '#FF6B6B' }]} />
-                      </Pressable>
+                      {canEdit && (
+                        <>
+                          <Pressable 
+                            style={[styles.actionButton, !reminder.isOn && styles.actionButtonOff, { backgroundColor: theme.background }]} 
+                            onPress={() => router.push({ pathname: '/(tabs)/pets/add-reminder', params: { reminderId: reminder.id, petId: id } })}
+                          >
+                            <Image source={require('../../../assets/icons/icon-edit.png')} style={[styles.actionIcon, { tintColor: theme.primary }]} />
+                          </Pressable>
+                          <Pressable 
+                            style={[styles.actionButton, !reminder.isOn && styles.actionButtonOff, { backgroundColor: theme.background }]} 
+                            onPress={() => {
+                              if (user) {
+                                reminderService.delete(user.uid, reminder.id);
+                              }
+                              setReminders(prev => prev.filter(r => r.id !== reminder.id));
+                            }}
+                          >
+                            <Image source={require('../../../assets/icons/icon-delete.png')} style={[styles.actionIcon, { tintColor: '#FF6B6B' }]} />
+                          </Pressable>
+                        </>
+                      )}
                     </View>
                   </View>
                 </View>

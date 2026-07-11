@@ -22,49 +22,9 @@ import { medicalService } from '../../../src/services/firestoreService';
 const getDaysInMonth = (y: number, m: number) => new Date(y, m, 0).getDate();
 const getFirstDayOfMonth = (y: number, m: number) => new Date(y, m - 1, 1).getDay();
 
-// 模擬已存在的資料庫資料
-const mockDB: Record<string, any> = {
-  '1': {
-    title: '皮膚問題就診及用藥',
-    visitDate: '2025年5月4日',
-    hospital: '侏羅紀野生動物專科醫院',
-    doctor: '朱哲助 院長',
-    reason: '最近發現 Delete 的下巴和前肢連接處，出現小範圍的皮屑和泛紅，且有輕微抓癢的行為。食慾和活動力正常，但為求謹慎就診檢查。',
-    diagnosis: '經過皮膚鏡檢後，初步判斷為輕微的黴菌感染，可能是由於近期梅雨季節，環境濕度偏高所引起。狀況不嚴重，透過外用藥物治療即可。',
-    advice: '1. 每日使用開立的藥膏，早晚各一次，薄擦於患部，持續一週。\n2. 保持飼養箱環境絕對乾燥、通風，建議增加除濕機使用頻率。\n3. 暫停泡澡，避免患部擴散。\n4. 密切觀察皮膚範圍是否有擴大或顏色加深的狀況。\n5. 預約 10 天後回診，追蹤復原狀況。',
-    images: [require('../../../assets/user-uploads/lizard-007.jpg')],
-    medStartDate: '2025年5月4日',
-    medEndDate: '2025年5月11日',
-    medicine: '黴菌靈外用藥膏',
-    method: '外部塗抹',
-    frequency: '每日 2 次',
-    dosage: '取約一顆米粒大小，薄擦於患部皮膚。',
-    medNote: '1. 塗抹後 15 分鐘內，盡量避免寵物舔舐患部。\n2. 請存放於陰涼乾燥處，避免陽光直射。\n3. 此為外用藥，切勿口服。',
-    tagColor: '#FF9600',
-  },
-  '2': {
-    title: '年度健康檢查',
-    visitDate: '2024年10月1日 TUE',
-    hospital: '侏羅紀野生動物專科醫院',
-    doctor: '朱哲助 院長',
-    reason: '例行性年度健康檢查。',
-    diagnosis: 'X光檢查骨骼發育正常，血檢數值皆在標準範圍內。整體健康狀況良好。',
-    advice: '1. 繼續保持目前的飲食與光照計畫。\n2. 注意冬季保溫。',
-    images: [],
-    medStartDate: '',
-    medEndDate: '',
-    medicine: '無',
-    method: '-',
-    frequency: '-',
-    dosage: '-',
-    medNote: '',
-    tagColor: '#5CD85A',
-  }
-};
-
 export default function AddMedicalScreen() {
   const router = useRouter();
-  const { petId, id } = useLocalSearchParams<{ petId: string; id?: string }>();
+  const { petId, id, ownerId } = useLocalSearchParams<{ petId: string; id?: string; ownerId?: string }>();
   const { themeId, fontFamilyName, isDemoMode } = useTheme();
   const theme = getThemeTokens(themeId);
   const { user } = useAuth();
@@ -97,25 +57,29 @@ export default function AddMedicalScreen() {
   const [calendarTarget, setCalendarTarget] = useState<'visit' | 'medStart' | 'medEnd'>('visit');
 
   useEffect(() => {
-    if (id && mockDB[id]) {
-      const data = mockDB[id];
-      setTitle(data.title);
-      setVisitDate(data.visitDate);
-      setHospital(data.hospital);
-      setDoctor(data.doctor);
-      setReason(data.reason);
-      setDiagnosis(data.diagnosis);
-      setAdvice(data.advice);
-      setSelectedImages(data.images || []);
-      setMedStartDate(data.medStartDate);
-      setMedEndDate(data.medEndDate);
-      setMedicine(data.medicine);
-      setMethod(data.method);
-      setFrequency(data.frequency);
-      setDosage(data.dosage);
-      setMedNote(data.medNote);
+    if (id && user) {
+      const resolvedOwnerId = ownerId || user.uid;
+      medicalService.getById(resolvedOwnerId, id).then(doc => {
+        if (doc) {
+          setTitle(doc.title);
+          setVisitDate(doc.visit?.date || '');
+          setHospital(doc.visit?.hospital || '');
+          setDoctor(doc.visit?.doctor || '');
+          setReason(doc.visit?.reason || '');
+          setDiagnosis(doc.visit?.diagnosis || '');
+          setAdvice(doc.visit?.advice?.join('\n') || '');
+          setSelectedImages(doc.visit?.imageUrls || []);
+          setMedStartDate(doc.medication?.startDate || '');
+          setMedEndDate(doc.medication?.endDate || '');
+          setMedicine(doc.medication?.medicine || '');
+          setMethod(doc.medication?.method || '');
+          setFrequency(doc.medication?.frequency || '');
+          setDosage(doc.medication?.dosage || '');
+          setMedNote(doc.medication?.note?.join('\n') || '');
+        }
+      });
     }
-  }, [id]);
+  }, [id, user]);
 
   const handleSave = () => {
     const newData = {
@@ -146,22 +110,23 @@ export default function AddMedicalScreen() {
       },
     };
 
-    if (isDemoMode) {
+    const resolvedOwnerId = ownerId || user?.uid;
+    if (resolvedOwnerId) {
       if (id) {
-        mockDB[id] = { ...mockDB[id], ...newData };
-      } else {
-        const newId = Date.now().toString();
-        mockDB[newId] = newData;
-      }
-      router.navigate({ pathname: '/(tabs)/pets/medical', params: { id: petId || '1' } });
-    } else if (user) {
-      if (id) {
-        medicalService.update(user.uid, id, newData).then(() => {
-          router.navigate({ pathname: '/(tabs)/pets/medical', params: { id: petId || '1' } });
+        medicalService.update(resolvedOwnerId, id, newData).then(() => {
+          if (petId) {
+            router.navigate({ pathname: '/(tabs)/pets/medical', params: { id: petId, ownerId } });
+          } else {
+            router.back();
+          }
         });
       } else {
-        medicalService.add(user.uid, newData).then(() => {
-          router.navigate({ pathname: '/(tabs)/pets/medical', params: { id: petId || '1' } });
+        medicalService.add(resolvedOwnerId, newData).then(() => {
+          if (petId) {
+            router.navigate({ pathname: '/(tabs)/pets/medical', params: { id: petId, ownerId } });
+          } else {
+            router.back();
+          }
         });
       }
     }
@@ -282,7 +247,7 @@ export default function AddMedicalScreen() {
           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.imagePickerContainer}>
             {selectedImages.map((img, idx) => (
               <Pressable key={idx} style={styles.previewImageWrapper} onPress={() => { /* TODO: Launch Action Sheet to remove */ }}>
-                <Image source={img} style={styles.previewImage} />
+                <Image source={typeof img === 'string' ? { uri: img } : img} style={styles.previewImage} />
                 <View style={[styles.editImageOverlay, { backgroundColor: 'rgba(0,0,0,0.4)' }]}>
                   <Text style={[styles.editImageText, { fontFamily: fontFamilyName }]}>點擊移除</Text>
                 </View>

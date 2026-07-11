@@ -16,7 +16,6 @@ import { getFontSize } from '../../../src/theme/typographySettings';
 import { paletteColors } from '../../../src/theme/themeColorSettings';
 import { BaseScreen } from '../../../src/components/common/BaseScreen';
 import { FloatingActionBar } from '../../../src/components/FloatingActionBar';
-import { mockReminderDB } from '../../../src/data/mockDiaryData';
 import { useAuth } from '../../../src/contexts/AuthContext';
 import { reminderService, petService, PetDoc } from '../../../src/services/firestoreService';
 
@@ -25,14 +24,6 @@ const weekDays = ['日', '一', '二', '三', '四', '五', '六'];
 type Frequency = 'once' | 'daily' | 'everyN' | 'weekly';
 
 const tagColors = ['#FF6B6B', '#FF9F43', '#FFD239', '#5CD85A', '#4DB8FF', '#B072FF', '#8E8E93'];
-
-// 模擬寵物名單（Demo 模式）
-const mockPetList = [
-  { id: '1', name: 'DELETE' },
-  { id: '2', name: 'CTRL' },
-  { id: '3', name: 'ENTER' },
-  { id: '4', name: 'ALT' },
-];
 
 const getDaysInMonth = (y: number, m: number) => new Date(y, m, 0).getDate();
 const getFirstDayOfMonth = (y: number, m: number) => new Date(y, m - 1, 1).getDay();
@@ -45,17 +36,11 @@ export default function AddReminderScreen() {
   const { user } = useAuth();
 
   // 寵物名單
-  const [petList, setPetList] = useState<{ id: string; name: string }[]>(isDemoMode ? mockPetList : []);
-  const [selectedPets, setSelectedPets] = useState<string[]>(id ? [id] : (isDemoMode ? [mockPetList[0].id] : []));
+  const [petList, setPetList] = useState<{ id: string; name: string }[]>([]);
+  const [selectedPets, setSelectedPets] = useState<string[]>(id ? [id] : []);
 
   useEffect(() => {
-    if (isDemoMode) {
-      setPetList(mockPetList);
-      if (selectedPets.length === 0) {
-        const defaultPet = mockPetList.find(p => p.id === id) || mockPetList[0];
-        setSelectedPets([defaultPet.id]);
-      }
-    } else if (user) {
+    if (user) {
       petService.getAll(user.uid).then(pets => {
         if (pets.length === 0) {
           Alert.alert('提示', '目前尚無寵物資料，請先新增寵物', [
@@ -63,15 +48,14 @@ export default function AddReminderScreen() {
           ]);
         } else {
           setPetList(pets.map(p => ({ id: p.id, name: p.name })));
-          // 如果沒有選擇任何寵物，或者選擇了預設假資料的 ID，則重新選擇
-          if (selectedPets.length === 0 || selectedPets[0] === '1') {
+          if (selectedPets.length === 0) {
             const defaultPet = pets.find(p => p.id === id) || pets[0];
             setSelectedPets([defaultPet.id]);
           }
         }
       });
     }
-  }, [isDemoMode, user, id]);
+  }, [user, id]);
 
   const togglePet = (petId: string) => {
     setSelectedPets(prev =>
@@ -115,33 +99,35 @@ export default function AddReminderScreen() {
 
   // 預填資料 (如果是編輯模式)
   useEffect(() => {
-    if (reminderId && mockReminderDB[reminderId]) {
-      const data = mockReminderDB[reminderId];
-      setSelectedPets(data.pets || []);
-      
-      if (defaultTypes.includes(data.type)) {
-        setSelectedType(data.type);
-        setIsAddingCustom(false);
-      } else {
-        setSelectedType('');
-        setIsAddingCustom(true);
-        setCustomType(data.type);
-      }
+    if (reminderId && user) {
+      reminderService.getById(user.uid, reminderId).then(data => {
+        if (!data) return;
+        setSelectedPets(data.pets || []);
+        
+        if (defaultTypes.includes(data.type)) {
+          setSelectedType(data.type);
+          setIsAddingCustom(false);
+        } else {
+          setSelectedType('');
+          setIsAddingCustom(true);
+          setCustomType(data.type);
+        }
 
-      setTagColor(data.tagColor || tagColors[0]);
-      setFrequency((data.frequencyType as Frequency) || 'once');
-      if (data.everyNDays) setEveryNDays(data.everyNDays);
-      if (data.startDate) setStartDate(data.startDate);
-      if (data.selectedWeekDays) setSelectedWeekDays(data.selectedWeekDays);
+        setTagColor(data.tagColor || tagColors[0]);
+        setFrequency((data.frequencyType as Frequency) || 'once');
+        if (data.everyNDays) setEveryNDays(data.everyNDays);
+        if (data.startDate) setStartDate(data.startDate);
+        if (data.selectedWeekDays) setSelectedWeekDays(data.selectedWeekDays);
 
-      if (data.time) {
-        const [h, m] = data.time.split(':');
-        setHour(h);
-        setMinute(m);
-      }
-      setNote(data.note || '');
+        if (data.time) {
+          const [h, m] = data.time.split(':');
+          setHour(h);
+          setMinute(m);
+        }
+        setNote(data.note || '');
+      });
     }
-  }, [reminderId]);
+  }, [reminderId, user]);
 
   const handleSave = () => {
     const finalType = isAddingCustom ? customType : selectedType;
@@ -170,11 +156,7 @@ export default function AddReminderScreen() {
       tagColor,
     };
 
-    if (isDemoMode) {
-      const mockData = { id: reminderId || Date.now().toString(), ...newData };
-      mockReminderDB[mockData.id] = mockData;
-      router.navigate({ pathname: '/(tabs)/pets/reminder', params: { id: id || '1' } });
-    } else if (user) {
+    if (user) {
       if (reminderId) {
         reminderService.update(user.uid, reminderId, newData).then(() => {
           router.navigate({ pathname: '/(tabs)/pets/reminder', params: { id: id || '1' } });

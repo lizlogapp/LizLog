@@ -72,32 +72,42 @@ export default function HomeScreen() {
       petService.getAll(user.uid).then(pets => {
         setAvailablePets(pets.map(p => p.name));
         setCurrentPetName(pets.length > 0 ? pets[0].name : '未設定');
-      });
 
-      // Load latest diary
-      diaryService.getAll(user.uid).then(diaries => {
-        if (diaries.length > 0) {
-          const latest = diaries[0];
-          const d = new Date(latest.date);
-          const monthNames = ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC'];
-          setLatestDiary({
-            id: latest.id,
-            day: String(d.getDate()).padStart(2, '0'),
-            month: monthNames[d.getMonth()],
-            weatherIcon: latest.weatherIcon === 'sunny' ? require('../../assets/icons/weather-sunny.png') : require('../../assets/icons/weather-cloudy.png'),
-            imageUrl: latest.imageUrl ? { uri: latest.imageUrl } : null,
-          });
-        } else {
-          setLatestDiary(null);
-        }
-      });
+        const ownerIds = Array.from(new Set(pets.map(p => p.ownerId || user.uid)));
+        if (ownerIds.length === 0) ownerIds.push(user.uid);
 
-      // Load reminders
-      reminderService.getAll(user.uid).then(fsReminders => {
-        const active = fsReminders.filter(r => r.isOn);
-        const today = new Date();
-        const dateStr = `${today.getMonth() + 1}/${today.getDate()}`;
-        setReminders(active.map(r => ({
+        // Load latest diary
+        diaryService.getAll(ownerIds).then(diaries => {
+          if (diaries.length > 0) {
+            const latest = diaries[0];
+            const d = new Date(latest.date);
+            const monthNames = ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC'];
+            setLatestDiary({
+              id: latest.id,
+              day: String(d.getDate()).padStart(2, '0'),
+              month: monthNames[d.getMonth()],
+              weatherIcon: latest.weatherIcon === 'sunny' ? require('../../assets/icons/weather-sunny.png') : require('../../assets/icons/weather-cloudy.png'),
+              imageUrl: latest.imageUrl ? { uri: latest.imageUrl } : null,
+            });
+          } else {
+            setLatestDiary(null);
+          }
+        });
+
+        const mutedPetIds = pets
+          .filter(p => p.coParents?.some(cp => cp.uid === user.uid && cp.muteReminders))
+          .map(p => p.id);
+
+        // Load reminders
+        reminderService.getAll(ownerIds).then(fsReminders => {
+          const active = fsReminders.filter(r => 
+            r.isOn && 
+            !mutedPetIds.includes(r.petId) &&
+            (!r.pets || !r.pets.some((pId: string) => mutedPetIds.includes(pId)))
+          );
+          const today = new Date();
+          const dateStr = `${today.getMonth() + 1}/${today.getDate()}`;
+          setReminders(active.map(r => ({
           id: r.id,
           pets: r.pets,
           title: r.type + (r.note ? `（${r.note}）` : ''),
@@ -105,6 +115,7 @@ export default function HomeScreen() {
           tagColor: r.tagColor,
           checked: false,
         })));
+        });
       });
     } else {
       setAvailablePets([]);
