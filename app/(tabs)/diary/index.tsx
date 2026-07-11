@@ -58,50 +58,7 @@ export default function DiaryScreen() {
   }, [isDemoMode, user]);
 
   // 模擬四張不同組合的卡片資料
-  const mockDiaries = [
-    {
-      id: 1,
-      dateStr: 'THU  7/17/2025',
-      weatherIcon: require('../../../assets/icons/weather-sunny.png'),
-      title: '初次探索！家旁邊的新公園草地',
-      image: require('../../../assets/user-uploads/lizard-001.jpg'),
-      pets: [
-        { name: 'DELETE', temp: '31℃', humid: '30%', states: { bask: true, feed: true, bath: true, poop: false } }
-      ]
-    },
-    {
-      id: 2,
-      dateStr: 'WED  7/13/2025',
-      weatherIcon: require('../../../assets/icons/weather-cloudy.png'),
-      title: '出門散散步',
-      image: require('../../../assets/user-uploads/lizard-001.jpg'),
-      pets: [
-        { name: 'DELETE', temp: '30℃', humid: '35%', states: { bask: true, feed: false, bath: false, poop: true } },
-        { name: 'CTRL', temp: '31℃', humid: '30%', states: { bask: true, feed: true, bath: false, poop: true } },
-        { name: 'ENTER', temp: '30℃', humid: '33%', states: { bask: true, feed: false, bath: true, poop: false } }
-      ]
-    },
-    {
-      id: 3,
-      dateStr: 'THU  7/17/2025',
-      weatherIcon: require('../../../assets/icons/weather-sunny.png'),
-      title: '喜歡泡澡的CTRL',
-      image: null,
-      pets: [
-        { name: 'CTRL', temp: '31℃', humid: '30%', states: { bask: true, feed: false, bath: true, poop: false } }
-      ]
-    },
-    {
-      id: 4,
-      dateStr: 'THU  7/17/2025',
-      weatherIcon: require('../../../assets/icons/weather-sunny.png'),
-      title: '',
-      image: null,
-      pets: [
-        { name: 'CTRL', temp: '30℃', humid: '30%', states: { bask: true, feed: false, bath: false, poop: true } }
-      ]
-    }
-  ];
+  const mockDiaries: any[] = [];
 
   const mappedFirestoreDiaries = firestoreDiaries.map(d => ({
     id: d.id,

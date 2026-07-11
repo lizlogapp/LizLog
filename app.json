@@ -15,6 +15,7 @@
       "supportsTablet": true
     },
     "android": {
+      "package": "com.lizlog.app",
       "adaptiveIcon": {
         "backgroundColor": "#FFFEFA",
         "foregroundImage": "./assets/branding/logos/logo-image-only.png"
@@ -27,6 +28,13 @@
     "plugins": [
       "expo-router",
       "expo-web-browser"
-    ]
+    ],
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "f2a5d238-17f4-4dcd-bc8c-94a025f3396a"
+      }
+    },
+    "owner": "asia10445"
   }
 }

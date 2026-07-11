@@ -9,6 +9,7 @@ import {
   StyleSheet,
   View,
   Dimensions,
+  ActivityIndicator,
 } from 'react-native';
 import { useSafeAreaInsets, SafeAreaProvider, initialWindowMetrics } from 'react-native-safe-area-context';
 import { ThemeProvider, useTheme } from '../src/theme/ThemeContext';
@@ -17,6 +18,7 @@ import { AuthProvider, useAuth } from '../src/contexts/AuthContext';
 import { backgroundImages } from '../src/theme/backgroundImageSettings';
 import { ThemeId, paletteColors } from '../src/theme/themeColorSettings';
 import { STATUS_BAR_HEIGHT, TAB_BAR_HEIGHT } from '../src/theme/layoutSettings';
+import { SplashAnimation } from '../src/components/common/SplashAnimation';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 
@@ -35,6 +37,7 @@ function RootLayoutInner() {
     themeId === ThemeId.RI_CHU_THEME ? paletteColors.RI_CHU : paletteColors.MU_CHENG;
 
   const { user, isLoading } = useAuth();
+  const [showSplash, setShowSplash] = React.useState(true);
   const segments = useSegments();
   const router = useRouter();
 
@@ -90,7 +93,7 @@ function RootLayoutInner() {
         pointerEvents="box-none"
       />
       <View style={[styles.stackWrapper, { flex: 1 }]}>
-        {!isLoading ? (
+        {!isLoading && (
           <Stack
             screenOptions={{
               headerShown: false,
@@ -98,8 +101,9 @@ function RootLayoutInner() {
               contentStyle: { backgroundColor: "transparent", flex: 1 },
             }}
           />
-        ) : (
-          <View style={{ flex: 1, backgroundColor: 'transparent' }} />
+        )}
+        {showSplash && (
+          <SplashAnimation isLoading={isLoading} onFinish={() => setShowSplash(false)} />
         )}
       </View>
     </View>
