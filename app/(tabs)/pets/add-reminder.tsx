@@ -18,6 +18,7 @@ import { BaseScreen } from '../../../src/components/common/BaseScreen';
 import { FloatingActionBar } from '../../../src/components/FloatingActionBar';
 import { useAuth } from '../../../src/contexts/AuthContext';
 import { reminderService, petService, PetDoc } from '../../../src/services/firestoreService';
+import { scheduleReminderNotification } from '../../../src/services/notificationService';
 
 const defaultTypes = ['餵食', '換水', '清掃', '用藥', '驅蟲', '回診'];
 const weekDays = ['日', '一', '二', '三', '四', '五', '六'];
@@ -30,14 +31,20 @@ const getFirstDayOfMonth = (y: number, m: number) => new Date(y, m - 1, 1).getDa
 
 export default function AddReminderScreen() {
   const router = useRouter();
-  const { id, reminderId } = useLocalSearchParams<{ id: string; reminderId: string }>();
+  const { id, petId, reminderId, ownerId } = useLocalSearchParams<{
+    id?: string;
+    petId?: string;
+    reminderId?: string;
+    ownerId?: string;
+  }>();
+  const targetPetId = id || petId || '';
   const { themeId, fontFamilyName, isDemoMode } = useTheme();
   const theme = getThemeTokens(themeId);
   const { user } = useAuth();
 
   // 寵物名單
   const [petList, setPetList] = useState<{ id: string; name: string }[]>([]);
-  const [selectedPets, setSelectedPets] = useState<string[]>(id ? [id] : []);
+  const [selectedPets, setSelectedPets] = useState<string[]>(targetPetId ? [targetPetId] : []);
 
   useEffect(() => {
     if (user) {
@@ -47,7 +54,14 @@ export default function AddReminderScreen() {
             { text: '確定', onPress: () => router.replace('/(tabs)/pets') }
           ]);
         } else {
-          setPetList(pets.map(p => ({ id: p.id, name: p.name })));
+          const resolvedOwnerId = ownerId || user.uid;
+          const writablePets = pets.filter(p => {
+            const role = p.coParents?.find(cp => cp.uid === user.uid);
+            return (p.ownerId || user.uid) === resolvedOwnerId
+              && !!role
+              && (role.isMainOwner || role.permission !== 'view');
+          });
+          setPetList(writablePets.map(p => ({ id: p.id, name: p.name })));
           if (selectedPets.length === 0) {
             const defaultPet = pets.find(p => p.id === id) || pets[0];
             setSelectedPets([defaultPet.id]);
@@ -55,7 +69,7 @@ export default function AddReminderScreen() {
         }
       });
     }
-  }, [user, id]);
+  }, [user, targetPetId, ownerId]);
 
   const togglePet = (petId: string) => {
     setSelectedPets(prev =>
@@ -100,7 +114,7 @@ export default function AddReminderScreen() {
   // 預填資料 (如果是編輯模式)
   useEffect(() => {
     if (reminderId && user) {
-      reminderService.getById(user.uid, reminderId).then(data => {
+      reminderService.getById(ownerId || user.uid, reminderId).then(data => {
         if (!data) return;
         setSelectedPets(data.pets || []);
         
@@ -127,9 +141,9 @@ export default function AddReminderScreen() {
         setNote(data.note || '');
       });
     }
-  }, [reminderId, user]);
+  }, [reminderId, user, ownerId]);
 
-  const handleSave = () => {
+  const handleSave = async () => {
     const finalType = isAddingCustom ? customType : selectedType;
     const finalTime = `${hour.padStart(2, '0')}:${minute.padStart(2, '0')}`;
     let finalFreq = '';
@@ -142,7 +156,7 @@ export default function AddReminderScreen() {
     }
 
     const newData = {
-      petId: id || selectedPets[0] || '1',
+      petId: targetPetId || selectedPets[0],
       type: finalType,
       freq: finalFreq,
       frequencyType: frequency,
@@ -157,14 +171,14 @@ export default function AddReminderScreen() {
     };
 
     if (user) {
-      if (reminderId) {
-        reminderService.update(user.uid, reminderId, newData).then(() => {
-          router.navigate({ pathname: '/(tabs)/pets/reminder', params: { id: id || '1' } });
-        });
-      } else {
-        reminderService.add(user.uid, newData).then(() => {
-          router.navigate({ pathname: '/(tabs)/pets/reminder', params: { id: id || '1' } });
-        });
+      const resolvedOwnerId = ownerId || user.uid;
+      try {
+        const savedId = reminderId || await reminderService.add(resolvedOwnerId, newData);
+        if (reminderId) await reminderService.update(resolvedOwnerId, reminderId, newData);
+        await scheduleReminderNotification(resolvedOwnerId, { ...newData, id: savedId });
+        router.navigate({ pathname: '/(tabs)/pets/reminder', params: { id: targetPetId, ownerId } });
+      } catch {
+        Alert.alert('錯誤', '提醒儲存或通知排程失敗，請稍後再試。');
       }
     }
   };
@@ -190,7 +204,7 @@ export default function AddReminderScreen() {
       floatingAction={
         <FloatingActionBar
           actions={[
-            { id: 'back', onPress: () => router.navigate({ pathname: '/(tabs)/pets/reminder', params: { id: id || '1' } }) },
+            { id: 'back', onPress: () => router.navigate({ pathname: '/(tabs)/pets/reminder', params: { id: targetPetId, ownerId } }) },
             { id: 'confirm', onPress: handleSave },
           ]}
         />

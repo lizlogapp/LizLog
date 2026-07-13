@@ -8,6 +8,7 @@ import {
   Pressable,
   Modal,
   Image,
+  Alert,
 } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useTheme } from '../../../src/theme/ThemeContext';
@@ -18,6 +19,7 @@ import { BaseScreen } from '../../../src/components/common/BaseScreen';
 import { FloatingActionBar } from '../../../src/components/FloatingActionBar';
 import { useAuth } from '../../../src/contexts/AuthContext';
 import { medicalService } from '../../../src/services/firestoreService';
+import * as ImagePicker from 'expo-image-picker';
 
 const getDaysInMonth = (y: number, m: number) => new Date(y, m, 0).getDate();
 const getFirstDayOfMonth = (y: number, m: number) => new Date(y, m - 1, 1).getDay();
@@ -39,7 +41,8 @@ export default function AddMedicalScreen() {
   const [advice, setAdvice] = useState('');
 
   // Image section
-  const [selectedImages, setSelectedImages] = useState<any[]>([]); // TODO: Replace with expo-image-picker URI array
+  const [selectedImages, setSelectedImages] = useState<string[]>([]);
+  const [isSaving, setIsSaving] = useState(false);
 
   // Medication section
   const [medStartDate, setMedStartDate] = useState('');
@@ -81,7 +84,28 @@ export default function AddMedicalScreen() {
     }
   }, [id, user]);
 
-  const handleSave = () => {
+  const pickImages = async () => {
+    const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (!permission.granted) {
+      Alert.alert('需要相簿權限', '請允許蜥日日記讀取相簿，才能加入醫療照片。');
+      return;
+    }
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ['images'],
+      allowsMultipleSelection: true,
+      selectionLimit: Math.max(1, 5 - selectedImages.length),
+      quality: 0.8,
+    });
+    if (!result.canceled) {
+      setSelectedImages(current => [
+        ...current,
+        ...result.assets.map(asset => asset.uri),
+      ].slice(0, 5));
+    }
+  };
+
+  const handleSave = async () => {
+    if (isSaving) return;
     const newData = {
       petId: petId || '1',
       title,
@@ -97,7 +121,7 @@ export default function AddMedicalScreen() {
         reason,
         diagnosis,
         advice: advice.split('\n').filter(Boolean),
-        imageUrls: [],
+          imageUrls: selectedImages.filter(uri => uri.startsWith('http')),
       },
       medication: {
         startDate: medStartDate,
@@ -111,24 +135,36 @@ export default function AddMedicalScreen() {
     };
 
     const resolvedOwnerId = ownerId || user?.uid;
-    if (resolvedOwnerId) {
-      if (id) {
-        medicalService.update(resolvedOwnerId, id, newData).then(() => {
-          if (petId) {
-            router.navigate({ pathname: '/(tabs)/pets/medical', params: { id: petId, ownerId } });
-          } else {
-            router.back();
-          }
-        });
-      } else {
-        medicalService.add(resolvedOwnerId, newData).then(() => {
-          if (petId) {
-            router.navigate({ pathname: '/(tabs)/pets/medical', params: { id: petId, ownerId } });
-          } else {
-            router.back();
-          }
+    if (!resolvedOwnerId) {
+      Alert.alert('錯誤', '請重新登入後再試。');
+      return;
+    }
+
+    setIsSaving(true);
+    try {
+      const medicalId = id || await medicalService.add(resolvedOwnerId, newData);
+      if (id) await medicalService.update(resolvedOwnerId, id, newData);
+
+      const remoteImages = selectedImages.filter(uri => uri.startsWith('http'));
+      const localImages = selectedImages.filter(uri => !uri.startsWith('http'));
+      const uploadedImages = await Promise.all(
+        localImages.map((uri, index) => medicalService.uploadImage(resolvedOwnerId, medicalId, uri, index)),
+      );
+      if (localImages.length > 0) {
+        await medicalService.update(resolvedOwnerId, medicalId, {
+          visit: { ...newData.visit, imageUrls: [...remoteImages, ...uploadedImages] },
         });
       }
+
+      if (petId) {
+        router.navigate({ pathname: '/(tabs)/pets/medical', params: { id: petId, ownerId } });
+      } else {
+        router.back();
+      }
+    } catch {
+      Alert.alert('錯誤', '醫療紀錄儲存失敗，請確認網路與圖片權限後再試。');
+    } finally {
+      setIsSaving(false);
     }
   };
 
@@ -153,7 +189,10 @@ export default function AddMedicalScreen() {
   const labelStyle = [styles.fieldLabel, { color: theme.primary, fontFamily: fontFamilyName }];
   const inputStyle = [styles.input, { borderColor: theme.primary, color: paletteColors.XUAN_RI, fontFamily: fontFamilyName }];
   const multiInputStyle = [styles.multiInput, { borderColor: theme.primary, color: paletteColors.XUAN_RI, fontFamily: fontFamilyName }];
-  const dateInputStyle = [styles.input, { borderColor: theme.primary, color: paletteColors.XUAN_RI, fontFamily: fontFamilyName, justifyContent: 'center' as const }];
+  const dateInputStyle = [
+    styles.dateInputButton,
+    { borderColor: theme.primary, backgroundColor: theme.background },
+  ];
 
   return (
     <BaseScreen
@@ -161,7 +200,7 @@ export default function AddMedicalScreen() {
       floatingAction={
         <FloatingActionBar
           actions={[
-            { id: 'back', onPress: () => router.navigate({ pathname: '/(tabs)/pets/medical', params: { id: petId || '1' } }) },
+            { id: 'back', onPress: () => router.navigate({ pathname: '/(tabs)/pets/medical', params: { id: petId || '1', ownerId } }) },
             { id: 'confirm', onPress: handleSave },
           ]}
         />
@@ -246,7 +285,7 @@ export default function AddMedicalScreen() {
           <Text style={labelStyle}>相關照片</Text>
           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.imagePickerContainer}>
             {selectedImages.map((img, idx) => (
-              <Pressable key={idx} style={styles.previewImageWrapper} onPress={() => { /* TODO: Launch Action Sheet to remove */ }}>
+              <Pressable key={idx} style={styles.previewImageWrapper} onPress={() => setSelectedImages(images => images.filter((_, imageIndex) => imageIndex !== idx))}>
                 <Image source={typeof img === 'string' ? { uri: img } : img} style={styles.previewImage} />
                 <View style={[styles.editImageOverlay, { backgroundColor: 'rgba(0,0,0,0.4)' }]}>
                   <Text style={[styles.editImageText, { fontFamily: fontFamilyName }]}>點擊移除</Text>
@@ -254,11 +293,11 @@ export default function AddMedicalScreen() {
               </Pressable>
             ))}
             
-            <Pressable style={[styles.imageAddButton, { borderColor: theme.primary }]} onPress={() => { /* TODO: Launch Image Picker */ }}>
+            {selectedImages.length < 5 && <Pressable style={[styles.imageAddButton, { borderColor: theme.primary }]} onPress={pickImages}>
               <Text style={[styles.imageAddText, { color: theme.primary, fontFamily: fontFamilyName }]}>
                 + 選擇照片
               </Text>
-            </Pressable>
+            </Pressable>}
           </ScrollView>
 
           <View style={[styles.divider, { backgroundColor: theme.primary }]} />
@@ -442,6 +481,15 @@ const styles = StyleSheet.create({
     fontSize: getFontSize(16, 'medium'),
     fontWeight: '300',
     marginBottom: 16,
+    backgroundColor: 'rgba(255,255,255,0.5)',
+  },
+  dateInputButton: {
+    borderWidth: 1,
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    minHeight: 44,
+    marginBottom: 16,
+    justifyContent: 'center',
     backgroundColor: 'rgba(255,255,255,0.5)',
   },
   multiInput: {

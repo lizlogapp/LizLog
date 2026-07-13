@@ -7,7 +7,7 @@ import { getFontSize } from '../../../src/theme/typographySettings';
 import { FloatingActionBar } from '../../../src/components/FloatingActionBar';
 import { BaseScreen } from '../../../src/components/common/BaseScreen';
 import { useAuth } from '../../../src/contexts/AuthContext';
-import { diaryService, DiaryDoc } from '../../../src/services/firestoreService';
+import { diaryService, petService, DiaryDoc } from '../../../src/services/firestoreService';
 
 export default function CalendarFilterScreen() {
   const router = useRouter();
@@ -23,10 +23,18 @@ export default function CalendarFilterScreen() {
       setFirestoreDiaries([]);
       return;
     }
-    const unsubscribeDiaries = diaryService.onDiariesChanged(user.uid, (diaries) => {
-      setFirestoreDiaries(diaries);
+    let unsubscribeDiaries: (() => void) | null = null;
+    let isActive = true;
+    petService.getAll(user.uid).then(pets => {
+      if (!isActive) return;
+      unsubscribeDiaries = diaryService.onDiariesChanged(user.uid, diaries => {
+        if (isActive) setFirestoreDiaries(diaries);
+      });
     });
-    return () => unsubscribeDiaries();
+    return () => {
+      isActive = false;
+      unsubscribeDiaries?.();
+    };
   }, [isDemoMode, user]);
 
   const currentYearInt = new Date().getFullYear();
@@ -53,11 +61,7 @@ export default function CalendarFilterScreen() {
 
   const getMonthDiaryCount = (month: number): number => {
     if (isDemoMode) {
-      const mockCount: Record<number, number> = {
-        1: 3, 2: 0, 3: 5, 4: 2, 5: 0, 6: 8,
-        7: 12, 8: 4, 9: 0, 10: 1, 11: 0, 12: 0,
-      };
-      return selectedYear === currentYearInt ? (mockCount[month] || 0) : 0;
+      return 0;
     }
     return firestoreDiaries.filter(d => {
       const date = new Date(d.date);
@@ -76,16 +80,7 @@ export default function CalendarFilterScreen() {
   };
 
   const getDiaryDays = (month: number): number[] => {
-    if (isDemoMode && selectedYear === currentYearInt) {
-      if (month === 7) return [1, 5, 13, 17, 20, 25, 28, 30];
-      if (month === 6) return [3, 8, 12, 15, 22, 26, 28, 30];
-      if (month === 1) return [5, 15, 28];
-      if (month === 3) return [2, 10, 14, 20, 30];
-      if (month === 4) return [8, 22];
-      if (month === 8) return [1, 12, 18, 25];
-      if (month === 10) return [15];
-      return [];
-    }
+    if (isDemoMode) return [];
     
     const days = new Set<number>();
     firestoreDiaries.forEach(d => {
@@ -223,7 +218,18 @@ export default function CalendarFilterScreen() {
                               ]}
                               onPress={() => {
                                 if (hasDiary) {
-                                  // TODO: 導航到該日日記
+                                  const diary = firestoreDiaries.find(item => {
+                                    const date = new Date(item.date);
+                                    return date.getFullYear() === selectedYear
+                                      && date.getMonth() + 1 === month
+                                      && date.getDate() === dayNum;
+                                  });
+                                  if (diary) {
+                                    router.push({
+                                      pathname: '/(tabs)/diary/view',
+                                      params: { id: diary.id, ownerId: diary.ownerId || user?.uid },
+                                    });
+                                  }
                                 }
                               }}
                             >

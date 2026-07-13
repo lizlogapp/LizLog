@@ -1,35 +1,18 @@
 /**
- * 字體與字級設定
- *
- * 字體：
- * - 暇日：Noto Sans
- * - 余白：Kurewa Gothic CJK TC
- *
- * 字級大小（中級）：
- * 14 / 16 / 18 / 20 / 24 / 28 / 32 / 44 / 48 / 54
- *
- * 小/大字級映射：
- * - small：14->10、16->12（其餘依偏移延伸）
- * - large：以 +4 推定（14->18、16->20 ...）
- *
- * 文字排版：
- * - line height：150%
- * - letter spacing：0
+ * 字體與字級 token。
  */
 
 export const fontFamilies = {
-  // Noto Sans
-  HAXI_RI: "暇日",
-  // Kurewa Gothic CJK TC
-  YU_BAI: "余白",
+  HAXI_RI: 'Noto Sans TC',
+  YU_BAI: 'Kurewa Gothic CJK TC',
 } as const;
 
 export type FontFamilyKey = keyof typeof fontFamilies;
 
 export const textScale = {
-  SMALL: "small",
-  MEDIUM: "medium",
-  LARGE: "large",
+  SMALL: 'small',
+  MEDIUM: 'medium',
+  LARGE: 'large',
 } as const;
 
 export type TextScale = (typeof textScale)[keyof typeof textScale];
@@ -37,7 +20,6 @@ export type TextScale = (typeof textScale)[keyof typeof textScale];
 export const baseTextSizes = [14, 16, 18, 20, 24, 28, 32, 44, 48, 54] as const;
 
 export const fontSizeScale = {
-  // 中級：原始字級
   [textScale.MEDIUM]: {
     14: 14,
     16: 16,
@@ -50,7 +32,6 @@ export const fontSizeScale = {
     48: 48,
     54: 54,
   },
-  // 小字：14->10、16->12（推定偏移 -4）
   [textScale.SMALL]: {
     14: 10,
     16: 12,
@@ -63,7 +44,6 @@ export const fontSizeScale = {
     48: 44,
     54: 50,
   },
-  // 大字：此處先依 +4 推定
   [textScale.LARGE]: {
     14: 18,
     16: 20,
@@ -80,7 +60,7 @@ export const fontSizeScale = {
 
 export const getFontSize = (baseSize: number, scale: TextScale) => {
   const mapped = (fontSizeScale as Record<string, Record<number, number>>)[scale]?.[baseSize];
-  return typeof mapped === "number" ? mapped : baseSize;
+  return typeof mapped === 'number' ? mapped : baseSize;
 };
 
 export const typographyDefaults = {
@@ -88,5 +68,5 @@ export const typographyDefaults = {
   letterSpacing: 0,
 } as const;
 
-export const buildLineHeight = (fontSize: number) => Math.round(fontSize * typographyDefaults.lineHeightRatio);
-
+export const buildLineHeight = (fontSize: number) =>
+  Math.round(fontSize * typographyDefaults.lineHeightRatio);

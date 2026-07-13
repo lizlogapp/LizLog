@@ -1,23 +1,37 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { View, Text, StyleSheet, ScrollView, Switch, Pressable, Modal, TextInput, Alert } from 'react-native';
-import LogoIcon from '../../assets/branding/logos/logo-icon.svg';
+import LogoIcon from '../../assets/branding/logos/logo-image.svg';
 import { useRouter } from 'expo-router';
-import { signOut, deleteUser } from 'firebase/auth';
+import Constants from 'expo-constants';
+import {
+  EmailAuthProvider,
+  reauthenticateWithCredential,
+  signOut,
+  updatePassword,
+  updateProfile,
+} from 'firebase/auth';
 import { auth } from '../../src/config/firebase';
 import { useTheme } from '../../src/theme/ThemeContext';
 import { getThemeTokens, ThemeId } from '../../src/theme/themeSettings';
 import { paletteColors } from '../../src/theme/themeColorSettings';
 import { getFontSize } from '../../src/theme/typographySettings';
 import { BaseScreen } from '../../src/components/common/BaseScreen';
+import {
+  cancelAllLizLogNotifications,
+  getNotificationPreferences,
+  requestNotificationPermission,
+  scheduleReminderNotification,
+  saveNotificationPreferences,
+} from '../../src/services/notificationService';
+import { reminderService } from '../../src/services/firestoreService';
 
 export default function SettingsScreen() {
   const { themeId, setThemeId, fontFamilyName, fontFamilyId, setFontFamilyId, isDemoMode, setIsDemoMode } = useTheme();
   const theme = getThemeTokens(themeId);
   const router = useRouter();
 
-  // Mock states for switches
   const [reminderEnabled, setReminderEnabled] = useState(true);
-  const [sysNotifyEnabled, setSysNotifyEnabled] = useState(true);
+  const [sysNotifyEnabled, setSysNotifyEnabled] = useState(false);
   const [isAboutExpanded, setIsAboutExpanded] = useState(false);
   const [showTermsModal, setShowTermsModal] = useState(false);
   const [showPrivacyModal, setShowPrivacyModal] = useState(false);
@@ -30,6 +44,104 @@ export default function SettingsScreen() {
   const [oldPassword, setOldPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
+  const [isSavingAccount, setIsSavingAccount] = useState(false);
+  const appVersion = Constants.expoConfig?.version ?? '0.1.0';
+
+  useEffect(() => {
+    getNotificationPreferences().then(preferences => {
+      setReminderEnabled(preferences.reminderEnabled);
+      setSysNotifyEnabled(preferences.systemEnabled);
+    });
+  }, []);
+
+  const handleReminderToggle = async (value: boolean) => {
+    setReminderEnabled(value);
+    await saveNotificationPreferences({ reminderEnabled: value, systemEnabled: sysNotifyEnabled });
+    if (!value) await cancelAllLizLogNotifications();
+  };
+
+  const handleSystemNotificationToggle = async (value: boolean) => {
+    if (value && !(await requestNotificationPermission())) {
+      setSysNotifyEnabled(false);
+      await saveNotificationPreferences({ reminderEnabled, systemEnabled: false });
+      Alert.alert('未開啟通知', '系統通知權限未允許，可稍後到手機設定中開啟。');
+      return;
+    }
+    setSysNotifyEnabled(value);
+    await saveNotificationPreferences({ reminderEnabled, systemEnabled: value });
+    if (!value) {
+      await cancelAllLizLogNotifications();
+    } else if (auth.currentUser) {
+      try {
+        const reminders = await reminderService.getAll(auth.currentUser.uid);
+        await Promise.all(reminders.map(reminder =>
+          scheduleReminderNotification(reminder.ownerId || auth.currentUser!.uid, reminder),
+        ));
+      } catch {
+        Alert.alert('部分提醒未排程', '通知權限已開啟，但部分雲端提醒尚未同步，請確認網路後再試。');
+      }
+    }
+  };
+
+  const handleNicknameUpdate = async () => {
+    const value = tempNickname.trim();
+    if (!value) {
+      Alert.alert('提示', '暱稱不可為空白');
+      return;
+    }
+    if (!auth.currentUser) {
+      Alert.alert('錯誤', '目前沒有已登入帳號');
+      return;
+    }
+
+    setIsSavingAccount(true);
+    try {
+      await updateProfile(auth.currentUser, { displayName: value });
+      setNickname(value);
+      setShowNicknameModal(false);
+      Alert.alert('完成', '暱稱已更新');
+    } catch {
+      Alert.alert('錯誤', '暱稱更新失敗，請稍後再試');
+    } finally {
+      setIsSavingAccount(false);
+    }
+  };
+
+  const handlePasswordUpdate = async () => {
+    const user = auth.currentUser;
+    if (!user?.email) {
+      Alert.alert('提示', '此登入方式不支援在 APP 內更改密碼');
+      return;
+    }
+    if (!oldPassword || !newPassword || !confirmPassword) {
+      Alert.alert('提示', '請完整填寫密碼欄位');
+      return;
+    }
+    if (newPassword.length < 6) {
+      Alert.alert('提示', '新密碼至少需要 6 個字元');
+      return;
+    }
+    if (newPassword !== confirmPassword) {
+      Alert.alert('提示', '兩次輸入的新密碼不一致');
+      return;
+    }
+
+    setIsSavingAccount(true);
+    try {
+      const credential = EmailAuthProvider.credential(user.email, oldPassword);
+      await reauthenticateWithCredential(user, credential);
+      await updatePassword(user, newPassword);
+      setOldPassword('');
+      setNewPassword('');
+      setConfirmPassword('');
+      setShowPasswordModal(false);
+      Alert.alert('完成', '密碼已更新');
+    } catch {
+      Alert.alert('錯誤', '舊密碼不正確，或密碼更新失敗');
+    } finally {
+      setIsSavingAccount(false);
+    }
+  };
 
   // Toggle theme (for demonstration, cycle through available themes if needed, or just toggle between RI_CHU and CHENG_RI)
   const toggleTheme = () => {
@@ -78,7 +190,7 @@ export default function SettingsScreen() {
             <Switch
               trackColor={{ false: '#E0E0E0', true: theme.primary }}
               thumbColor={'#FFFFFF'}
-              onValueChange={setReminderEnabled}
+              onValueChange={handleReminderToggle}
               value={reminderEnabled}
               style={{ transform: [{ scaleX: 0.8 }, { scaleY: 0.8 }] }}
             />
@@ -88,7 +200,7 @@ export default function SettingsScreen() {
             <Switch
               trackColor={{ false: '#E0E0E0', true: theme.primary }}
               thumbColor={'#FFFFFF'}
-              onValueChange={setSysNotifyEnabled}
+              onValueChange={handleSystemNotificationToggle}
               value={sysNotifyEnabled}
               style={{ transform: [{ scaleX: 0.8 }, { scaleY: 0.8 }] }}
             />
@@ -111,7 +223,7 @@ export default function SettingsScreen() {
             <Text style={[styles.label, { color: theme.primary, fontFamily: fontFamilyName }]}>文字字體</Text>
             <Pressable onPress={toggleFont}>
               <Text style={[styles.value, { color: theme.primary, fontFamily: fontFamilyName }]}>
-                {fontFamilyId === 'HAXI_RI' ? '暇日' : '魚白'}
+                {fontFamilyId === 'HAXI_RI' ? '暇日' : '余白'}
               </Text>
             </Pressable>
           </View>
@@ -139,7 +251,10 @@ export default function SettingsScreen() {
                 寵物管理
               </Text>
             </Pressable>
-            <Pressable style={[styles.actionButton, { backgroundColor: theme.background }]}>
+            <Pressable 
+              style={[styles.actionButton, { backgroundColor: theme.background }]}
+              onPress={() => router.push('/iot')}
+            >
               <Text style={[styles.actionButtonText, { color: theme.primary, fontFamily: fontFamilyName }]}>
                 IoT 設備管理
               </Text>
@@ -173,7 +288,7 @@ export default function SettingsScreen() {
                     蜥日日記
                   </Text>
                   <Text style={[styles.aboutAppVersion, { color: theme.primary, fontFamily: fontFamilyName }]}>
-                    版本 1.0.0
+                    版本 {appVersion}
                   </Text>
                   <Text style={[styles.aboutCopyright, { color: theme.primary, fontFamily: fontFamilyName }]}>
                     © 2026 LizLog
@@ -186,33 +301,13 @@ export default function SettingsScreen() {
               style={[styles.actionButton, { backgroundColor: theme.background }]}
               onPress={() => {
                 Alert.alert(
-                  '刪除帳號',
-                  '您確定要永久刪除此帳號嗎？此操作無法復原，所有資料（包含寵物與日記）都會被清空。',
-                  [
-                    { text: '取消', style: 'cancel' },
-                    { 
-                      text: '確認刪除', 
-                      style: 'destructive',
-                      onPress: async () => {
-                        try {
-                          if (auth.currentUser) {
-                            await deleteUser(auth.currentUser);
-                          }
-                        } catch (error: any) {
-                          if (error.code === 'auth/requires-recent-login') {
-                            Alert.alert('安全性提示', '基於安全考量，請先「登出」並「重新登入」後，再次執行刪除帳號。');
-                          } else {
-                            Alert.alert('錯誤', '刪除帳號失敗，請稍後再試');
-                          }
-                        }
-                      }
-                    }
-                  ]
+                  '申請刪除測試資料',
+                  '0.1.0 封閉測試版由專案負責人手動清除登入帳號、寵物、日記、圖片與共育關聯。自助刪除會在公開測試前完成，現在不執行可能遺留資料的不完整刪除。'
                 );
               }}
             >
               <Text style={[styles.actionButtonText, { color: '#FF3B30', fontFamily: fontFamilyName }]}>
-                刪除帳號
+                申請刪除帳號
               </Text>
             </Pressable>
 
@@ -309,7 +404,8 @@ export default function SettingsScreen() {
               </View>
               <Pressable 
                 style={[styles.formSubmitButton, { backgroundColor: theme.background }]} 
-                onPress={() => { setNickname(tempNickname); setShowNicknameModal(false); }}
+                onPress={handleNicknameUpdate}
+                disabled={isSavingAccount}
               >
                 <Text style={[styles.formSubmitText, { color: theme.primary, fontFamily: fontFamilyName }]}>確認</Text>
               </Pressable>
@@ -353,11 +449,8 @@ export default function SettingsScreen() {
               </View>
               <Pressable 
                 style={[styles.formSubmitButton, { backgroundColor: theme.background }]} 
-                onPress={() => { 
-                  // TODO: handle password change logic
-                  setOldPassword(''); setNewPassword(''); setConfirmPassword('');
-                  setShowPasswordModal(false); 
-                }}
+                onPress={handlePasswordUpdate}
+                disabled={isSavingAccount}
               >
                 <Text style={[styles.formSubmitText, { color: theme.primary, fontFamily: fontFamilyName }]}>確認</Text>
               </Pressable>

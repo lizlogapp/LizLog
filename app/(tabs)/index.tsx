@@ -16,7 +16,8 @@ import { BaseScreen } from '../../src/components/common/BaseScreen';
 import { ReminderItem, petIdToName } from '../../src/data/mockDiaryData';
 import { paletteColors } from '../../src/theme/themeColorSettings';
 import { useAuth } from '../../src/contexts/AuthContext';
-import { diaryService, petService, reminderService } from '../../src/services/firestoreService';
+import { diaryService, petService, reminderService, PetDoc } from '../../src/services/firestoreService';
+import { sensorService, SensorData } from '../../src/services/sensorService';
 import {
   STATUS_BAR_HEIGHT,
   TAB_BAR_HEIGHT,
@@ -49,14 +50,16 @@ export default function HomeScreen() {
   const { user } = useAuth();
 
   const [loadingComplete, setLoadingComplete] = useState(true);
-  const [availablePets, setAvailablePets] = useState<string[]>([]); // 預設空陣列
-  const [currentPetName, setCurrentPetName] = useState<string>('未設定'); // 預設未設定
+  const [allPets, setAllPets] = useState<(PetDoc & { id: string })[]>([]); 
+  const [currentPet, setCurrentPet] = useState<(PetDoc & { id: string }) | null>(null); 
   const [isDropdownVisible, setIsDropdownVisible] = useState<boolean>(false); // 控制下拉選單顯示
   const [isConnected, setIsConnected] = useState<boolean>(false); // 預設未連線
+  const [sensorData, setSensorData] = useState<SensorData | null>(null);
 
   // 模擬未來從資料庫撈取的「最新一筆日記」物件
   interface DiaryRecord {
     id: string;
+    ownerId: string;
     day: string;
     month: string;
     weatherIcon: any;
@@ -66,27 +69,55 @@ export default function HomeScreen() {
 
   const [reminders, setReminders] = useState<ReminderItem[]>([]); // 預設空陣列
 
+  const isReminderDueToday = (reminder: {
+    frequencyType: string;
+    startDate?: string;
+    everyNDays?: string;
+    selectedWeekDays?: number[];
+  }) => {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    if (reminder.frequencyType === 'daily') return true;
+    if (reminder.frequencyType === 'weekly') {
+      return reminder.selectedWeekDays?.includes(today.getDay()) ?? false;
+    }
+
+    const start = reminder.startDate ? new Date(reminder.startDate.replace(/\//g, '-')) : null;
+    if (!start || Number.isNaN(start.getTime())) return reminder.frequencyType === 'once';
+    start.setHours(0, 0, 0, 0);
+    const elapsedDays = Math.floor((today.getTime() - start.getTime()) / 86_400_000);
+    if (reminder.frequencyType === 'once') return elapsedDays === 0;
+    if (reminder.frequencyType === 'everyN') {
+      const interval = Number.parseInt(reminder.everyNDays || '', 10);
+      return elapsedDays >= 0 && interval > 0 && elapsedDays % interval === 0;
+    }
+    return false;
+  };
+
   useEffect(() => {
     if (user) {
       // Load pets
       petService.getAll(user.uid).then(pets => {
-        setAvailablePets(pets.map(p => p.name));
-        setCurrentPetName(pets.length > 0 ? pets[0].name : '未設定');
-
-        const ownerIds = Array.from(new Set(pets.map(p => p.ownerId || user.uid)));
-        if (ownerIds.length === 0) ownerIds.push(user.uid);
+        setAllPets(pets);
+        if (!currentPet && pets.length > 0) {
+          setCurrentPet(pets[0]);
+        } else if (pets.length === 0) {
+          setCurrentPet(null);
+        }
 
         // Load latest diary
-        diaryService.getAll(ownerIds).then(diaries => {
+        diaryService.getAll(user.uid).then(diaries => {
           if (diaries.length > 0) {
             const latest = diaries[0];
             const d = new Date(latest.date);
             const monthNames = ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC'];
             setLatestDiary({
               id: latest.id,
+              ownerId: latest.ownerId || user.uid,
               day: String(d.getDate()).padStart(2, '0'),
               month: monthNames[d.getMonth()],
-              weatherIcon: latest.weatherIcon === 'sunny' ? require('../../assets/icons/weather-sunny.png') : require('../../assets/icons/weather-cloudy.png'),
+              weatherIcon: latest.weatherIcon?.includes('sunny') ? require('../../assets/icons/weather-sunny.png') : require('../../assets/icons/weather-cloudy.png'),
               imageUrl: latest.imageUrl ? { uri: latest.imageUrl } : null,
             });
           } else {
@@ -99,9 +130,10 @@ export default function HomeScreen() {
           .map(p => p.id);
 
         // Load reminders
-        reminderService.getAll(ownerIds).then(fsReminders => {
+        reminderService.getAll(user.uid).then(fsReminders => {
           const active = fsReminders.filter(r => 
             r.isOn && 
+            isReminderDueToday(r) &&
             !mutedPetIds.includes(r.petId) &&
             (!r.pets || !r.pets.some((pId: string) => mutedPetIds.includes(pId)))
           );
@@ -118,13 +150,44 @@ export default function HomeScreen() {
         });
       });
     } else {
-      setAvailablePets([]);
-      setCurrentPetName('未設定');
+      setAllPets([]);
+      setCurrentPet(null);
       setLatestDiary(null);
       setReminders([]);
       setIsConnected(false);
+      setSensorData(null);
     }
   }, [isDemoMode, user]);
+
+  useEffect(() => {
+    if (!currentPet) {
+      setIsConnected(false);
+      setSensorData(null);
+      return;
+    }
+
+    let unsubscribe = () => {};
+    const loadSensor = async () => {
+      const sensorId = await sensorService.resolveSensorId(currentPet, allPets);
+      if (sensorId) {
+        unsubscribe = sensorService.onSensorDataChanged(sensorId, (data) => {
+          if (data && data.status === 'online') {
+            setIsConnected(true);
+            setSensorData(data);
+          } else {
+            setIsConnected(false);
+            setSensorData(null);
+          }
+        });
+      } else {
+        setIsConnected(false);
+        setSensorData(null);
+      }
+    };
+    loadSensor();
+
+    return () => unsubscribe();
+  }, [currentPet, allPets]);
 
 
 
@@ -205,7 +268,7 @@ export default function HomeScreen() {
           <Text style={[styles.headerLabel, { color: theme.primary, fontFamily: fontFamilyName }]}>當前顯示</Text>
           <Pressable
             onPress={() => {
-              if (availablePets.length === 0) {
+              if (allPets.length === 0) {
                 router.push('/(tabs)/pets');
               } else {
                 setIsDropdownVisible(!isDropdownVisible);
@@ -213,12 +276,12 @@ export default function HomeScreen() {
             }}
           >
             <Text style={[styles.headerValue, { color: theme.text, fontFamily: fontFamilyName }]}>
-              {currentPetName || '未設定'}
+              {currentPet?.name || '未設定'}
             </Text>
           </Pressable>
 
           {/* 懸浮下拉選單 (Dropdown) */}
-          {isDropdownVisible && availablePets.length > 0 && (
+          {isDropdownVisible && allPets.length > 0 && (
             <View style={[styles.dropdownModal, { backgroundColor: theme.background }]}>
               <View style={styles.dropdownTail} />
               <ScrollView
@@ -227,20 +290,20 @@ export default function HomeScreen() {
                 bounces={false}
                 overScrollMode="never"
               >
-                {availablePets.map((pet, idx) => (
+                {allPets.map((pet, idx) => (
                   <Pressable
-                    key={pet}
+                    key={pet.id}
                     style={[
                       styles.dropdownItem,
-                      idx === availablePets.length - 1 && { marginBottom: 0 }
+                      idx === allPets.length - 1 && { marginBottom: 0 }
                     ]}
                     onPress={() => {
-                      setCurrentPetName(pet);
+                      setCurrentPet(pet);
                       setIsDropdownVisible(false);
                     }}
                   >
                     <Text style={[styles.dropdownItemText, { color: theme.text, fontFamily: fontFamilyName }]}>
-                      {pet}
+                      {pet.name}
                     </Text>
                   </Pressable>
                 ))}
@@ -252,7 +315,7 @@ export default function HomeScreen() {
         {/* 卡片 2：未連接感測器 & 快速紀錄 (四功能) */}
         <View style={[styles.sensorCardBlock, { backgroundColor: theme.background }]}>
           <View style={styles.sensorTopHalf}>
-            {!isConnected ? (
+            {!isConnected || !sensorData ? (
               <Pressable onPress={() => router.push('/(tabs)/settings')}>
                 <Text style={[styles.sensorText, { color: theme.text, fontFamily: fontFamilyName }]}>未連接感測器</Text>
               </Pressable>
@@ -264,7 +327,9 @@ export default function HomeScreen() {
                     <Text style={[styles.sensorDataChar, { color: theme.primary, fontFamily: fontFamilyName }]}>溫</Text>
                     <Text style={[styles.sensorDataChar, { color: theme.primary, fontFamily: fontFamilyName }]}>度</Text>
                   </View>
-                  <Text style={[styles.sensorDataValue, { color: theme.text, fontFamily: fontFamilyName }]}>31°C</Text>
+                  <Text style={[styles.sensorDataValue, { color: theme.text, fontFamily: fontFamilyName }]}>
+                    {sensorData.temperature.toFixed(1)}°C
+                  </Text>
                 </View>
 
                 {/* 濕度區塊 */}
@@ -273,7 +338,9 @@ export default function HomeScreen() {
                     <Text style={[styles.sensorDataChar, { color: theme.primary, fontFamily: fontFamilyName }]}>濕</Text>
                     <Text style={[styles.sensorDataChar, { color: theme.primary, fontFamily: fontFamilyName }]}>度</Text>
                   </View>
-                  <Text style={[styles.sensorDataValue, { color: theme.text, fontFamily: fontFamilyName }]}>30%</Text>
+                  <Text style={[styles.sensorDataValue, { color: theme.text, fontFamily: fontFamilyName }]}>
+                    {sensorData.humidity.toFixed(0)}%
+                  </Text>
                 </View>
               </View>
             )}
@@ -374,7 +441,10 @@ export default function HomeScreen() {
         ) : (
           <Pressable
             style={[styles.diaryBlockActive, { backgroundColor: theme.background }]}
-            onPress={() => router.push('/(tabs)/diary/view?from=home')}
+            onPress={() => router.push({
+              pathname: '/(tabs)/diary/view',
+              params: { id: latestDiary.id, ownerId: latestDiary.ownerId, from: 'home' },
+            })}
           >
             {/* 左側：精緻雜誌風資訊區塊 (資料綁定) */}
             <View style={styles.diaryActiveLeft}>

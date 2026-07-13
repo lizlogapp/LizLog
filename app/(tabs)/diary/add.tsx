@@ -1,35 +1,26 @@
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, Pressable, ScrollView, Image, TextInput } from 'react-native';
+import { View, Text, StyleSheet, Pressable, ScrollView, Image, TextInput, Alert } from 'react-native';
 import { useTheme } from '../../../src/theme/ThemeContext';
 import { getThemeTokens } from '../../../src/theme/themeSettings';
 import { getFontSize } from '../../../src/theme/typographySettings';
 import { FloatingActionBar } from '../../../src/components/FloatingActionBar';
 import { BaseScreen } from '../../../src/components/common/BaseScreen';
 import Slider from '@react-native-community/slider';
-import { addFeedData } from '../../../src/data/mockDiaryData';
 import { useAuth } from '../../../src/contexts/AuthContext';
 import { diaryService, petService, DiaryDoc } from '../../../src/services/firestoreService';
+import * as ImagePicker from 'expo-image-picker';
+import * as DocumentPicker from 'expo-document-picker';
 // SVG Icons
-// @ts-ignore
 import IconTemp from '../../../assets/icons/icon-temp.svg';
-// @ts-ignore
 import IconHumid from '../../../assets/icons/icon-humid.svg';
-// @ts-ignore
 import IconBask from '../../../assets/icons/icon-bask.svg';
-// @ts-ignore
 import IconFeed from '../../../assets/icons/icon-feed.svg';
-// @ts-ignore
 import IconBath from '../../../assets/icons/icon-bath.svg';
-// @ts-ignore
 import IconPoop from '../../../assets/icons/icon-poop.svg';
-// @ts-ignore
 import IconWeight from '../../../assets/icons/icon-weight.svg';
-// @ts-ignore
 import IconLength from '../../../assets/icons/icon-length.svg';
-// @ts-ignore
 import IconDiaryWrite from '../../../assets/icons/icon-diary.svg';
-// @ts-ignore
 import IconUploadSvg from '../../../assets/icons/icon-upload.svg';
 
 // 取得當日日期格式化字串
@@ -43,13 +34,15 @@ const getTodayString = () => {
   return `${dayName}  ${m}/${d}/${y}`;
 };
 
+type SelectedAttachment = { uri?: string; name: string; mimeType?: string; url?: string };
+
 /**
  * 新增日記頁面
  * 包含：照片區域、寵物標籤選擇、日期/天氣、標題編輯、數據紀錄、寫日記與上傳按鈕
  */
 export default function AddDiaryScreen() {
   const router = useRouter();
-  const { id } = useLocalSearchParams<{ id?: string }>();
+  const { id, ownerId } = useLocalSearchParams<{ id?: string; ownerId?: string }>();
   const isEditing = !!id;
   const { themeId, fontFamilyName } = useTheme();
   const theme = getThemeTokens(themeId);
@@ -62,6 +55,7 @@ export default function AddDiaryScreen() {
   // 寵物選單狀態
   const [availablePets, setAvailablePets] = useState<string[]>([]);
   const [petOwnerMap, setPetOwnerMap] = useState<Record<string, string>>({});
+  const [petIdMap, setPetIdMap] = useState<Record<string, string>>({});
   const [selectedPets, setSelectedPets] = useState<string[]>([]);
   const [isPetDropdownVisible, setIsPetDropdownVisible] = useState(false);
 
@@ -71,6 +65,9 @@ export default function AddDiaryScreen() {
   const [diaryContent, setDiaryContent] = useState('');
   const [isDiaryExpanded, setIsDiaryExpanded] = useState(false);
   const [isUploadExpanded, setIsUploadExpanded] = useState(false);
+  const [imageUri, setImageUri] = useState('');
+  const [attachments, setAttachments] = useState<SelectedAttachment[]>([]);
+  const [isSaving, setIsSaving] = useState(false);
   const [appetite, setAppetite] = useState(0); // 食慾狀態，預設 0 (未檢測)
   const [poopState, setPoopState] = useState('無'); // 排便狀態，預設 '無'
   const [feedState, setFeedState] = useState('無'); // 飲食狀態，預設 '無'
@@ -96,10 +93,13 @@ export default function AddDiaryScreen() {
       const names = writablePets.map(p => p.name);
       
       const ownerMap: Record<string, string> = {};
+      const idMap: Record<string, string> = {};
       writablePets.forEach(p => {
         ownerMap[p.name] = p.ownerId || user.uid;
+        idMap[p.name] = p.id;
       });
       setPetOwnerMap(ownerMap);
+      setPetIdMap(idMap);
       setAvailablePets(names);
 
       if (!isEditing && names.length > 0 && selectedPets.length === 0) {
@@ -108,12 +108,13 @@ export default function AddDiaryScreen() {
     });
 
     if (isEditing && id && typeof id === 'string') {
-      diaryService.getAll([user.uid]).then(diaries => {
-        const doc = diaries.find(d => d.id === id);
+      diaryService.getById(ownerId || user.uid, id).then(doc => {
         if (doc) {
           setTitle(doc.title || '');
           setDiaryContent(doc.content || '');
           setIsDiaryExpanded(!!doc.content);
+          setImageUri(doc.imageUrl || '');
+          setAttachments((doc.attachments || []).map(file => ({ ...file })));
           setIsoDate(doc.date);
           const dDate = new Date(doc.date);
           const days = ['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT'];
@@ -136,7 +137,7 @@ export default function AddDiaryScreen() {
         }
       });
     }
-  }, [user, isEditing, id]);
+  }, [user, isEditing, id, ownerId]);
 
   const togglePet = (pet: string) => {
     if (selectedPets.includes(pet)) {
@@ -159,6 +160,114 @@ export default function AddDiaryScreen() {
     { icon: IconLength, label: '身長', value: length },
   ];
 
+  const pickDiaryImage = async () => {
+    const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (!permission.granted) {
+      Alert.alert('需要相簿權限', '請允許蜥日日記讀取相簿，才能加入日記照片。');
+      return;
+    }
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ['images'],
+      allowsEditing: true,
+      aspect: [4, 3],
+      quality: 0.8,
+    });
+    if (!result.canceled && result.assets[0]?.uri) setImageUri(result.assets[0].uri);
+  };
+
+  const pickAttachments = async () => {
+    const result = await DocumentPicker.getDocumentAsync({
+      multiple: true,
+      copyToCacheDirectory: true,
+    });
+    if (!result.canceled) {
+      setAttachments(current => [
+        ...current,
+        ...result.assets.map(asset => ({
+          uri: asset.uri,
+          name: asset.name,
+          mimeType: asset.mimeType,
+        })),
+      ].slice(0, 5));
+    }
+  };
+
+  const handleSave = async () => {
+    if (!user || isSaving) return;
+    if (selectedPets.length === 0) {
+      Alert.alert('提示', '請至少選擇一隻寵物。');
+      return;
+    }
+
+    const selectedOwners = Array.from(new Set(selectedPets.map(name => petOwnerMap[name] || user.uid)));
+    if (selectedOwners.length > 1) {
+      Alert.alert('請分開建立日記', '為避免共育資料跨飼主混在一起，同一篇日記只能選擇相同主人的寵物。');
+      return;
+    }
+
+    const targetOwnerId = isEditing ? ownerId || user.uid : selectedOwners[0] || user.uid;
+    const remoteAttachments = attachments
+      .filter(file => file.url)
+      .map(file => ({ name: file.name, url: file.url as string, mimeType: file.mimeType }));
+    const newData: Omit<DiaryDoc, 'id'> = {
+      date: isoDate,
+      title: title || '未命名標題',
+      weatherIcon: 'weather-sunny',
+      content: diaryContent,
+      imageUrl: imageUri.startsWith('http') ? imageUri : undefined,
+      attachments: remoteAttachments,
+      petIds: selectedPets.map(name => petIdMap[name]).filter(Boolean),
+      pets: selectedPets.map(name => ({
+        name,
+        temp,
+        humid,
+        states: {
+          bask: parseInt(baskMinutes, 10) > 0,
+          feed: feedState !== '無',
+          bath: parseInt(bathMinutes, 10) > 0,
+          poop: poopState === '有',
+        },
+      })),
+      records: { temp, humid, weight, length, bask: baskMinutes, bath: bathMinutes, poop: poopState, feed: feedState, appetite },
+    };
+
+    setIsSaving(true);
+    try {
+      const diaryId = isEditing && typeof id === 'string'
+        ? id
+        : await diaryService.add(targetOwnerId, newData);
+      if (isEditing) await diaryService.update(targetOwnerId, diaryId, newData);
+
+      const uploadedImage = imageUri && !imageUri.startsWith('http')
+        ? await diaryService.uploadImage(targetOwnerId, diaryId, imageUri)
+        : newData.imageUrl;
+      const localAttachments = attachments.filter(file => file.uri && !file.url);
+      const uploadedAttachments = await Promise.all(
+        localAttachments.map(file => diaryService.uploadAttachment(targetOwnerId, diaryId, {
+          uri: file.uri as string,
+          name: file.name,
+          mimeType: file.mimeType,
+        })),
+      );
+      if (uploadedImage || uploadedAttachments.length > 0) {
+        await diaryService.update(targetOwnerId, diaryId, {
+          imageUrl: uploadedImage,
+          attachments: [...remoteAttachments, ...uploadedAttachments],
+        });
+      }
+
+      if (isEditing) {
+        router.navigate({ pathname: '/(tabs)/diary/view', params: { id: diaryId, ownerId: targetOwnerId } });
+      } else {
+        router.navigate('/(tabs)/diary');
+      }
+    } catch {
+      Alert.alert('錯誤', '日記儲存或附件上傳失敗，請確認網路後再試。');
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
   return (
     <BaseScreen
       scrollable={false}
@@ -167,47 +276,12 @@ export default function AddDiaryScreen() {
           actions={[
             { id: 'back', onPress: () => {
               if (isEditing && id) {
-                router.navigate({ pathname: '/(tabs)/diary/view', params: { id } });
+                router.navigate({ pathname: '/(tabs)/diary/view', params: { id, ownerId } });
               } else {
                 router.navigate('/(tabs)/diary');
               }
             }},
-            { id: 'confirm', onPress: () => { 
-              if (!user) return;
-              
-              const newData: Omit<DiaryDoc, 'id'> = {
-                date: isoDate,
-                title: title || '未命名標題',
-                weatherIcon: 'weather-sunny',
-                content: diaryContent,
-                pets: selectedPets.map(name => ({
-                  name,
-                  temp,
-                  humid,
-                  states: { bask: parseInt(baskMinutes)>0, feed: feedState!=='無', bath: parseInt(bathMinutes)>0, poop: poopState==='有' }
-                })),
-                records: {
-                  temp, humid, weight, length, bask: baskMinutes, bath: bathMinutes, poop: poopState, feed: feedState, appetite
-                }
-              };
-
-              if (appetite > 0) {
-                const now = new Date();
-                addFeedData(`${now.getMonth()+1}/${now.getDate()}`, appetite);
-              }
-
-              const targetOwnerId = selectedPets.length > 0 ? petOwnerMap[selectedPets[0]] || user.uid : user.uid;
-
-              if (isEditing && typeof id === 'string') {
-                diaryService.update(targetOwnerId, id, newData).then(() => {
-                  router.navigate({ pathname: '/(tabs)/diary/view', params: { id } });
-                });
-              } else {
-                diaryService.add(targetOwnerId, newData).then(() => {
-                  router.navigate('/(tabs)/diary');
-                });
-              }
-            }},
+            { id: 'confirm', onPress: handleSave },
           ]}
         />
       }
@@ -229,8 +303,9 @@ export default function AddDiaryScreen() {
           <View style={[styles.mainCard, { backgroundColor: theme.background }]}>
             {/* 照片區域 */}
             <View style={[styles.photoArea, { backgroundColor: theme.accentNoon }]}>
+              {imageUri ? <Image source={{ uri: imageUri }} style={StyleSheet.absoluteFillObject} resizeMode="cover" /> : null}
               {/* 新增照片按鈕 */}
-              <Pressable style={styles.addPhotoButton} onPress={() => { /* TODO: 開啟相簿 */ }}>
+              <Pressable style={styles.addPhotoButton} onPress={pickDiaryImage}>
                 <Image
                   source={require('../../../assets/icons/icon-image.png')}
                   style={[styles.addPhotoIcon, { tintColor: '#FFFFFF' }]}
@@ -463,7 +538,14 @@ export default function AddDiaryScreen() {
 
           {isUploadExpanded && (
             <View style={[styles.uploadExpandedCard, { backgroundColor: theme.background }]}>
-              <Pressable style={[styles.uploadAddButton, { borderColor: theme.primary }]} onPress={() => { /* TODO: 開啟檔案選擇器 */ }}>
+              {attachments.map((file, index) => (
+                <Pressable key={`${file.name}-${index}`} onPress={() => setAttachments(current => current.filter((_, itemIndex) => itemIndex !== index))}>
+                  <Text style={[styles.uploadAddText, { color: theme.primary, fontFamily: fontFamilyName }]}>
+                    {file.name}　×
+                  </Text>
+                </Pressable>
+              ))}
+              {attachments.length < 5 && <Pressable style={[styles.uploadAddButton, { borderColor: theme.primary }]} onPress={pickAttachments}>
                 <Image
                   source={require('../../../assets/icons/icon-image.png')}
                   style={[styles.uploadAddIcon, { tintColor: theme.primary }]}
@@ -471,7 +553,7 @@ export default function AddDiaryScreen() {
                 <Text style={[styles.uploadAddText, { color: theme.primary, fontFamily: fontFamilyName }]}>
                   新增照片 / 檔案
                 </Text>
-              </Pressable>
+              </Pressable>}
               <Text style={[styles.uploadHint, { color: theme.primary + '80', fontFamily: fontFamilyName }]}>
                 可上傳多個檔案（建議單檔不超過 10MB）
               </Text>

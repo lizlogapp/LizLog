@@ -22,7 +22,13 @@ import { medicalService, MedicalDoc } from '../../../src/services/firestoreServi
 
 export default function MedicalDetailScreen() {
   const router = useRouter();
-  const { id, petId } = useLocalSearchParams<{ id: string, petId?: string }>();
+  const { id, petId, ownerId, canEdit: canEditStr } = useLocalSearchParams<{
+    id: string;
+    petId?: string;
+    ownerId?: string;
+    canEdit?: string;
+  }>();
+  const canEdit = canEditStr !== 'false';
   const { themeId, fontFamilyName } = useTheme();
   const theme = getThemeTokens(themeId);
 
@@ -35,22 +41,25 @@ export default function MedicalDetailScreen() {
 
   useEffect(() => {
     if (!user || !id) return;
-    medicalService.getById(user.uid, id).then(doc => {
+    medicalService.getById(ownerId || user.uid, id).then(doc => {
       if (doc) {
         setData(doc);
         setTagColor(doc.tagColor || '#FF6B6B');
       }
     });
-  }, [user, id]);
+  }, [user, id, ownerId]);
 
   useEffect(() => {
-    if (data && user && tagColor !== data.tagColor) {
-      medicalService.update(user.uid, id, { tagColor }).catch(e => console.log('Tag color update failed', e));
+    if (data && user && canEdit && tagColor !== data.tagColor) {
+      medicalService.update(ownerId || user.uid, id, { tagColor }).catch(() => {
+        setTagColor(data.tagColor);
+      });
       setData(prev => prev ? { ...prev, tagColor } : null);
     }
-  }, [tagColor]);
+  }, [tagColor, data, user, id, ownerId, canEdit]);
 
   const handleTagClick = () => {
+    if (!canEdit) return;
     const idx = availableColors.indexOf(tagColor);
     setTagColor(availableColors[(idx + 1) % availableColors.length]);
   };
@@ -78,7 +87,7 @@ export default function MedicalDetailScreen() {
         scrollable={false}
         floatingAction={
           <FloatingActionBar
-            actions={[{ id: 'back', onPress: () => router.navigate({ pathname: '/(tabs)/pets/medical', params: { id: petId || '1' } }) }]}
+            actions={[{ id: 'back', onPress: () => router.navigate({ pathname: '/(tabs)/pets/medical', params: { id: petId || '1', ownerId, canEdit: canEdit.toString() } }) }]}
           />
         }
       >
@@ -95,7 +104,7 @@ export default function MedicalDetailScreen() {
       floatingAction={
         <FloatingActionBar
           actions={[
-            { id: 'back', onPress: () => router.navigate({ pathname: '/(tabs)/pets/medical', params: { id: petId || '1' } }) },
+            { id: 'back', onPress: () => router.navigate({ pathname: '/(tabs)/pets/medical', params: { id: petId || '1', ownerId, canEdit: canEdit.toString() } }) },
           ]}
         />
       }
@@ -182,12 +191,12 @@ export default function MedicalDetailScreen() {
 
           {/* Bottom Actions */}
           <View style={styles.actionSection}>
-            <Pressable style={[styles.actionButton, { backgroundColor: theme.background }]} onPress={() => router.push({ pathname: '/(tabs)/pets/add-medical', params: { id: id || '1' } })}>
+            {canEdit && <Pressable style={[styles.actionButton, { backgroundColor: theme.background }]} onPress={() => router.push({ pathname: '/(tabs)/pets/add-medical', params: { id, petId, ownerId } })}>
               <Image source={require('../../../assets/icons/icon-edit.png')} style={[styles.actionIcon, { tintColor: theme.primary }]} />
-            </Pressable>
-            <Pressable style={[styles.actionButton, { backgroundColor: theme.background }]} onPress={() => setShowDeleteModal(true)}>
+            </Pressable>}
+            {canEdit && <Pressable style={[styles.actionButton, { backgroundColor: theme.background }]} onPress={() => setShowDeleteModal(true)}>
               <Image source={require('../../../assets/icons/icon-delete.png')} style={[styles.actionIcon, { tintColor: theme.primary }]} />
-            </Pressable>
+            </Pressable>}
           </View>
         </View>
       </ScrollView>
@@ -209,9 +218,9 @@ export default function MedicalDetailScreen() {
               
               <Pressable style={[styles.modalButton, { backgroundColor: theme.primary }]} onPress={() => {
                 if (user && id) {
-                  medicalService.delete(user.uid, id).then(() => {
+                  medicalService.delete(ownerId || user.uid, id).then(() => {
                     setShowDeleteModal(false);
-                    router.navigate({ pathname: '/(tabs)/pets/medical', params: { id: petId || '1' } });
+                    router.navigate({ pathname: '/(tabs)/pets/medical', params: { id: petId || '1', ownerId, canEdit: canEdit.toString() } });
                   });
                 }
               }}>

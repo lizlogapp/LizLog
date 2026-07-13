@@ -2,12 +2,12 @@
   "expo": {
     "name": "蜥日日記",
     "slug": "lizlog",
-    "version": "1.0.0",
+    "version": "0.1.0",
     "orientation": "portrait",
-    "icon": "./assets/branding/logos/logo-image-only.png",
+    "icon": "./assets/branding/logos/logo-image.png",
     "userInterfaceStyle": "light",
     "splash": {
-      "image": "./assets/branding/logos/logo-image-only.png",
+      "image": "./assets/branding/logos/logo-image.png",
       "resizeMode": "contain",
       "backgroundColor": "#FFFEFA"
     },
@@ -18,16 +18,30 @@
       "package": "com.lizlog.app",
       "adaptiveIcon": {
         "backgroundColor": "#FFFEFA",
-        "foregroundImage": "./assets/branding/logos/logo-image-only.png"
+        "foregroundImage": "./assets/branding/logos/logo-image.png"
       }
     },
     "web": {
-      "favicon": "./assets/branding/logos/logo-image-only.png"
+      "favicon": "./assets/branding/logos/logo-image.png"
     },
     "scheme": "lizlog",
     "plugins": [
       "expo-router",
-      "expo-web-browser"
+      "expo-web-browser",
+      "expo-font",
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "允許蜥日日記選擇寵物、日記與醫療紀錄照片。"
+        }
+      ],
+      [
+        "expo-notifications",
+        {
+          "color": "#FF7300",
+          "defaultChannel": "lizlog-reminders"
+        }
+      ]
     ],
     "extra": {
       "router": {},

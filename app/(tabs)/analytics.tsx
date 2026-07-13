@@ -12,23 +12,14 @@ import { diaryService, petService, DiaryDoc } from '../../src/services/firestore
 
 // 引入從 temp 新增進來的 SVG 圖示
 // 引入從 temp 新增進來並翻成英文避免組件撞名的 SVG 圖示
-// @ts-ignore
 import IconTemp from '../../assets/icons/icon-temp.svg';
-// @ts-ignore
 import IconHumid from '../../assets/icons/icon-humid.svg';
-// @ts-ignore
 import IconBask from '../../assets/icons/icon-bask.svg';
-// @ts-ignore
 import IconWeight from '../../assets/icons/icon-weight.svg';
-// @ts-ignore
 import IconLength from '../../assets/icons/icon-length.svg';
-// @ts-ignore
 import IconPoop from '../../assets/icons/icon-poop.svg';
-// @ts-ignore
 import IconMolt from '../../assets/icons/icon-molt.svg';
-// @ts-ignore
 import IconBath from '../../assets/icons/icon-bath.svg';
-// @ts-ignore
 import IconFeed from '../../assets/icons/icon-feed.svg';
 
 export default function AnalyticsScreen() {
@@ -57,10 +48,7 @@ export default function AnalyticsScreen() {
         setCurrentPetName('未設定');
       }
 
-      const ownerIds = Array.from(new Set(pets.map(p => p.ownerId || user.uid)));
-      if (ownerIds.length === 0) ownerIds.push(user.uid);
-      
-      diaryService.getAll(ownerIds).then(entries => {
+      diaryService.getAll(user.uid).then(entries => {
         setDiaryEntries(entries);
       });
     });
@@ -112,6 +100,38 @@ export default function AnalyticsScreen() {
   };
 
   const latestStatus = computeLatestStatus();
+
+  const buildChartData = (chartName: string, period: string) => {
+    const keyMap: Record<string, keyof NonNullable<DiaryDoc['records']>> = {
+      '溫度變化圖': 'temp',
+      '濕度變化圖': 'humid',
+      '日照變化圖': 'bask',
+      '泡澡變化圖': 'bath',
+      '飲食變化圖': 'appetite',
+      '體重變化圖': 'weight',
+      '身長變化圖': 'length',
+    };
+    const key = keyMap[chartName];
+    if (!key) return [];
+
+    const maxPoints = period === '日' ? 7 : period === '週' ? 7 : period === '月' ? 10 : 12;
+    return diaryEntries
+      .filter(entry => entry.pets?.some(pet => pet.name === currentPetName))
+      .sort((a, b) => a.date.localeCompare(b.date))
+      .map(entry => {
+        const pet = entry.pets.find(item => item.name === currentPetName);
+        const fallback = key === 'temp' ? pet?.temp : key === 'humid' ? pet?.humid : undefined;
+        const raw = entry.records?.[key] ?? fallback;
+        const val = typeof raw === 'number' ? raw : Number.parseFloat(raw || '');
+        const date = new Date(entry.date);
+        return {
+          label: Number.isNaN(date.getTime()) ? entry.date : `${date.getMonth() + 1}/${date.getDate()}`,
+          val,
+        };
+      })
+      .filter(point => Number.isFinite(point.val))
+      .slice(-maxPoints);
+  };
 
   const chartButtons = [
     { text: '溫度變化圖', Icon: IconTemp },
@@ -340,9 +360,7 @@ export default function AnalyticsScreen() {
           // 如果當前的 tab 不在可用的 tabs 內，退回 '週'
           const displayTab = availableTabs.includes(activeChartTab) ? activeChartTab : '週';
           
-          let currentMockData: any[] = [];
-          // 圖表資料暫時為空，待日後 IoT 感測器串接後可提供即時數據
-          // 目前圖表區域會顯示為空白
+          const currentMockData = buildChartData(btn.text, displayTab);
 
           // 預先計算每個點的高度比例，用於折線圖或長條圖
           const processedData = currentMockData.map((data: any) => {
@@ -432,10 +450,10 @@ export default function AnalyticsScreen() {
                       // 從共用資料中心取得事件日期
                       // 從日記數據計算事件日期
                       const eventDays: number[] = [];
-                      const stateKey = btn.text === '排便日曆' ? 'poop' : 'bath'; // 蓛皮目前尚無專屬欄位，暫用 bath 替代
+                      const stateKey = btn.text === '排便日曆' ? 'poop' : null;
                       diaryEntries.forEach(entry => {
                         const petData = entry.pets?.find(p => p.name === currentPetName);
-                        if (petData?.states?.[stateKey as keyof typeof petData.states]) {
+                        if (stateKey && petData?.states?.[stateKey]) {
                           // 解析日期字串
                           const dateMatch = entry.date?.match(/(\d{4})\/(\d{2})\/(\d{2})/);
                           if (dateMatch) {
@@ -636,7 +654,7 @@ export default function AnalyticsScreen() {
                   {/* 底部按鈕 */}
                   <Pressable 
                     style={[styles.chartFooterButton, { backgroundColor: theme.background, borderColor: 'transparent', shadowColor: '#000000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.25, shadowRadius: 7, elevation: 4 }]}
-                    onPress={() => Alert.alert('提示', '詳細數據清單與報表功能建置中...')}
+                    onPress={() => Alert.alert('版本範圍', '詳細數據清單與報表排入 0.2.0；0.1.0 先提供趨勢圖與核心照護數據。')}
                   >
                     <Text style={[styles.chartFooterButtonText, { color: theme.primary, fontFamily: fontFamilyName }]}>
                       {btn.text.includes('變化圖') ? `查看${btn.text.replace('變化圖', '')}詳細數據` : `查看${btn.text.replace('日曆', '')}詳細紀錄`}

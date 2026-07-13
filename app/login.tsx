@@ -22,6 +22,7 @@ import {
   GoogleAuthProvider,
   signInWithCredential,
   sendEmailVerification,
+  sendPasswordResetEmail,
   signOut,
 } from 'firebase/auth';
 import { auth } from '../src/config/firebase';
@@ -141,33 +142,33 @@ export default function LoginScreen() {
       
       // 檢查信箱是否驗證
       if (!user.emailVerified) {
-        Alert.alert(
-          '需要驗證電子郵件',
-          '您的電子郵件尚未驗證。請先到您的信箱點擊驗證連結。如果您沒收到，可以點擊下方按鈕重新發送。',
-          [
-            {
-              text: '重新發送驗證信',
-              onPress: async () => {
-                try {
-                  await sendEmailVerification(user);
-                  Alert.alert('已發送', '驗證信已重新寄出，請檢查您的收件匣。');
-                } catch (e) {
-                  Alert.alert('錯誤', '發送失敗，請稍後再試。');
-                } finally {
-                  await signOut(auth);
-                }
-              }
-            },
-            {
-              text: '確定',
-              style: 'cancel',
-              onPress: async () => {
-                await signOut(auth);
-              }
-            }
-          ]
-        );
+        try {
+          await sendEmailVerification(user);
+        } catch {
+          // Firebase 可能因寄送頻率限制拒絕重寄；仍需立即登出未驗證帳號。
+        }
+        await signOut(auth);
+        Alert.alert('需要驗證電子郵件', '驗證信已寄出。請完成信箱驗證後再登入。');
+        return;
       }
+    } catch (error) {
+      handleAuthError(error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleForgotPassword = async () => {
+    const normalizedEmail = email.trim();
+    if (!normalizedEmail) {
+      Alert.alert('提示', '請先輸入註冊信箱');
+      return;
+    }
+
+    setIsLoading(true);
+    try {
+      await sendPasswordResetEmail(auth, normalizedEmail);
+      Alert.alert('已發送', '密碼重設信已寄出，請檢查您的收件匣。');
     } catch (error) {
       handleAuthError(error);
     } finally {
@@ -232,7 +233,7 @@ export default function LoginScreen() {
           {/* Logo 區塊 */}
           <View style={styles.logoContainer}>
             <Image
-              source={require('../assets/branding/logos/logo-square-with-text.png')}
+              source={require('../assets/branding/logos/logo-text-square.png')}
               style={styles.logoImage}
               resizeMode="contain"
             />
@@ -285,7 +286,7 @@ export default function LoginScreen() {
 
             {/* 忘記密碼 */}
             <View style={styles.forgotPasswordRow}>
-              <Pressable disabled={anyLoading}>
+              <Pressable disabled={anyLoading} onPress={handleForgotPassword}>
                 <Text style={[styles.forgotText, { color: theme.primary, fontFamily: fontFamilyName }]}>
                   忘記密碼？
                 </Text>

@@ -15,8 +15,7 @@ import { paletteColors } from '../../../src/theme/themeColorSettings';
 import { BaseScreen } from '../../../src/components/common/BaseScreen';
 import { useAuth } from '../../../src/contexts/AuthContext';
 import { petService, PetDoc } from '../../../src/services/firestoreService';
-// @ts-ignore
-import LogoIcon from '../../../assets/branding/logos/logo-icon.svg';
+import LogoIcon from '../../../assets/branding/logos/logo-image.svg';
 
 // 將從 Firestore 取得的資料轉換格式
 interface PetData {

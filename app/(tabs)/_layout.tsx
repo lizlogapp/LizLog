@@ -13,13 +13,20 @@ import HomeIcon from '../../assets/tab-bar/home-default.svg';
 import PetsIcon from '../../assets/tab-bar/pets-default.svg';
 import SettingsIcon from '../../assets/tab-bar/settings-default.svg';
 
+type SvgIconProps = {
+  width?: string | number;
+  height?: string | number;
+  preserveAspectRatio?: string;
+  color?: string;
+};
+
 function TabsLayoutInner() {
   const { themeId } = useTheme();
   const theme = getThemeTokens(themeId);
   const insets = useSafeAreaInsets();
 
   // Helper renderer to encapsulate active logic
-  const renderIcon = (IconComponent: React.FC<any>, focused: boolean) => {
+  const renderIcon = (IconComponent: React.ComponentType<SvgIconProps>, focused: boolean) => {
     if (focused) {
       return (
         <View style={{ width: 50, height: 50, justifyContent: 'center', alignItems: 'center' }}>

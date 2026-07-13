@@ -1,5 +1,5 @@
 import { useRouter, useLocalSearchParams } from 'expo-router';
-import React, { useState, useRef } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import {
   View,
   Text,
@@ -9,6 +9,7 @@ import {
   Dimensions,
   Pressable,
   Modal,
+  ActivityIndicator,
 } from 'react-native';
 import Slider from '@react-native-community/slider';
 import { useTheme } from '../../../src/theme/ThemeContext';
@@ -16,24 +17,18 @@ import { getThemeTokens } from '../../../src/theme/themeSettings';
 import { getFontSize } from '../../../src/theme/typographySettings';
 import { FloatingActionBar } from '../../../src/components/FloatingActionBar';
 import { BaseScreen } from '../../../src/components/common/BaseScreen';
-import { mockDiaryRecord, appetiteToLabel } from '../../../src/data/mockDiaryData';
+import { appetiteToLabel } from '../../../src/data/mockDiaryData';
+import { useAuth } from '../../../src/contexts/AuthContext';
+import { diaryService, DiaryDoc } from '../../../src/services/firestoreService';
 
 // SVG Icons
-// @ts-ignore
 import IconTemp from '../../../assets/icons/icon-temp.svg';
-// @ts-ignore
 import IconHumid from '../../../assets/icons/icon-humid.svg';
-// @ts-ignore
 import IconBask from '../../../assets/icons/icon-bask.svg';
-// @ts-ignore
 import IconFeed from '../../../assets/icons/icon-feed.svg';
-// @ts-ignore
 import IconBath from '../../../assets/icons/icon-bath.svg';
-// @ts-ignore
 import IconPoop from '../../../assets/icons/icon-poop.svg';
-// @ts-ignore
 import IconWeight from '../../../assets/icons/icon-weight.svg';
-// @ts-ignore
 import IconLength from '../../../assets/icons/icon-length.svg';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
@@ -45,48 +40,73 @@ const { width: SCREEN_WIDTH } = Dimensions.get('window');
  */
 export default function DiaryViewScreen() {
   const router = useRouter();
-  const { id, from } = useLocalSearchParams<{ id: string; from?: string }>();
-  const diaryId = id ? parseInt(id, 10) : null;
+  const { id, ownerId } = useLocalSearchParams<{ id: string; ownerId?: string; from?: string }>();
+  const { user } = useAuth();
   const { themeId, fontFamilyName } = useTheme();
   const theme = getThemeTokens(themeId);
   const labelColor = theme.primary;
   const valueColor = theme.accentHot;
 
-  // 模擬日記資料（未來從資料庫根據 diaryId 取得）
-  const mockDiary = {
-    id: 1,
-    dateStr: 'THU  7/17/2025',
-    weatherIcon: require('../../../assets/icons/weather-sunny.png'),
-    title: '初次探索！家旁邊的新公園草地',
-    content: `今天天氣真的太棒了，萬里無雲！看著窗外的陽光，突然有個念頭，想帶Delete 去體驗一下真正的草地是什麼感覺，而不是總待在飼養箱裡。\n\n我們去了家旁邊剛落成的小公園，找了一塊乾淨的草坪。剛把他放下來的時候，他還有些小緊張，小心翼翼地，那個小表情真的太可愛了！\n大概過了五分鐘，他就完全放開了，開始好奇地四處聞聞、到處探索。看著他在陽光下，鱗片閃閃發光的樣子，滿足地樣子，真的太可愛了！\n\n回家後，他的食慾也變得特別好，看來今天的探險消耗了不少體力。這會成為我們最珍貴的回憶！`,
-    petName: 'DELETE',
-    carouselImages: [
-      require('../../../assets/user-uploads/lizard-001.jpg'),
-      require('../../../assets/user-uploads/lizard-002.jpg'),
-      require('../../../assets/user-uploads/lizard-003.jpg'),
-    ],
+  const [diary, setDiary] = useState<(DiaryDoc & { id: string }) | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+
+  useEffect(() => {
+    let isActive = true;
+    if (!user || !id) {
+      setIsLoading(false);
+      return () => {
+        isActive = false;
+      };
+    }
+
+    setIsLoading(true);
+    diaryService
+      .getById(ownerId || user.uid, id)
+      .then(result => {
+        if (isActive) setDiary(result);
+      })
+      .finally(() => {
+        if (isActive) setIsLoading(false);
+      });
+
+    return () => {
+      isActive = false;
+    };
+  }, [id, ownerId, user]);
+
+  const date = diary?.date ? new Date(diary.date) : null;
+  const days = ['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT'];
+  const dateStr = date && !Number.isNaN(date.getTime())
+    ? `${days[date.getDay()]}  ${date.getMonth() + 1}/${date.getDate()}/${date.getFullYear()}`
+    : diary?.date || '-';
+  const primaryPet = diary?.pets?.[0];
+  const records = diary?.records ?? {};
+  const diaryImage = diary?.imageUrl
+    ? { uri: diary.imageUrl }
+    : require('../../../assets/branding/logos/logo-image.png');
+  const displayDiary = {
+    id: diary?.id || '',
+    dateStr,
+    weatherIcon: diary?.weatherIcon?.includes('cloud')
+      ? require('../../../assets/icons/weather-cloudy.png')
+      : require('../../../assets/icons/weather-sunny.png'),
+    title: diary?.title || '未命名日記',
+    content: diary?.content || '尚未填寫日記內容。',
+    petName: diary?.pets?.map(pet => pet.name).join('、') || '未指定寵物',
+    carouselImages: [diaryImage],
     sensorData: {
-      temp: mockDiaryRecord.temp,
-      humid: mockDiaryRecord.humid,
-      bask: mockDiaryRecord.bask,
-      feed: mockDiaryRecord.feed,
-      appetite: mockDiaryRecord.appetite,
-      bath: mockDiaryRecord.bath,
-      poop: mockDiaryRecord.poop,
-      weight: mockDiaryRecord.weight,
-      length: mockDiaryRecord.length,
+      temp: records.temp || primaryPet?.temp || '-',
+      humid: records.humid || primaryPet?.humid || '-',
+      bask: records.bask || '-',
+      feed: records.feed || '-',
+      appetite: records.appetite || 0,
+      bath: records.bath || '-',
+      poop: records.poop || '-',
+      weight: records.weight || '-',
+      length: records.length || '-',
     },
-    statusIcons: {
-      bask: false,
-      feed: true,
-      bath: false,
-      poop: true,
-    },
-    attachments: [
-      require('../../../assets/user-uploads/lizard-004.jpg'),
-      require('../../../assets/user-uploads/lizard-005.jpg'),
-      require('../../../assets/user-uploads/lizard-006.jpg'),
-    ],
+    statusIcons: primaryPet?.states || { bask: false, feed: false, bath: false, poop: false },
+    attachments: diary?.imageUrl ? [diaryImage] : [],
   };
 
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
@@ -103,20 +123,44 @@ export default function DiaryViewScreen() {
   };
 
   const handleImageTap = () => {
-    const nextIndex = (currentImageIndex + 1) % mockDiary.carouselImages.length;
+    const nextIndex = (currentImageIndex + 1) % displayDiary.carouselImages.length;
     carouselRef.current?.scrollTo({ x: nextIndex * cardWidth, animated: true });
   };
 
   const recordItems = [
-    { icon: IconTemp, label: '溫度', value: mockDiary.sensorData.temp },
-    { icon: IconHumid, label: '濕度', value: mockDiary.sensorData.humid },
-    { icon: IconBask, label: '日照', value: mockDiary.sensorData.bask },
-    { icon: IconFeed, label: '飲食', value: mockDiary.sensorData.feed, appetite: mockDiary.sensorData.appetite },
-    { icon: IconBath, label: '泡澡', value: mockDiary.sensorData.bath },
-    { icon: IconPoop, label: '排便', value: mockDiary.sensorData.poop },
-    { icon: IconWeight, label: '體重', value: mockDiary.sensorData.weight },
-    { icon: IconLength, label: '身長', value: mockDiary.sensorData.length },
+    { icon: IconTemp, label: '溫度', value: displayDiary.sensorData.temp },
+    { icon: IconHumid, label: '濕度', value: displayDiary.sensorData.humid },
+    { icon: IconBask, label: '日照', value: displayDiary.sensorData.bask },
+    { icon: IconFeed, label: '飲食', value: displayDiary.sensorData.feed, appetite: displayDiary.sensorData.appetite },
+    { icon: IconBath, label: '泡澡', value: displayDiary.sensorData.bath },
+    { icon: IconPoop, label: '排便', value: displayDiary.sensorData.poop },
+    { icon: IconWeight, label: '體重', value: displayDiary.sensorData.weight },
+    { icon: IconLength, label: '身長', value: displayDiary.sensorData.length },
   ];
+
+  if (isLoading) {
+    return (
+      <BaseScreen scrollable={false}>
+        <View style={styles.stateContainer}>
+          <ActivityIndicator color={theme.primary} />
+          <Text style={[styles.stateText, { color: theme.primary, fontFamily: fontFamilyName }]}>讀取日記中…</Text>
+        </View>
+      </BaseScreen>
+    );
+  }
+
+  if (!diary) {
+    return (
+      <BaseScreen scrollable={false}>
+        <View style={styles.stateContainer}>
+          <Text style={[styles.stateText, { color: theme.primary, fontFamily: fontFamilyName }]}>找不到這篇日記。</Text>
+          <Pressable onPress={() => router.navigate('/(tabs)/diary')}>
+            <Text style={[styles.stateLink, { color: theme.accentHot, fontFamily: fontFamilyName }]}>返回日記列表</Text>
+          </Pressable>
+        </View>
+      </BaseScreen>
+    );
+  }
 
   return (
     <BaseScreen
@@ -128,7 +172,10 @@ export default function DiaryViewScreen() {
               // 返回層級：日記檢視 -> 日記列表
               router.navigate('/(tabs)/diary');
             }},
-            { id: 'edit', onPress: () => router.push({ pathname: '/(tabs)/diary/add', params: { id: id || '1' } }) },
+            { id: 'edit', onPress: () => router.push({
+              pathname: '/(tabs)/diary/add',
+              params: { id, ownerId: diary?.ownerId || ownerId },
+            }) },
           ]}
         />
       }
@@ -149,7 +196,7 @@ export default function DiaryViewScreen() {
                 onScroll={handleCarouselScroll}
                 scrollEventThrottle={16}
               >
-                {mockDiary.carouselImages.map((img, idx) => (
+                {displayDiary.carouselImages.map((img, idx) => (
                   <Pressable key={idx} onPress={handleImageTap} style={{ width: cardWidth }}>
                     <Image source={img} style={styles.carouselImage} />
                   </Pressable>
@@ -158,7 +205,7 @@ export default function DiaryViewScreen() {
 
               {/* 分頁指示點 */}
               <View style={styles.dotsContainer}>
-                {mockDiary.carouselImages.map((_, idx) => (
+                {displayDiary.carouselImages.map((_, idx) => (
                   <View
                     key={idx}
                     style={[
@@ -172,7 +219,7 @@ export default function DiaryViewScreen() {
               {/* 寵物標籤 */}
               <View style={styles.petTagsContainer}>
                 <View style={[styles.petTag, { backgroundColor: theme.accentDawn }]}>
-                  <Text style={[styles.petTagText, { color: theme.primary, fontFamily: fontFamilyName }]}>{mockDiary.petName}</Text>
+                  <Text style={[styles.petTagText, { color: theme.primary, fontFamily: fontFamilyName }]}>{displayDiary.petName}</Text>
                 </View>
               </View>
             </View>
@@ -180,18 +227,18 @@ export default function DiaryViewScreen() {
             {/* 日期 + 天氣 + 標題 + 數據列 */}
             <View style={styles.infoContainer}>
               <View style={styles.dateRow}>
-                <Text style={[styles.dateText, { color: valueColor, fontFamily: fontFamilyName }]}>{mockDiary.dateStr}</Text>
-                <Image source={mockDiary.weatherIcon} style={[styles.weatherIcon, { tintColor: valueColor }]} />
+                <Text style={[styles.dateText, { color: valueColor, fontFamily: fontFamilyName }]}>{displayDiary.dateStr}</Text>
+                <Image source={displayDiary.weatherIcon} style={[styles.weatherIcon, { tintColor: valueColor }]} />
               </View>
-              <Text style={[styles.titleText, { color: valueColor, fontFamily: fontFamilyName }]}>{mockDiary.title}</Text>
+              <Text style={[styles.titleText, { color: valueColor, fontFamily: fontFamilyName }]}>{displayDiary.title}</Text>
               <View style={styles.metricRow}>
-                <Text style={[styles.metricText, { color: valueColor, fontFamily: fontFamilyName }]}>{mockDiary.sensorData.temp}</Text>
-                <Text style={[styles.metricText, { color: valueColor, fontFamily: fontFamilyName }]}>{mockDiary.sensorData.humid}</Text>
+                <Text style={[styles.metricText, { color: valueColor, fontFamily: fontFamilyName }]}>{displayDiary.sensorData.temp}</Text>
+                <Text style={[styles.metricText, { color: valueColor, fontFamily: fontFamilyName }]}>{displayDiary.sensorData.humid}</Text>
                 <View style={styles.metricIconsBlock}>
-                  <Image source={mockDiary.statusIcons.bask ? require('../../../assets/icons/category-basking-active.png') : require('../../../assets/icons/category-basking-default.png')} style={styles.stateIcon} />
-                  <Image source={mockDiary.statusIcons.feed ? require('../../../assets/icons/category-food-active.png') : require('../../../assets/icons/category-food-default.png')} style={styles.stateIcon} />
-                  <Image source={mockDiary.statusIcons.bath ? require('../../../assets/icons/category-bath-active.png') : require('../../../assets/icons/category-bath-default.png')} style={styles.stateIcon} />
-                  <Image source={mockDiary.statusIcons.poop ? require('../../../assets/icons/category-poop-active.png') : require('../../../assets/icons/category-poop-default.png')} style={styles.stateIcon} />
+                  <Image source={displayDiary.statusIcons.bask ? require('../../../assets/icons/category-basking-active.png') : require('../../../assets/icons/category-basking-default.png')} style={styles.stateIcon} />
+                  <Image source={displayDiary.statusIcons.feed ? require('../../../assets/icons/category-food-active.png') : require('../../../assets/icons/category-food-default.png')} style={styles.stateIcon} />
+                  <Image source={displayDiary.statusIcons.bath ? require('../../../assets/icons/category-bath-active.png') : require('../../../assets/icons/category-bath-default.png')} style={styles.stateIcon} />
+                  <Image source={displayDiary.statusIcons.poop ? require('../../../assets/icons/category-poop-active.png') : require('../../../assets/icons/category-poop-default.png')} style={styles.stateIcon} />
                 </View>
               </View>
             </View>
@@ -199,8 +246,8 @@ export default function DiaryViewScreen() {
 
           {/* ===== 卡片二：日記全文 ===== */}
           <View style={[styles.contentCard, { backgroundColor: theme.background }]}>
-            <Text style={[styles.contentTitle, { color: labelColor, fontFamily: fontFamilyName }]}>{mockDiary.title}</Text>
-            <Text style={[styles.contentBody, { color: theme.text, fontFamily: fontFamilyName }]}>{mockDiary.content}</Text>
+            <Text style={[styles.contentTitle, { color: labelColor, fontFamily: fontFamilyName }]}>{displayDiary.title}</Text>
+            <Text style={[styles.contentBody, { color: theme.text, fontFamily: fontFamilyName }]}>{displayDiary.content}</Text>
           </View>
 
           {/* ===== 卡片三：狀態紀錄 ===== */}
@@ -292,7 +339,7 @@ export default function DiaryViewScreen() {
           {/* ===== 卡片四：附件照片 ===== */}
           <View style={[styles.attachmentCard, { backgroundColor: theme.background }]}>
             <View style={styles.attachmentRow}>
-              {mockDiary.attachments.map((img, idx) => (
+              {displayDiary.attachments.map((img, idx) => (
                 <Pressable key={idx} onPress={() => setFullscreenImage(img)} style={styles.thumbnailWrapper}>
                   <Image source={img} style={styles.thumbnail} />
                 </Pressable>
@@ -324,6 +371,18 @@ export default function DiaryViewScreen() {
 }
 
 const styles = StyleSheet.create({
+  stateContainer: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 12,
+  },
+  stateText: {
+    fontSize: getFontSize(16, 'medium'),
+  },
+  stateLink: {
+    fontSize: getFontSize(14, 'medium'),
+  },
   scrollContent: {
     paddingHorizontal: 16,
     paddingTop: 8,

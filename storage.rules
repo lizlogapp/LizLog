@@ -1,0 +1,40 @@
+rules_version = '2';
+
+service firebase.storage {
+  match /b/{bucket}/o {
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function underLimit() {
+      return request.resource == null || request.resource.size < 10 * 1024 * 1024;
+    }
+
+    function pet(ownerId, petId) {
+      return firestore.get(/databases/(default)/documents/users/$(ownerId)/pets/$(petId)).data;
+    }
+
+    function record(ownerId, collectionName, recordId) {
+      return firestore.get(/databases/(default)/documents/users/$(ownerId)/$(collectionName)/$(recordId)).data;
+    }
+
+    match /users/{ownerId}/pets/{petId}/{file=**} {
+      allow read: if signedIn() && pet(ownerId, petId).coParentIds.hasAny([request.auth.uid]);
+      allow write: if signedIn() && underLimit() && pet(ownerId, petId).editorIds.hasAny([request.auth.uid]);
+    }
+
+    match /users/{ownerId}/diaries/{recordId}/{file=**} {
+      allow read: if signedIn() && record(ownerId, 'diaries', recordId).accessUserIds.hasAny([request.auth.uid]);
+      allow write: if signedIn() && underLimit() && record(ownerId, 'diaries', recordId).editorIds.hasAny([request.auth.uid]);
+    }
+
+    match /users/{ownerId}/medical/{recordId}/{file=**} {
+      allow read: if signedIn() && record(ownerId, 'medical', recordId).accessUserIds.hasAny([request.auth.uid]);
+      allow write: if signedIn() && underLimit() && record(ownerId, 'medical', recordId).editorIds.hasAny([request.auth.uid]);
+    }
+
+    match /{file=**} {
+      allow read, write: if false;
+    }
+  }
+}

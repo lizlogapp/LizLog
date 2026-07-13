@@ -66,6 +66,11 @@ export default function PetViewScreen() {
     return !!myRole && (myRole.isMainOwner || myRole.permission !== 'view');
   }, [user, firestorePet]);
 
+  const isMainOwner = React.useMemo(() => {
+    if (!user || !firestorePet) return false;
+    return !!firestorePet.coParents?.some(cp => cp.uid === user.uid && cp.isMainOwner);
+  }, [user, firestorePet]);
+
   // 將 Firestore 資料轉換為頁面所需格式
   const pet = firestorePet ? {
     id: firestorePet.id,
@@ -104,7 +109,7 @@ export default function PetViewScreen() {
 
   const handleDeletedClose = () => {
     if (user && id) {
-      petService.delete(user.uid, id);
+      petService.delete(ownerId || user.uid, id);
     }
     setShowDeletedConfirm(false);
     router.replace('/(tabs)/pets');
@@ -236,19 +241,19 @@ export default function PetViewScreen() {
                   if (!canEdit) return;
                   router.push({ pathname: '/(tabs)/pets/add', params: { id, ownerId: pet?.ownerId } });
                 } else if (item.id === 'delete') {
-                  if (!canEdit) return;
+                  if (!isMainOwner) return;
                   setDeleteInputName('');
                   setShowDeleteScreen(true);
                 }
               }}
-              disabled={!canEdit && (item.id === 'edit' || item.id === 'delete')}
+              disabled={(!canEdit && item.id === 'edit') || (!isMainOwner && item.id === 'delete')}
             >
               <Image
                 source={item.icon}
-                style={[styles.menuIcon, { tintColor: (!canEdit && (item.id === 'edit' || item.id === 'delete')) ? theme.primary + '50' : theme.primary }]}
+                style={[styles.menuIcon, { tintColor: ((!canEdit && item.id === 'edit') || (!isMainOwner && item.id === 'delete')) ? theme.primary + '50' : theme.primary }]}
                 resizeMode="contain"
               />
-              <Text style={[styles.menuLabel, { color: (!canEdit && (item.id === 'edit' || item.id === 'delete')) ? theme.primary + '50' : theme.primary, fontFamily: fontFamilyName }]}>
+              <Text style={[styles.menuLabel, { color: ((!canEdit && item.id === 'edit') || (!isMainOwner && item.id === 'delete')) ? theme.primary + '50' : theme.primary, fontFamily: fontFamilyName }]}>
                 {item.label}
               </Text>
             </Pressable>

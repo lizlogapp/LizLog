@@ -13,7 +13,7 @@ import { getThemeTokens } from '../../../src/theme/themeSettings';
 import { getFontSize } from '../../../src/theme/typographySettings';
 import { paletteColors } from '../../../src/theme/themeColorSettings';
 import { BaseScreen } from '../../../src/components/common/BaseScreen';
-import { FloatingActionBar } from '../../../src/components/FloatingActionBar';
+import { FloatingActionBar, FloatingActionItem } from '../../../src/components/FloatingActionBar';
 import LizardIllustration from '../../../assets/illustrations/lizard-6.svg';
 import { useAuth } from '../../../src/contexts/AuthContext';
 import { medicalService } from '../../../src/services/firestoreService';
@@ -30,8 +30,7 @@ export default function MedicalScreen() {
 
   React.useEffect(() => {
     if (!user || !id) return;
-    const resolvedOwnerId = ownerId || user.uid;
-    const unsubscribe = medicalService.onMedicalChanged([resolvedOwnerId], (firestoreRecords) => {
+    const unsubscribe = medicalService.onMedicalChanged(user.uid, (firestoreRecords) => {
       // 過濾出屬於目前這隻寵物的紀錄
       const petRecords = firestoreRecords.filter(r => r.petId === id);
       setRecords(petRecords);
@@ -39,17 +38,23 @@ export default function MedicalScreen() {
     return () => unsubscribe();
   }, [user, id, ownerId]);
 
+  const actions: FloatingActionItem[] = [
+    { id: 'back', onPress: () => router.navigate({ pathname: '/(tabs)/pets/view', params: { id, ownerId } }) },
+  ];
+
+  if (canEdit) {
+    actions.push({
+      id: 'add',
+      onPress: () => router.push({ pathname: '/(tabs)/pets/add-medical', params: { petId: id, ownerId } }),
+    });
+  }
+
   return (
     <BaseScreen
       scrollable={false}
       floatingAction={
         <FloatingActionBar
-          actions={[
-            { id: 'back', onPress: () => router.navigate({ pathname: '/(tabs)/pets/view', params: { id, ownerId } }) },
-            { id: 'add', onPress: () => {
-              if (canEdit) router.push({ pathname: '/(tabs)/pets/add-medical', params: { petId: id, ownerId } });
-            }},
-          ].filter(action => action.id !== 'add' || canEdit)}
+          actions={actions}
         />
       }
     >
@@ -74,7 +79,10 @@ export default function MedicalScreen() {
               <Pressable
                 key={record.id}
                 style={[styles.recordCard, { backgroundColor: theme.background }]}
-                onPress={() => router.push({ pathname: '/(tabs)/pets/medical-detail', params: { id: record.id, petId: id } })}
+                onPress={() => router.push({
+                  pathname: '/(tabs)/pets/medical-detail',
+                  params: { id: record.id, petId: id, ownerId, canEdit: canEdit.toString() },
+                })}
               >
                 {/* 左側動態顏色裝飾條 */}
                 <View style={[styles.cardSideBar, { backgroundColor: record.tagColor }]} />

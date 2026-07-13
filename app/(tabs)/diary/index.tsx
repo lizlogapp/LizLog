@@ -39,12 +39,7 @@ export default function DiaryScreen() {
       if (!isActive) return;
       setAvailablePets(pets.map(p => p.name));
       
-      const ownerIds = Array.from(new Set(pets.map(p => p.ownerId || user.uid)));
-      if (ownerIds.length === 0) {
-        ownerIds.push(user.uid);
-      }
-
-      unsubscribeDiaries = diaryService.onDiariesChanged(ownerIds, (diaries) => {
+      unsubscribeDiaries = diaryService.onDiariesChanged(user.uid, (diaries) => {
         if (isActive) {
           setFirestoreDiaries(diaries);
         }
@@ -62,8 +57,9 @@ export default function DiaryScreen() {
 
   const mappedFirestoreDiaries = firestoreDiaries.map(d => ({
     id: d.id,
+    ownerId: d.ownerId || user?.uid,
     dateStr: d.date, // format this properly if needed
-    weatherIcon: d.weatherIcon === 'sunny' ? require('../../../assets/icons/weather-sunny.png') : require('../../../assets/icons/weather-cloudy.png'),
+    weatherIcon: d.weatherIcon?.includes('sunny') ? require('../../../assets/icons/weather-sunny.png') : require('../../../assets/icons/weather-cloudy.png'),
     title: d.title,
     image: d.imageUrl ? { uri: d.imageUrl } : null,
     pets: d.pets
@@ -282,7 +278,10 @@ export default function DiaryScreen() {
               { backgroundColor: theme.background },
               { opacity: pressed ? 0.9 : 1 }
             ]}
-            onPress={() => router.push({ pathname: '/(tabs)/diary/view', params: { id: diary.id } })}
+            onPress={() => router.push({
+              pathname: '/(tabs)/diary/view',
+              params: { id: diary.id, ownerId: diary.ownerId },
+            })}
           >
             
             {/* 照片區與重疊的寵物標籤 / 無照片時的頂部標籤 */}

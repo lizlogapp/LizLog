@@ -31,6 +31,13 @@ import EditIcon from '../../assets/floating-actions/edit.svg';
 import BackIcon from '../../assets/floating-actions/back.svg';
 import DiaryIcon from '../../assets/floating-actions/diary.svg';
 import { NeumorphicButton } from './common/NeumorphicButton';
+
+type SvgIconProps = {
+  width?: string | number;
+  height?: string | number;
+  preserveAspectRatio?: string;
+  color?: string;
+};
 export type FloatingActionId =
   | 'add'
   | 'calendar'
@@ -39,7 +46,7 @@ export type FloatingActionId =
   | 'back'
   | 'diary';
 
-const ActionIcons: Record<FloatingActionId, React.FC<any>> = {
+const ActionIcons: Record<FloatingActionId, React.ComponentType<SvgIconProps>> = {
   add: AddIcon,
   calendar: CalendarIcon,
   confirm: ConfirmIcon,

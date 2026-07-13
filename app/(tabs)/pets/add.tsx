@@ -19,10 +19,11 @@ import { BaseScreen } from '../../../src/components/common/BaseScreen';
 import { FloatingActionBar } from '../../../src/components/FloatingActionBar';
 import { useAuth } from '../../../src/contexts/AuthContext';
 import { petService, PetDoc } from '../../../src/services/firestoreService';
+import * as ImagePicker from 'expo-image-picker';
 
 export default function AddPetScreen() {
   const router = useRouter();
-  const { id, from } = useLocalSearchParams<{ id?: string; from?: string }>();
+  const { id, from, ownerId } = useLocalSearchParams<{ id?: string; from?: string; ownerId?: string }>();
   const { themeId, fontFamilyName, isDemoMode } = useTheme();
   const theme = getThemeTokens(themeId);
   const { user } = useAuth();
@@ -35,10 +36,16 @@ export default function AddPetScreen() {
   const [homeDate, setHomeDate] = useState('');
   const [gender, setGender] = useState('');
   const [tag, setTag] = useState('');
+  const [tempMin, setTempMin] = useState('25');
+  const [tempMax, setTempMax] = useState('35');
+  const [humidMin, setHumidMin] = useState('30');
+  const [humidMax, setHumidMax] = useState('50');
+  const [imageUri, setImageUri] = useState('');
+  const [isSaving, setIsSaving] = useState(false);
 
   useEffect(() => {
     if (isEditing && id && user) {
-      petService.getById(user.uid, id).then(doc => {
+      petService.getById(ownerId || user.uid, id).then(doc => {
         if (doc) {
           setName(doc.name || '');
           setSpecies(doc.species || '鬆獅蜥');
@@ -46,10 +53,15 @@ export default function AddPetScreen() {
           setHomeDate(doc.homeDate || '');
           setGender(doc.gender || '');
           setTag(doc.tag || '');
+          setTempMin(doc.tempMin?.toString() ?? '25');
+          setTempMax(doc.tempMax?.toString() ?? '35');
+          setHumidMin(doc.humidMin?.toString() ?? '30');
+          setHumidMax(doc.humidMax?.toString() ?? '50');
+          setImageUri(doc.imageUrl || '');
         }
       });
     }
-  }, [isEditing, id, user]);
+  }, [isEditing, id, user, ownerId]);
 
   const [showDatePicker, setShowDatePicker] = useState<{ visible: boolean; target: 'birthday' | 'homeDate' | null }>({
     visible: false,
@@ -67,6 +79,21 @@ export default function AddPetScreen() {
   const inputStyle = [styles.input, { color: theme.text, fontFamily: fontFamilyName }];
   const fieldTextStyle = [styles.fieldValue, { color: theme.text, fontFamily: fontFamilyName }];
 
+  const pickImage = async () => {
+    const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (!permission.granted) {
+      Alert.alert('需要相簿權限', '請允許蜥日日記讀取相簿，才能選擇寵物照片。');
+      return;
+    }
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ['images'],
+      allowsEditing: true,
+      aspect: [1, 1],
+      quality: 0.8,
+    });
+    if (!result.canceled && result.assets[0]?.uri) setImageUri(result.assets[0].uri);
+  };
+
   return (
     <BaseScreen
       scrollable={false}
@@ -76,46 +103,70 @@ export default function AddPetScreen() {
             { id: 'back', onPress: () => {
               // 返回層級：如果是編輯模式 -> 寵物詳情；如果是新增 -> 寵物列表
               if (isEditing && id) {
-                router.navigate({ pathname: '/(tabs)/pets/view', params: { id } });
+                router.navigate({ pathname: '/(tabs)/pets/view', params: { id, ownerId } });
               } else {
                 router.navigate('/(tabs)/pets');
               }
             }},
             {
               id: 'confirm',
-              onPress: () => {
+              onPress: async () => {
+                if (isSaving) return;
                 if (!name.trim()) {
                   Alert.alert('提示', '請填寫寵物名字');
                   return;
                 }
-                
-                if (isEditing && typeof id === 'string') {
-                  if (user) {
-                    petService.update(user.uid, id, {
-                      name,
-                      species,
-                      birthDate: birthday,
-                      homeDate,
-                      gender,
-                      tag,
-                    }).catch(e => Alert.alert('錯誤', '更新失敗'));
-                  }
-                  Alert.alert('成功', `已更新寵物：${name}`);
-                } else {
-                  if (user) {
-                    petService.add(user.uid, {
-                      name,
-                      species,
-                      birthDate: birthday,
-                      homeDate,
-                      gender,
-                      tag,
-                    }).catch(e => Alert.alert('錯誤', '新增失敗'));
-                  }
-                  Alert.alert('成功', `已新增寵物：${name}`);
+                if (!user) {
+                  Alert.alert('錯誤', '請重新登入後再試');
+                  return;
                 }
-                
-                router.back();
+
+                setIsSaving(true);
+                try {
+                  let savedPetId: string;
+                  if (isEditing && typeof id === 'string') {
+                    savedPetId = id;
+                    await petService.update(ownerId || user.uid, id, {
+                      name,
+                      species,
+                      birthDate: birthday,
+                      homeDate,
+                      gender,
+                      tag,
+                      tempMin: parseInt(tempMin) || 25,
+                      tempMax: parseInt(tempMax) || 35,
+                      humidMin: parseInt(humidMin) || 30,
+                      humidMax: parseInt(humidMax) || 50,
+                    });
+                    Alert.alert('成功', `已更新寵物：${name}`);
+                  } else {
+                    savedPetId = await petService.add(user.uid, {
+                      name,
+                      species,
+                      birthDate: birthday,
+                      homeDate,
+                      gender,
+                      tag,
+                      tempMin: parseInt(tempMin) || 25,
+                      tempMax: parseInt(tempMax) || 35,
+                      humidMin: parseInt(humidMin) || 30,
+                      humidMax: parseInt(humidMax) || 50,
+                    });
+                  }
+
+                  const resolvedOwnerId = ownerId || user.uid;
+                  if (imageUri && !imageUri.startsWith('http')) {
+                    const imageUrl = await petService.uploadImage(resolvedOwnerId, savedPetId, imageUri);
+                    await petService.update(resolvedOwnerId, savedPetId, { imageUrl });
+                  }
+
+                  Alert.alert('成功', isEditing ? `已更新寵物：${name}` : `已新增寵物：${name}`);
+                  router.back();
+                } catch {
+                  Alert.alert('錯誤', isEditing ? '更新失敗，請稍後再試' : '新增失敗，請稍後再試');
+                } finally {
+                  setIsSaving(false);
+                }
               },
             },
           ]}
@@ -132,8 +183,9 @@ export default function AddPetScreen() {
           {/* 照片區 */}
           <Pressable
           style={styles.photoCard}
-          onPress={() => Alert.alert('提示', '照片選取功能建置中...')}
+          onPress={pickImage}
         >
+          {imageUri ? <Image source={{ uri: imageUri }} style={StyleSheet.absoluteFillObject} resizeMode="cover" /> : null}
           {/* 照片佔位圖示（同新增日記頁面樣式） */}
           <View style={styles.addPhotoButton}>
             <Image
@@ -259,6 +311,35 @@ export default function AddPetScreen() {
               />
             </View>
           </View>
+
+          {/* IoT 感測器安全範圍 */}
+          <Text style={[styles.sectionTitle, { color: theme.primary, fontFamily: fontFamilyName, marginTop: 16, marginBottom: 8 }]}>IoT 警報範圍設定</Text>
+          <View style={styles.fieldRow}>
+            <Text style={labelStyle}>溫度範圍 (°C)</Text>
+            <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1, marginLeft: 16 }}>
+              <View style={[styles.inputCard, { backgroundColor: theme.background, flex: 1, marginLeft: 0 }]}>
+                <TextInput style={inputStyle} value={tempMin} onChangeText={setTempMin} keyboardType="numeric" />
+              </View>
+              <Text style={{ marginHorizontal: 8, color: theme.text, fontFamily: fontFamilyName }}>~</Text>
+              <View style={[styles.inputCard, { backgroundColor: theme.background, flex: 1, marginLeft: 0 }]}>
+                <TextInput style={inputStyle} value={tempMax} onChangeText={setTempMax} keyboardType="numeric" />
+              </View>
+            </View>
+          </View>
+
+          <View style={styles.fieldRow}>
+            <Text style={labelStyle}>濕度範圍 (%)</Text>
+            <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1, marginLeft: 16 }}>
+              <View style={[styles.inputCard, { backgroundColor: theme.background, flex: 1, marginLeft: 0 }]}>
+                <TextInput style={inputStyle} value={humidMin} onChangeText={setHumidMin} keyboardType="numeric" />
+              </View>
+              <Text style={{ marginHorizontal: 8, color: theme.text, fontFamily: fontFamilyName }}>~</Text>
+              <View style={[styles.inputCard, { backgroundColor: theme.background, flex: 1, marginLeft: 0 }]}>
+                <TextInput style={inputStyle} value={humidMax} onChangeText={setHumidMax} keyboardType="numeric" />
+              </View>
+            </View>
+          </View>
+
         </View>
         </View>
       </ScrollView>
@@ -450,8 +531,12 @@ const styles = StyleSheet.create({
     gap: 4,
   },
   chevronIcon: {
-    width: 14,
-    height: 14,
+    width: 20,
+    height: 20,
+  },
+  sectionTitle: {
+    fontSize: getFontSize(16, 'medium'),
+    fontWeight: 'bold',
   },
 
   // 性別選擇

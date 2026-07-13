@@ -78,7 +78,7 @@ export const SplashAnimation: React.FC<SplashAnimationProps> = ({ isLoading, onF
           resizeMode="contain"
         />
         <Animated.Image 
-          source={require('../../../assets/branding/logos/logo-image-only.png')}
+          source={require('../../../assets/branding/logos/logo-image.png')}
           style={[styles.image, { opacity: op3 }]}
           resizeMode="contain"
         />

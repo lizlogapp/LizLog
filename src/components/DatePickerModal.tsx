@@ -4,6 +4,12 @@ import { paletteColors } from '../theme/themeColorSettings';
 import { useTheme } from '../theme/ThemeContext';
 import { getFontSize } from '../theme/typographySettings';
 
+type CalendarCell = {
+  day: number;
+  isCurrentMonth: boolean;
+  date: Date;
+};
+
 interface Props {
   visible: boolean;
   currentDate: Date;
@@ -28,8 +34,8 @@ export default function DatePickerModal({ visible, currentDate, onClose, onSelec
     }
   }, [visible, currentDate]);
 
-  const generateDays = () => {
-    const days = [];
+  const generateDays = (): CalendarCell[] => {
+    const days: CalendarCell[] = [];
     const firstDayIndex = new Date(displayYear, displayMonth, 1).getDay();
     const daysInMonth = new Date(displayYear, displayMonth + 1, 0).getDate();
     const daysInPrevMonth = new Date(displayYear, displayMonth, 0).getDate();
@@ -68,7 +74,7 @@ export default function DatePickerModal({ visible, currentDate, onClose, onSelec
 
   const calendarDays = generateDays();
 
-  const handleDayPress = (item: any) => {
+  const handleDayPress = (item: CalendarCell) => {
     onSelectDate(item.date);
     onClose();
   };

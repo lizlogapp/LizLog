@@ -15,10 +15,10 @@ import { getFontSize } from '../../../src/theme/typographySettings';
 import { paletteColors } from '../../../src/theme/themeColorSettings';
 import { BaseScreen } from '../../../src/components/common/BaseScreen';
 import { FloatingActionBar } from '../../../src/components/FloatingActionBar';
-// @ts-ignore
 import LizardIllustration from '../../../assets/illustrations/lizard-6.svg';
 import { useAuth } from '../../../src/contexts/AuthContext';
 import { reminderService } from '../../../src/services/firestoreService';
+import { cancelReminderNotification, scheduleReminderNotification } from '../../../src/services/notificationService';
 
 export default function ReminderScreen() {
   const router = useRouter();
@@ -33,8 +33,7 @@ export default function ReminderScreen() {
 
   React.useEffect(() => {
     if (!user || !id) return;
-    const resolvedOwnerId = ownerId || user.uid;
-    const unsubscribe = reminderService.onRemindersChanged([resolvedOwnerId], (firestoreReminders) => {
+    const unsubscribe = reminderService.onRemindersChanged(user.uid, (firestoreReminders) => {
       // 過濾出屬於目前這隻寵物的提醒
       const petReminders = firestoreReminders.filter(r => r.petId === id || (r.pets && r.pets.includes(id)));
       setReminders(petReminders.map(r => ({
@@ -45,13 +44,18 @@ export default function ReminderScreen() {
     return () => unsubscribe();
   }, [user, id, ownerId]);
 
-  const toggleReminder = (rId: string) => {
+  const toggleReminder = async (rId: string) => {
     if (user) {
       const reminder = reminders.find(r => r.id === rId);
       if (reminder) {
         const newIsOn = !reminder.isOn;
         const resolvedOwnerId = ownerId || user.uid;
-        reminderService.update(resolvedOwnerId, rId, { isOn: newIsOn });
+        await reminderService.update(resolvedOwnerId, rId, { isOn: newIsOn });
+        if (newIsOn) {
+          await scheduleReminderNotification(resolvedOwnerId, { ...reminder, isOn: true });
+        } else {
+          await cancelReminderNotification(resolvedOwnerId, rId);
+        }
         setReminders(prev => prev.map(r => r.id === rId ? { ...r, isOn: newIsOn } : r));
       }
     }
@@ -63,12 +67,12 @@ export default function ReminderScreen() {
       floatingAction={
         <FloatingActionBar
           actions={[
-            { id: 'back', onPress: () => {
+            { id: 'back' as const, onPress: () => {
               // 返回層級：寵物提醒 -> 寵物詳情
-              router.navigate({ pathname: '/(tabs)/pets/view', params: { id } });
+              router.navigate({ pathname: '/(tabs)/pets/view', params: { id, ownerId } });
             }},
-            { id: 'add', onPress: () => {
-              if (canEdit) router.push({ pathname: '/(tabs)/pets/add-reminder', params: { id } });
+            { id: 'add' as const, onPress: () => {
+              if (canEdit) router.push({ pathname: '/(tabs)/pets/add-reminder', params: { id, ownerId } });
             }},
           ].filter(action => action.id !== 'add' || canEdit)}
         />
@@ -146,7 +150,10 @@ export default function ReminderScreen() {
                         <>
                           <Pressable 
                             style={[styles.actionButton, !reminder.isOn && styles.actionButtonOff, { backgroundColor: theme.background }]} 
-                            onPress={() => router.push({ pathname: '/(tabs)/pets/add-reminder', params: { reminderId: reminder.id, petId: id } })}
+                            onPress={() => router.push({
+                              pathname: '/(tabs)/pets/add-reminder',
+                              params: { reminderId: reminder.id, petId: id, ownerId },
+                            })}
                           >
                             <Image source={require('../../../assets/icons/icon-edit.png')} style={[styles.actionIcon, { tintColor: theme.primary }]} />
                           </Pressable>
@@ -154,7 +161,7 @@ export default function ReminderScreen() {
                             style={[styles.actionButton, !reminder.isOn && styles.actionButtonOff, { backgroundColor: theme.background }]} 
                             onPress={() => {
                               if (user) {
-                                reminderService.delete(user.uid, reminder.id);
+                                reminderService.delete(ownerId || user.uid, reminder.id);
                               }
                               setReminders(prev => prev.filter(r => r.id !== reminder.id));
                             }}

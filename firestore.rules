@@ -1,0 +1,140 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner(ownerId) {
+      return signedIn() && request.auth.uid == ownerId;
+    }
+
+    function pet(ownerId, petId) {
+      return get(/databases/$(database)/documents/users/$(ownerId)/pets/$(petId)).data;
+    }
+
+    function canViewPet(ownerId, petId) {
+      return isOwner(ownerId) || (
+        signedIn() && pet(ownerId, petId).coParentIds.hasAny([request.auth.uid])
+      );
+    }
+
+    function canEditPet(ownerId, petId) {
+      return isOwner(ownerId) || (
+        signedIn() && pet(ownerId, petId).editorIds.hasAny([request.auth.uid])
+      );
+    }
+
+    function recordAccessMatchesPet(ownerId, data) {
+      return data.accessUserIds.hasAll(pet(ownerId, data.petId).coParentIds)
+        && pet(ownerId, data.petId).coParentIds.hasAll(data.accessUserIds)
+        && data.editorIds.hasAll(pet(ownerId, data.petId).editorIds)
+        && pet(ownerId, data.petId).editorIds.hasAll(data.editorIds);
+    }
+
+    function diaryAccessMatchesPet(ownerId, data) {
+      return data.petIds.size() > 0
+        && data.accessUserIds.hasAll(pet(ownerId, data.petIds[0]).coParentIds)
+        && pet(ownerId, data.petIds[0]).coParentIds.hasAll(data.accessUserIds)
+        && data.editorIds.hasAll(pet(ownerId, data.petIds[0]).editorIds)
+        && pet(ownerId, data.petIds[0]).editorIds.hasAll(data.editorIds);
+    }
+
+    function validInviteJoin(ownerId, petId) {
+      let code = request.resource.data.lastInviteCode;
+      let invitePath = /databases/$(database)/documents/invites/$(code);
+      return signedIn()
+        && code is string
+        && exists(invitePath)
+        && get(invitePath).data.ownerId == ownerId
+        && get(invitePath).data.petId == petId
+        && request.resource.data.coParentIds.hasAny([request.auth.uid])
+        && request.resource.data.diff(resource.data).affectedKeys()
+          .hasOnly(['coParents', 'coParentIds', 'editorIds', 'lastInviteCode', 'updatedAt']);
+    }
+
+    function validSelfLeave() {
+      return signedIn()
+        && resource.data.coParentIds.hasAny([request.auth.uid])
+        && !request.resource.data.coParentIds.hasAny([request.auth.uid])
+        && request.resource.data.diff(resource.data).affectedKeys()
+          .hasOnly(['coParents', 'coParentIds', 'editorIds', 'updatedAt']);
+    }
+
+    match /users/{ownerId} {
+      allow read, create, update, delete: if isOwner(ownerId);
+
+      match /pets/{petId} {
+        allow get, list: if isOwner(ownerId)
+          || (signedIn() && resource.data.coParentIds.hasAny([request.auth.uid]));
+        allow create: if isOwner(ownerId)
+          && request.resource.data.ownerId == ownerId
+          && request.resource.data.coParentIds.hasAny([ownerId])
+          && request.resource.data.editorIds.hasAny([ownerId]);
+        allow update: if isOwner(ownerId)
+          || validInviteJoin(ownerId, petId)
+          || validSelfLeave()
+          || (canEditPet(ownerId, petId)
+            && !request.resource.data.diff(resource.data).affectedKeys()
+              .hasAny(['ownerId', 'coParents', 'coParentIds', 'editorIds']));
+        allow delete: if isOwner(ownerId);
+      }
+
+      match /reminders/{recordId} {
+        allow get, list: if isOwner(ownerId)
+          || (signedIn() && resource.data.accessUserIds.hasAny([request.auth.uid]));
+        allow create: if request.resource.data.ownerId == ownerId
+          && canEditPet(ownerId, request.resource.data.petId)
+          && recordAccessMatchesPet(ownerId, request.resource.data);
+        allow update: if canEditPet(ownerId, resource.data.petId)
+          && request.resource.data.ownerId == ownerId
+          && recordAccessMatchesPet(ownerId, request.resource.data);
+        allow delete: if canEditPet(ownerId, resource.data.petId);
+      }
+
+      match /medical/{recordId} {
+        allow get, list: if isOwner(ownerId)
+          || (signedIn() && resource.data.accessUserIds.hasAny([request.auth.uid]));
+        allow create: if request.resource.data.ownerId == ownerId
+          && canEditPet(ownerId, request.resource.data.petId)
+          && recordAccessMatchesPet(ownerId, request.resource.data);
+        allow update: if canEditPet(ownerId, resource.data.petId)
+          && request.resource.data.ownerId == ownerId
+          && recordAccessMatchesPet(ownerId, request.resource.data);
+        allow delete: if canEditPet(ownerId, resource.data.petId);
+      }
+
+      match /diaries/{recordId} {
+        allow get, list: if isOwner(ownerId)
+          || (signedIn() && resource.data.accessUserIds.hasAny([request.auth.uid]));
+        allow create: if request.resource.data.ownerId == ownerId
+          && diaryAccessMatchesPet(ownerId, request.resource.data)
+          && canEditPet(ownerId, request.resource.data.petIds[0]);
+        allow update: if resource.data.petIds.size() > 0
+          && canEditPet(ownerId, resource.data.petIds[0])
+          && request.resource.data.ownerId == ownerId
+          && diaryAccessMatchesPet(ownerId, request.resource.data);
+        allow delete: if resource.data.petIds.size() > 0
+          && canEditPet(ownerId, resource.data.petIds[0]);
+      }
+    }
+
+    match /invites/{code} {
+      allow get: if signedIn();
+      allow list: if false;
+      allow create: if signedIn()
+        && request.resource.data.ownerId == request.auth.uid
+        && request.resource.data.code == code;
+      allow update: if false;
+      allow delete: if signedIn() && (
+        resource.data.ownerId == request.auth.uid
+        || pet(resource.data.ownerId, resource.data.petId).coParentIds.hasAny([request.auth.uid])
+      );
+    }
+
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
