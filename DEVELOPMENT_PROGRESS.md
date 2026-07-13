@@ -12,6 +12,7 @@
 - 分析圖表改讀實際日記資料，移除誤導的假日曆內容。
 - `npm run typecheck`、Expo Doctor 18/18 與 Android bundle 匯出通過。
 - 版本定為 `0.1.0`，圖示、Expo plugins 與相依套件已校正。
+- EAS 專案已轉移至 `@lizlogapp/lizlog`，並沿用原 `projectId`。
 - APP Git worktree 已修復並對齊 GitHub `main` 基準。
 - 圖片／附件選取與 Storage 上傳程式已完成。
 - Android 本機通知權限、偏好與週期排程程式已完成。
