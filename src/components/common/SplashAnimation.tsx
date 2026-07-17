@@ -1,7 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { View, Animated, StyleSheet, Image, Dimensions } from 'react-native';
-
-const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
+import { Animated, StyleSheet, View } from 'react-native';
 
 interface SplashAnimationProps {
   isLoading: boolean;
@@ -9,77 +7,89 @@ interface SplashAnimationProps {
 }
 
 export const SplashAnimation: React.FC<SplashAnimationProps> = ({ isLoading, onFinish }) => {
-  const op1 = useRef(new Animated.Value(0)).current; // lizard-head-light
-  const op2 = useRef(new Animated.Value(0)).current; // lizard-head-dark
-  const op3 = useRef(new Animated.Value(0)).current; // logo-image-only
-  const containerOp = useRef(new Animated.Value(1)).current;
-
-  const [isAnimating, setIsAnimating] = useState(true);
+  const lightOpacity = useRef(new Animated.Value(1)).current;
+  const darkOpacity = useRef(new Animated.Value(0)).current;
+  const logoOpacity = useRef(new Animated.Value(0)).current;
+  const containerOpacity = useRef(new Animated.Value(1)).current;
+  const [sequenceComplete, setSequenceComplete] = useState(false);
+  const [visible, setVisible] = useState(true);
 
   useEffect(() => {
-    // 短載入就快，長載入就慢
-    const baseDuration = isLoading ? 800 : 300;
-
-    const animSequence = Animated.sequence([
-      Animated.timing(op1, { toValue: 1, duration: baseDuration, useNativeDriver: true }),
+    const sequence = Animated.sequence([
+      Animated.delay(180),
       Animated.parallel([
-        Animated.timing(op1, { toValue: 0, duration: baseDuration, useNativeDriver: true }),
-        Animated.timing(op2, { toValue: 1, duration: baseDuration, useNativeDriver: true }),
+        Animated.timing(lightOpacity, {
+          toValue: 0,
+          duration: 420,
+          useNativeDriver: true,
+        }),
+        Animated.timing(darkOpacity, {
+          toValue: 1,
+          duration: 420,
+          useNativeDriver: true,
+        }),
       ]),
       Animated.parallel([
-        Animated.timing(op2, { toValue: 0, duration: baseDuration, useNativeDriver: true }),
-        Animated.timing(op3, { toValue: 1, duration: baseDuration, useNativeDriver: true }),
+        Animated.timing(darkOpacity, {
+          toValue: 0,
+          duration: 420,
+          useNativeDriver: true,
+        }),
+        Animated.timing(logoOpacity, {
+          toValue: 1,
+          duration: 420,
+          useNativeDriver: true,
+        }),
       ]),
-      Animated.delay(isLoading ? 500 : 100),
     ]);
 
-    const runAnimation = () => {
-      animSequence.start(({ finished }) => {
-        if (isLoading) {
-          // 如果還在載入，重置繼續播放
-          op1.setValue(0);
-          op2.setValue(0);
-          op3.setValue(0);
-          runAnimation();
-        } else {
-          // 載入完畢，整體淡出
-          Animated.timing(containerOp, {
-            toValue: 0,
-            duration: 400,
-            useNativeDriver: true,
-          }).start(() => {
-            setIsAnimating(false);
-            onFinish();
-          });
-        }
-      });
-    };
+    sequence.start(({ finished }) => {
+      if (finished) setSequenceComplete(true);
+    });
 
-    runAnimation();
+    return () => sequence.stop();
+  }, [darkOpacity, lightOpacity, logoOpacity]);
 
-    return () => {
-      animSequence.stop();
-    };
-  }, [isLoading]);
+  useEffect(() => {
+    if (isLoading || !sequenceComplete) return;
 
-  if (!isAnimating) return null;
+    const fadeOut = Animated.timing(containerOpacity, {
+      toValue: 0,
+      duration: 320,
+      useNativeDriver: true,
+    });
+
+    fadeOut.start(({ finished }) => {
+      if (finished) {
+        setVisible(false);
+        onFinish();
+      }
+    });
+
+    return () => fadeOut.stop();
+  }, [containerOpacity, isLoading, onFinish, sequenceComplete]);
+
+  if (!visible) return null;
 
   return (
-    <Animated.View style={[styles.container, { opacity: containerOp }]} pointerEvents="auto">
+    <Animated.View
+      style={[styles.container, { opacity: containerOpacity }]}
+      pointerEvents="auto"
+    >
       <View style={styles.imageContainer}>
-        <Animated.Image 
+        <Animated.Image
           source={require('../../../assets/illustrations/lizard-head-light.png')}
-          style={[styles.image, { opacity: op1 }]}
+          style={[styles.image, { opacity: lightOpacity }]}
           resizeMode="contain"
         />
-        <Animated.Image 
+        <Animated.Image
           source={require('../../../assets/illustrations/lizard-head-dark.png')}
-          style={[styles.image, { opacity: op2 }]}
+          style={[styles.image, { opacity: darkOpacity }]}
           resizeMode="contain"
         />
-        <Animated.Image 
+        <Animated.Image
           source={require('../../../assets/branding/logos/logo-image.png')}
-          style={[styles.image, { opacity: op3 }]}
+          style={[styles.image, { opacity: logoOpacity }]}
           resizeMode="contain"
         />
       </View>
@@ -90,12 +100,10 @@ export const SplashAnimation: React.FC<SplashAnimationProps> = ({ isLoading, onF
 const styles = StyleSheet.create({
   container: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: '#FFFEFA', 
+    backgroundColor: '#FFFEFA',
     justifyContent: 'center',
     alignItems: 'center',
     zIndex: 9999,
-    width: SCREEN_WIDTH,
-    height: SCREEN_HEIGHT,
   },
   imageContainer: {
     width: 200,

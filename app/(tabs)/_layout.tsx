@@ -1,11 +1,14 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { View, StyleSheet } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Tabs } from 'expo-router';
+import { Tabs, useRouter, useSegments } from 'expo-router';
 import { getThemeTokens } from '../../src/theme/themeSettings';
 import { useTheme } from '../../src/theme/ThemeContext';
 import { TAB_BAR_HEIGHT } from '../../src/theme/layoutSettings';
 import { NeumorphicButton } from '../../src/components/common/NeumorphicButton';
+import { useAuth } from '../../src/contexts/AuthContext';
+import { PetSnapshotProvider } from '../../src/contexts/PetSnapshotContext';
+import { petService } from '../../src/services/firestoreService';
 
 import AnalyticsIcon from '../../assets/tab-bar/analytics-default.svg';
 import DiaryIcon from '../../assets/tab-bar/records-default.svg';
@@ -24,6 +27,35 @@ function TabsLayoutInner() {
   const { themeId } = useTheme();
   const theme = getThemeTokens(themeId);
   const insets = useSafeAreaInsets();
+  const router = useRouter();
+  const segments = useSegments();
+  const { user } = useAuth();
+  const [hasPets, setHasPets] = useState<boolean | null>(null);
+
+  useEffect(() => {
+    if (!user) {
+      setHasPets(false);
+      return;
+    }
+    return petService.onPetsChanged(user.uid, pets => setHasPets(pets.length > 0));
+  }, [user]);
+
+  useEffect(() => {
+    // Expo Router 在首頁可能只回傳 ['(tabs)']，此時仍應視為 index。
+    const currentTab = (segments as string[])[1] ?? 'index';
+    if (hasPets === false && !['pets', 'settings'].includes(currentTab)) {
+      router.replace('/(tabs)/pets');
+    }
+  }, [hasPets, router, segments]);
+
+  const lockedTabListeners = {
+    tabPress: (event: { preventDefault: () => void }) => {
+      if (hasPets !== true) {
+        event.preventDefault();
+        router.replace('/(tabs)/pets');
+      }
+    },
+  };
 
   // Helper renderer to encapsulate active logic
   const renderIcon = (IconComponent: React.ComponentType<SvgIconProps>, focused: boolean) => {
@@ -75,22 +107,28 @@ function TabsLayoutInner() {
     >
       <Tabs.Screen
         name="analytics"
+        listeners={lockedTabListeners}
         options={{
-          title: '?��?',
+          title: '分析',
+          tabBarAccessibilityLabel: hasPets ? '分析' : '分析，請先新增寵物',
           tabBarIcon: ({ focused }) => renderIcon(AnalyticsIcon, focused),
         }}
       />
       <Tabs.Screen
         name="diary"
+        listeners={lockedTabListeners}
         options={{
-          title: '?��?',
+          title: '日記',
+          tabBarAccessibilityLabel: hasPets ? '日記' : '日記，請先新增寵物',
           tabBarIcon: ({ focused }) => renderIcon(DiaryIcon, focused),
         }}
       />
       <Tabs.Screen
         name="index"
+        listeners={lockedTabListeners}
         options={{
-          title: '首�?',
+          title: '首頁',
+          tabBarAccessibilityLabel: hasPets ? '首頁' : '首頁，請先新增寵物',
           tabBarIcon: ({ focused }) => renderIcon(HomeIcon, focused),
         }}
       />
@@ -109,14 +147,17 @@ function TabsLayoutInner() {
         }}
       />
 
-      {/* ?��? records ?�面，避??Expo Router ?��??��?�?6 ?�未?�置?�無?��?�?*/}
+      {/* 隱藏 records 舊路由，避免顯示額外頁籤。 */}
       <Tabs.Screen name="records" options={{ href: null }} />
-      {/* ?��??��??�面（�??��??��?籤可見�? */}
     </Tabs>
   );
 }
 
 export default function TabsLayout() {
-  return <TabsLayoutInner />;
+  return (
+    <PetSnapshotProvider>
+      <TabsLayoutInner />
+    </PetSnapshotProvider>
+  );
 }
 

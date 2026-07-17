@@ -7,6 +7,7 @@ import {
   Pressable,
   Image,
   Modal,
+  Alert,
 } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useTheme } from '../../../src/theme/ThemeContext';
@@ -221,6 +222,8 @@ export default function MedicalDetailScreen() {
                   medicalService.delete(ownerId || user.uid, id).then(() => {
                     setShowDeleteModal(false);
                     router.navigate({ pathname: '/(tabs)/pets/medical', params: { id: petId || '1', ownerId, canEdit: canEdit.toString() } });
+                  }).catch(() => {
+                    Alert.alert('刪除失敗', '無法完整刪除醫療照片與紀錄，請確認網路後再試。');
                   });
                 }
               }}>

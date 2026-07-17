@@ -8,6 +8,7 @@ import {
   Pressable,
   Modal,
   TextInput,
+  Alert,
 } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useTheme } from '../../../src/theme/ThemeContext';
@@ -19,9 +20,10 @@ import { FloatingActionBar, FloatingActionItem } from '../../../src/components/F
 import { useAuth } from '../../../src/contexts/AuthContext';
 import { petService, PetDoc } from '../../../src/services/firestoreService';
 
-function calcAge(birthDateStr: string): string {
+function calcAge(birthDateStr?: string): string {
+  if (!birthDateStr) return '生日未設定';
   const birthDate = new Date(birthDateStr.replace(/\//g, '-'));
-  if (isNaN(birthDate.getTime())) return '未知年紀';
+  if (isNaN(birthDate.getTime())) return '生日未設定';
 
   const now = new Date();
   let years = now.getFullYear() - birthDate.getFullYear();
@@ -53,11 +55,38 @@ export default function PetViewScreen() {
 
   // Firestore 寵物資料
   const [firestorePet, setFirestorePet] = useState<(PetDoc & { id: string }) | null>(null);
+  const [isPetLoading, setIsPetLoading] = useState(true);
+  const [petLoadError, setPetLoadError] = useState(false);
 
   useEffect(() => {
-    if (!user || !id) return;
+    let isActive = true;
+    setFirestorePet(null);
+    setPetLoadError(false);
+
+    if (!user || !id) {
+      setIsPetLoading(false);
+      setPetLoadError(true);
+      return () => {
+        isActive = false;
+      };
+    }
+
+    setIsPetLoading(true);
     const resolvedOwnerId = ownerId || user.uid;
-    petService.getById(resolvedOwnerId, id).then(setFirestorePet);
+    void petService.getById(resolvedOwnerId, id)
+      .then(doc => {
+        if (isActive) setFirestorePet(doc);
+      })
+      .catch(() => {
+        if (isActive) setPetLoadError(true);
+      })
+      .finally(() => {
+        if (isActive) setIsPetLoading(false);
+      });
+
+    return () => {
+      isActive = false;
+    };
   }, [user, id, ownerId]);
 
   const canEdit = React.useMemo(() => {
@@ -94,39 +123,42 @@ export default function PetViewScreen() {
   const [deleteInputName, setDeleteInputName] = useState('');
   const [showDeletedConfirm, setShowDeletedConfirm] = useState(false);
   const [deletedPetName, setDeletedPetName] = useState('');
+  const [isDeleting, setIsDeleting] = useState(false);
 
   const isDeleteNameMatch = pet
     ? deleteInputName.trim().toLowerCase() === pet.name.toLowerCase()
     : false;
 
-  const handleDeleteFinal = () => {
-    if (!pet) return;
-    setDeletedPetName(pet.name);
-    setShowDeleteScreen(false);
-    setShowDeletedConfirm(true);
-    // 注意：此時先不刪除資料，等使用者關閉確認視窗後再刪除
+  const handleDeleteFinal = async () => {
+    if (!pet || !user || !id || isDeleting) return;
+
+    const petName = pet.name;
+    setIsDeleting(true);
+    try {
+      await petService.delete(ownerId || user.uid, id);
+      setDeletedPetName(petName);
+      setShowDeleteScreen(false);
+      setShowDeletedConfirm(true);
+    } catch (error) {
+      setShowDeletedConfirm(false);
+      Alert.alert(
+        '刪除尚未完整完成',
+        error instanceof Error
+          ? error.message
+          : '無法完整刪除寵物照片與資料，請確認網路後再試。',
+      );
+    } finally {
+      setIsDeleting(false);
+    }
   };
 
   const handleDeletedClose = () => {
-    if (user && id) {
-      petService.delete(ownerId || user.uid, id);
-    }
     setShowDeletedConfirm(false);
     router.replace('/(tabs)/pets');
   };
 
   // 如果 pet 不存在或已被刪除且正在顯示確認視窗
   if (!pet) {
-    // 預覽數秒後自動跳轉
-    React.useEffect(() => {
-      if (!showDeletedConfirm) {
-        const timer = setTimeout(() => {
-          router.replace('/(tabs)/pets');
-        }, 2000);
-        return () => clearTimeout(timer);
-      }
-    }, [showDeletedConfirm]);
-
     return (
       <BaseScreen 
         scrollable={false}
@@ -152,7 +184,9 @@ export default function PetViewScreen() {
         ) : (
           <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
             <Text style={{ color: theme.primary + '60', fontFamily: fontFamilyName, fontSize: getFontSize(20, 'medium'), marginBottom: 8 }}>
-              找不到寵物資料
+              {isPetLoading
+                ? '正在載入寵物資料…'
+                : (petLoadError ? '寵物資料載入失敗' : '找不到寵物資料')}
             </Text>
           </View>
         )}
@@ -162,7 +196,9 @@ export default function PetViewScreen() {
 
   // FloatingActionBar 動態切換
   const floatingActions: FloatingActionItem[] = showDeleteScreen
-    ? [{ id: 'back' as const, onPress: () => setShowDeleteScreen(false) }]
+    ? [{ id: 'back' as const, onPress: () => {
+        if (!isDeleting) setShowDeleteScreen(false);
+      } }]
     : [{ id: 'back' as const, onPress: () => router.navigate('/(tabs)/pets') }];
 
   return (
@@ -318,13 +354,12 @@ export default function PetViewScreen() {
 
             {/* 確認刪除按鈕 */}
             <Pressable
-              style={[styles.deleteConfirmButton, !isDeleteNameMatch && styles.deleteConfirmButtonDisabled]}
-              onPress={() => {
-                if (isDeleteNameMatch) handleDeleteFinal();
-              }}
+              style={[styles.deleteConfirmButton, (!isDeleteNameMatch || isDeleting) && styles.deleteConfirmButtonDisabled]}
+              onPress={handleDeleteFinal}
+              disabled={!isDeleteNameMatch || isDeleting}
             >
               <Text style={[styles.deleteConfirmText, { fontFamily: fontFamilyName }]}>
-                確認刪除
+                {isDeleting ? '刪除中…' : '確認刪除'}
               </Text>
             </Pressable>
           </ScrollView>

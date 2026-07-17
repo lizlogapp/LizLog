@@ -68,7 +68,7 @@ export default function JoinScreen() {
           輸入邀請碼
         </Text>
         <Text style={[styles.subtitle, { color: theme.primary + '80', fontFamily: fontFamilyName }]}>
-          輸入主飼主分享的邀請碼，加入共同飼育
+          輸入飼主分享的邀請馬，加入共同飼育。
         </Text>
 
         <TextInput
@@ -80,21 +80,20 @@ export default function JoinScreen() {
           }]}
           value={code}
           onChangeText={setCode}
-          placeholder="請輸入 6 位邀請碼"
-          placeholderTextColor={theme.primary + '40'}
+          placeholder=""
           autoCapitalize="characters"
-          maxLength={6}
+          maxLength={10}
           textAlign="center"
         />
 
         <Pressable
           style={({ pressed }) => [
             styles.joinButton,
-            { backgroundColor: code.trim().length === 6 ? theme.primary : theme.primary + '40' },
+            { backgroundColor: code.trim().length === 10 ? theme.primary : theme.primary + '40' },
             { opacity: pressed ? 0.8 : 1 },
           ]}
           onPress={handleJoin}
-          disabled={code.trim().length !== 6 || isLoading}
+          disabled={code.trim().length !== 10 || isLoading}
         >
           {isLoading ? (
             <ActivityIndicator color="#FFFFFF" />
@@ -117,8 +116,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   title: {
-    fontSize: getFontSize(24, 'large'),
-    fontWeight: '300',
+    fontSize: getFontSize(16, 'medium'),
+    fontWeight: '600',
     marginBottom: 12,
   },
   subtitle: {
@@ -134,7 +133,6 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     borderWidth: 1,
     fontSize: getFontSize(28, 'large'),
-    letterSpacing: 8,
     fontWeight: '400',
     marginBottom: 32,
     shadowColor: '#000',

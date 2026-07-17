@@ -16,10 +16,14 @@
     },
     "android": {
       "package": "com.lizlog.app",
+      "icon": "./assets/branding/logos/logo-image.png",
       "adaptiveIcon": {
         "backgroundColor": "#FFFEFA",
         "foregroundImage": "./assets/branding/logos/logo-image.png"
-      }
+      },
+      "permissions": [
+        "android.permission.SCHEDULE_EXACT_ALARM"
+      ]
     },
     "web": {
       "favicon": "./assets/branding/logos/logo-image.png"
@@ -32,7 +36,8 @@
       [
         "expo-image-picker",
         {
-          "photosPermission": "允許蜥日日記選擇寵物、日記與醫療紀錄照片。"
+          "photosPermission": "允許蜥日日記選擇寵物、日記與醫療紀錄照片。",
+          "microphonePermission": false
         }
       ],
       [

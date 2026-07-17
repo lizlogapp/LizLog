@@ -19,6 +19,7 @@ import { BaseScreen } from '../../../src/components/common/BaseScreen';
 import { FloatingActionBar } from '../../../src/components/FloatingActionBar';
 import { useAuth } from '../../../src/contexts/AuthContext';
 import { medicalService } from '../../../src/services/firestoreService';
+import { IMAGE_POLICY } from '../../../src/services/imageService';
 import * as ImagePicker from 'expo-image-picker';
 
 const getDaysInMonth = (y: number, m: number) => new Date(y, m, 0).getDate();
@@ -42,6 +43,7 @@ export default function AddMedicalScreen() {
 
   // Image section
   const [selectedImages, setSelectedImages] = useState<string[]>([]);
+  const [selectedImageThumbnails, setSelectedImageThumbnails] = useState<string[]>([]);
   const [isSaving, setIsSaving] = useState(false);
 
   // Medication section
@@ -72,6 +74,7 @@ export default function AddMedicalScreen() {
           setDiagnosis(doc.visit?.diagnosis || '');
           setAdvice(doc.visit?.advice?.join('\n') || '');
           setSelectedImages(doc.visit?.imageUrls || []);
+          setSelectedImageThumbnails(doc.visit?.imageThumbnailUrls || []);
           setMedStartDate(doc.medication?.startDate || '');
           setMedEndDate(doc.medication?.endDate || '');
           setMedicine(doc.medication?.medicine || '');
@@ -93,14 +96,14 @@ export default function AddMedicalScreen() {
     const result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ['images'],
       allowsMultipleSelection: true,
-      selectionLimit: Math.max(1, 5 - selectedImages.length),
+      selectionLimit: Math.max(1, IMAGE_POLICY.medicalImageLimit - selectedImages.length),
       quality: 0.8,
     });
     if (!result.canceled) {
       setSelectedImages(current => [
         ...current,
         ...result.assets.map(asset => asset.uri),
-      ].slice(0, 5));
+      ].slice(0, IMAGE_POLICY.medicalImageLimit));
     }
   };
 
@@ -121,7 +124,8 @@ export default function AddMedicalScreen() {
         reason,
         diagnosis,
         advice: advice.split('\n').filter(Boolean),
-          imageUrls: selectedImages.filter(uri => uri.startsWith('http')),
+        imageUrls: selectedImages.filter(uri => uri.startsWith('http')),
+        imageThumbnailUrls: selectedImageThumbnails,
       },
       medication: {
         startDate: medStartDate,
@@ -146,13 +150,18 @@ export default function AddMedicalScreen() {
       if (id) await medicalService.update(resolvedOwnerId, id, newData);
 
       const remoteImages = selectedImages.filter(uri => uri.startsWith('http'));
+      const remoteThumbnails = selectedImageThumbnails;
       const localImages = selectedImages.filter(uri => !uri.startsWith('http'));
       const uploadedImages = await Promise.all(
-        localImages.map((uri, index) => medicalService.uploadImage(resolvedOwnerId, medicalId, uri, index)),
+        localImages.map((uri, index) => medicalService.uploadImage(resolvedOwnerId, medicalId, uri, index, user?.uid || resolvedOwnerId)),
       );
       if (localImages.length > 0) {
         await medicalService.update(resolvedOwnerId, medicalId, {
-          visit: { ...newData.visit, imageUrls: [...remoteImages, ...uploadedImages] },
+          visit: {
+            ...newData.visit,
+            imageUrls: [...remoteImages, ...uploadedImages.map(image => image.imageUrl)],
+            imageThumbnailUrls: [...remoteThumbnails, ...uploadedImages.map(image => image.thumbnailUrl)],
+          },
         });
       }
 
@@ -161,8 +170,10 @@ export default function AddMedicalScreen() {
       } else {
         router.back();
       }
-    } catch {
-      Alert.alert('錯誤', '醫療紀錄儲存失敗，請確認網路與圖片權限後再試。');
+    } catch (error) {
+      Alert.alert('錯誤', error instanceof Error
+        ? error.message
+        : '醫療紀錄儲存失敗，請確認網路與圖片權限後再試。');
     } finally {
       setIsSaving(false);
     }
@@ -285,7 +296,10 @@ export default function AddMedicalScreen() {
           <Text style={labelStyle}>相關照片</Text>
           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.imagePickerContainer}>
             {selectedImages.map((img, idx) => (
-              <Pressable key={idx} style={styles.previewImageWrapper} onPress={() => setSelectedImages(images => images.filter((_, imageIndex) => imageIndex !== idx))}>
+              <Pressable key={idx} style={styles.previewImageWrapper} onPress={() => {
+                setSelectedImages(images => images.filter((_, imageIndex) => imageIndex !== idx));
+                setSelectedImageThumbnails(images => images.filter((_, imageIndex) => imageIndex !== idx));
+              }}>
                 <Image source={typeof img === 'string' ? { uri: img } : img} style={styles.previewImage} />
                 <View style={[styles.editImageOverlay, { backgroundColor: 'rgba(0,0,0,0.4)' }]}>
                   <Text style={[styles.editImageText, { fontFamily: fontFamilyName }]}>點擊移除</Text>
@@ -293,7 +307,7 @@ export default function AddMedicalScreen() {
               </Pressable>
             ))}
             
-            {selectedImages.length < 5 && <Pressable style={[styles.imageAddButton, { borderColor: theme.primary }]} onPress={pickImages}>
+            {selectedImages.length < IMAGE_POLICY.medicalImageLimit && <Pressable style={[styles.imageAddButton, { borderColor: theme.primary }]} onPress={pickImages}>
               <Text style={[styles.imageAddText, { color: theme.primary, fontFamily: fontFamilyName }]}>
                 + 選擇照片
               </Text>
@@ -411,8 +425,7 @@ export default function AddMedicalScreen() {
             {(() => {
               const daysInMonth = getDaysInMonth(pickerYear, pickerMonth);
               const firstDay = getFirstDayOfMonth(pickerYear, pickerMonth);
-              const totalCells = firstDay + daysInMonth;
-              const rows = Math.ceil(totalCells / 7);
+              const rows = 6;
               return Array.from({ length: rows }).map((_, rowIdx) => (
                 <View key={rowIdx} style={styles.calWeekRow}>
                   {Array.from({ length: 7 }).map((_, colIdx) => {
@@ -562,6 +575,7 @@ const styles = StyleSheet.create({
   },
   modalContent: {
     width: '85%',
+    minHeight: 362,
     backgroundColor: '#FFFEFA',
     borderRadius: 20,
     padding: 20,

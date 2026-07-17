@@ -19,7 +19,9 @@ import { FloatingActionBar } from '../../../src/components/FloatingActionBar';
 import { BaseScreen } from '../../../src/components/common/BaseScreen';
 import { appetiteToLabel } from '../../../src/data/mockDiaryData';
 import { useAuth } from '../../../src/contexts/AuthContext';
+import { getWeatherOption } from '../../../src/data/weatherOptions';
 import { diaryService, DiaryDoc } from '../../../src/services/firestoreService';
+import { formatDiaryDate } from '../../../src/utils/diaryDate';
 
 // SVG Icons
 import IconTemp from '../../../assets/icons/icon-temp.svg';
@@ -28,6 +30,7 @@ import IconBask from '../../../assets/icons/icon-bask.svg';
 import IconFeed from '../../../assets/icons/icon-feed.svg';
 import IconBath from '../../../assets/icons/icon-bath.svg';
 import IconPoop from '../../../assets/icons/icon-poop.svg';
+import IconMolt from '../../../assets/icons/icon-molt.svg';
 import IconWeight from '../../../assets/icons/icon-weight.svg';
 import IconLength from '../../../assets/icons/icon-length.svg';
 
@@ -74,39 +77,42 @@ export default function DiaryViewScreen() {
     };
   }, [id, ownerId, user]);
 
-  const date = diary?.date ? new Date(diary.date) : null;
-  const days = ['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT'];
-  const dateStr = date && !Number.isNaN(date.getTime())
-    ? `${days[date.getDay()]}  ${date.getMonth() + 1}/${date.getDate()}/${date.getFullYear()}`
-    : diary?.date || '-';
+  const dateStr = formatDiaryDate(diary?.date);
   const primaryPet = diary?.pets?.[0];
   const records = diary?.records ?? {};
-  const diaryImage = diary?.imageUrl
-    ? { uri: diary.imageUrl }
-    : require('../../../assets/branding/logos/logo-image.png');
+  const diaryImageUrls = diary?.imageUrls?.length
+    ? diary.imageUrls
+    : (diary?.imageUrl ? [diary.imageUrl] : []);
+  const diaryImages = diaryImageUrls.length
+    ? diaryImageUrls.map(uri => ({ uri }))
+    : [require('../../../assets/branding/logos/logo-image.png')];
   const displayDiary = {
     id: diary?.id || '',
     dateStr,
-    weatherIcon: diary?.weatherIcon?.includes('cloud')
-      ? require('../../../assets/icons/weather-cloudy.png')
-      : require('../../../assets/icons/weather-sunny.png'),
-    title: diary?.title || '未命名日記',
-    content: diary?.content || '尚未填寫日記內容。',
+    weatherIcon: getWeatherOption(diary?.weatherIcon).source,
+    title: diary?.title?.trim() === '標題' ? '' : (diary?.title?.trim() || ''),
+    content: diary?.content || '',
     petName: diary?.pets?.map(pet => pet.name).join('、') || '未指定寵物',
-    carouselImages: [diaryImage],
+    carouselImages: diaryImages,
     sensorData: {
-      temp: records.temp || primaryPet?.temp || '-',
-      humid: records.humid || primaryPet?.humid || '-',
+      temp: records.temp && records.temp !== '-' ? records.temp : (primaryPet?.temp || '-'),
+      humid: records.humid && records.humid !== '-' ? records.humid : (primaryPet?.humid || '-'),
       bask: records.bask || '-',
       feed: records.feed || '-',
       appetite: records.appetite || 0,
       bath: records.bath || '-',
       poop: records.poop || '-',
+      molt: records.molt || (primaryPet?.states?.molt ? '有' : '無'),
       weight: records.weight || '-',
       length: records.length || '-',
     },
-    statusIcons: primaryPet?.states || { bask: false, feed: false, bath: false, poop: false },
-    attachments: diary?.imageUrl ? [diaryImage] : [],
+    statusIcons: {
+      bask: Boolean(primaryPet?.states?.bask || Number.parseFloat(records.bask || '') > 0),
+      feed: Boolean(primaryPet?.states?.feed || (records.feed && records.feed !== '無')),
+      bath: Boolean(primaryPet?.states?.bath || Number.parseFloat(records.bath || '') > 0),
+      poop: Boolean(primaryPet?.states?.poop || records.poop === '有'),
+    },
+    attachments: diaryImageUrls.map(uri => ({ uri })),
   };
 
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
@@ -134,6 +140,7 @@ export default function DiaryViewScreen() {
     { icon: IconFeed, label: '飲食', value: displayDiary.sensorData.feed, appetite: displayDiary.sensorData.appetite },
     { icon: IconBath, label: '泡澡', value: displayDiary.sensorData.bath },
     { icon: IconPoop, label: '排便', value: displayDiary.sensorData.poop },
+    { icon: IconMolt, label: '蛻皮', value: displayDiary.sensorData.molt },
     { icon: IconWeight, label: '體重', value: displayDiary.sensorData.weight },
     { icon: IconLength, label: '身長', value: displayDiary.sensorData.length },
   ];
@@ -227,10 +234,10 @@ export default function DiaryViewScreen() {
             {/* 日期 + 天氣 + 標題 + 數據列 */}
             <View style={styles.infoContainer}>
               <View style={styles.dateRow}>
-                <Text style={[styles.dateText, { color: valueColor, fontFamily: fontFamilyName }]}>{displayDiary.dateStr}</Text>
-                <Image source={displayDiary.weatherIcon} style={[styles.weatherIcon, { tintColor: valueColor }]} />
+                <Text style={[styles.dateText, { color: labelColor, fontFamily: fontFamilyName }]}>{displayDiary.dateStr}</Text>
+                <Image source={displayDiary.weatherIcon} style={[styles.weatherIcon, { tintColor: labelColor }]} />
               </View>
-              <Text style={[styles.titleText, { color: valueColor, fontFamily: fontFamilyName }]}>{displayDiary.title}</Text>
+              {displayDiary.title ? <Text style={[styles.titleText, { color: labelColor, fontFamily: fontFamilyName }]}>{displayDiary.title}</Text> : null}
               <View style={styles.metricRow}>
                 <Text style={[styles.metricText, { color: valueColor, fontFamily: fontFamilyName }]}>{displayDiary.sensorData.temp}</Text>
                 <Text style={[styles.metricText, { color: valueColor, fontFamily: fontFamilyName }]}>{displayDiary.sensorData.humid}</Text>
@@ -245,10 +252,12 @@ export default function DiaryViewScreen() {
           </View>
 
           {/* ===== 卡片二：日記全文 ===== */}
-          <View style={[styles.contentCard, { backgroundColor: theme.background }]}>
-            <Text style={[styles.contentTitle, { color: labelColor, fontFamily: fontFamilyName }]}>{displayDiary.title}</Text>
-            <Text style={[styles.contentBody, { color: theme.text, fontFamily: fontFamilyName }]}>{displayDiary.content}</Text>
-          </View>
+          {(displayDiary.title || displayDiary.content.trim()) ? (
+            <View style={[styles.contentCard, { backgroundColor: theme.background }]}>
+              {displayDiary.title ? <Text style={[styles.contentTitle, { color: labelColor, fontFamily: fontFamilyName }]}>{displayDiary.title}</Text> : null}
+              {displayDiary.content.trim() ? <Text style={[styles.contentBody, { color: theme.text, fontFamily: fontFamilyName }]}>{displayDiary.content}</Text> : null}
+            </View>
+          ) : null}
 
           {/* ===== 卡片三：狀態紀錄 ===== */}
           <View style={[styles.detailCard, { backgroundColor: theme.background }]}>
@@ -261,7 +270,7 @@ export default function DiaryViewScreen() {
                     <Text style={[styles.recordLabel, { color: labelColor, fontFamily: fontFamilyName }]}>
                       {item.label}：
                     </Text>
-                    {item.label === '排便' ? (
+                    {['排便', '蛻皮'].includes(item.label) ? (
                       <View style={{ flexDirection: 'row', gap: 6, flex: 1, alignItems: 'center', justifyContent: 'flex-start' }}>
                         {['無', '有'].map((opt) => (
                           <View

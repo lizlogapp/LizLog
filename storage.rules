@@ -6,8 +6,28 @@ service firebase.storage {
       return request.auth != null;
     }
 
-    function underLimit() {
-      return request.resource == null || request.resource.size < 10 * 1024 * 1024;
+    function validImage(fileName) {
+      return request.resource == null || (
+        fileName.matches('.*[.]jpg')
+        && request.resource.contentType == 'image/jpeg'
+        && request.resource.size < 2 * 1024 * 1024
+      );
+    }
+
+    function validAttachment(fileName) {
+      return request.resource == null || (
+        request.resource.size < 10 * 1024 * 1024
+        && request.resource.contentType != null
+        && [
+          'application/pdf',
+          'text/plain',
+          'application/msword',
+          'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+          'application/vnd.ms-excel',
+          'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+        ].hasAny([request.resource.contentType])
+        && fileName.matches('.*[.](pdf|txt|doc|docx|xls|xlsx)')
+      );
     }
 
     function pet(ownerId, petId) {
@@ -18,19 +38,70 @@ service firebase.storage {
       return firestore.get(/databases/(default)/documents/users/$(ownerId)/$(collectionName)/$(recordId)).data;
     }
 
-    match /users/{ownerId}/pets/{petId}/{file=**} {
-      allow read: if signedIn() && pet(ownerId, petId).coParentIds.hasAny([request.auth.uid]);
-      allow write: if signedIn() && underLimit() && pet(ownerId, petId).editorIds.hasAny([request.auth.uid]);
+    match /users/{ownerId}/pets/{petId}/{filePath=**} {
+      allow read: if signedIn() && (
+        request.auth.uid == ownerId
+        || pet(ownerId, petId).coParentIds.hasAny([request.auth.uid])
+      );
+      // 必須先有對應寵物文件；避免登入者對任意不存在的 petId 寫入孤兒檔案。
+      // 刪除則允許 owner 清理已刪 Firestore 文件留下的不可讀孤兒檔案。
+      allow write: if signedIn() && (
+        (request.resource == null && (
+          request.auth.uid == ownerId
+          || pet(ownerId, petId).editorIds.hasAny([request.auth.uid])
+        ))
+        || (request.resource != null
+          && validImage(filePath)
+          && pet(ownerId, petId).editorIds.hasAny([request.auth.uid]))
+      );
     }
 
-    match /users/{ownerId}/diaries/{recordId}/{file=**} {
-      allow read: if signedIn() && record(ownerId, 'diaries', recordId).accessUserIds.hasAny([request.auth.uid]);
-      allow write: if signedIn() && underLimit() && record(ownerId, 'diaries', recordId).editorIds.hasAny([request.auth.uid]);
+    match /users/{ownerId}/diaries/{recordId}/{filePath=**} {
+      allow read: if signedIn() && (
+        request.auth.uid == ownerId
+        || record(ownerId, 'diaries', recordId).accessUserIds.hasAny([request.auth.uid])
+      );
+      allow write: if signedIn() && (
+        (request.resource == null && (
+          request.auth.uid == ownerId
+          || record(ownerId, 'diaries', recordId).editorIds.hasAny([request.auth.uid])
+        ))
+        || (request.resource != null
+          && validImage(filePath)
+          && record(ownerId, 'diaries', recordId).editorIds.hasAny([request.auth.uid]))
+      );
     }
 
-    match /users/{ownerId}/medical/{recordId}/{file=**} {
-      allow read: if signedIn() && record(ownerId, 'medical', recordId).accessUserIds.hasAny([request.auth.uid]);
-      allow write: if signedIn() && underLimit() && record(ownerId, 'medical', recordId).editorIds.hasAny([request.auth.uid]);
+    match /users/{ownerId}/diaries/{recordId}/attachments/{fileName} {
+      allow read: if signedIn() && (
+        request.auth.uid == ownerId
+        || record(ownerId, 'diaries', recordId).accessUserIds.hasAny([request.auth.uid])
+      );
+      allow write: if signedIn() && (
+        (request.resource == null && (
+          request.auth.uid == ownerId
+          || record(ownerId, 'diaries', recordId).editorIds.hasAny([request.auth.uid])
+        ))
+        || (request.resource != null
+          && validAttachment(fileName)
+          && record(ownerId, 'diaries', recordId).editorIds.hasAny([request.auth.uid]))
+      );
+    }
+
+    match /users/{ownerId}/medical/{recordId}/{filePath=**} {
+      allow read: if signedIn() && (
+        request.auth.uid == ownerId
+        || record(ownerId, 'medical', recordId).accessUserIds.hasAny([request.auth.uid])
+      );
+      allow write: if signedIn() && (
+        (request.resource == null && (
+          request.auth.uid == ownerId
+          || record(ownerId, 'medical', recordId).editorIds.hasAny([request.auth.uid])
+        ))
+        || (request.resource != null
+          && validImage(filePath)
+          && record(ownerId, 'medical', recordId).editorIds.hasAny([request.auth.uid]))
+      );
     }
 
     match /{file=**} {

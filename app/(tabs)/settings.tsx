@@ -1,5 +1,17 @@
-import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, Switch, Pressable, Modal, TextInput, Alert } from 'react-native';
+import React, { useEffect, useRef, useState } from 'react';
+import {
+  Alert,
+  AppState,
+  Linking,
+  View,
+  Text,
+  StyleSheet,
+  ScrollView,
+  Switch,
+  Pressable,
+  Modal,
+  TextInput,
+} from 'react-native';
 import LogoIcon from '../../assets/branding/logos/logo-image.svg';
 import { useRouter } from 'expo-router';
 import Constants from 'expo-constants';
@@ -18,12 +30,14 @@ import { getFontSize } from '../../src/theme/typographySettings';
 import { BaseScreen } from '../../src/components/common/BaseScreen';
 import {
   cancelAllLizLogNotifications,
+  getNotificationPermissionState,
   getNotificationPreferences,
+  ReminderNotificationInput,
   requestNotificationPermission,
-  scheduleReminderNotification,
   saveNotificationPreferences,
+  synchronizeEligibleReminderNotifications,
 } from '../../src/services/notificationService';
-import { reminderService } from '../../src/services/firestoreService';
+import { petService, reminderService } from '../../src/services/firestoreService';
 
 export default function SettingsScreen() {
   const { themeId, setThemeId, fontFamilyName, fontFamilyId, setFontFamilyId, isDemoMode, setIsDemoMode } = useTheme();
@@ -32,6 +46,8 @@ export default function SettingsScreen() {
 
   const [reminderEnabled, setReminderEnabled] = useState(true);
   const [sysNotifyEnabled, setSysNotifyEnabled] = useState(false);
+  const [notificationSettingsBusy, setNotificationSettingsBusy] = useState(false);
+  const awaitingNotificationSettingsRef = useRef(false);
   const [isAboutExpanded, setIsAboutExpanded] = useState(false);
   const [showTermsModal, setShowTermsModal] = useState(false);
   const [showPrivacyModal, setShowPrivacyModal] = useState(false);
@@ -46,40 +62,139 @@ export default function SettingsScreen() {
   const [confirmPassword, setConfirmPassword] = useState('');
   const [isSavingAccount, setIsSavingAccount] = useState(false);
   const appVersion = Constants.expoConfig?.version ?? '0.1.0';
+  const demoModeEnabled = Constants.expoConfig?.extra?.enableDemoMode === true;
+
+  async function synchronizeAllEnabledReminders() {
+    if (!auth.currentUser) return;
+    const [reminders, pets] = await Promise.all([
+      reminderService.getAll(auth.currentUser.uid),
+      petService.getAll(auth.currentUser.uid),
+    ]);
+    const result = await synchronizeEligibleReminderNotifications(
+      auth.currentUser.uid,
+      reminders as ReminderNotificationInput[],
+      pets,
+    );
+    if (result.failedReminderIds.length > 0) {
+      Alert.alert('部分提醒未排程', '部分提醒的時間或頻率設定不完整，請逐筆檢查。');
+    }
+  }
+
+  function openNotificationSettings() {
+    awaitingNotificationSettingsRef.current = true;
+    Linking.openSettings().catch(() => {
+      awaitingNotificationSettingsRef.current = false;
+      Alert.alert('無法開啟設定', '請手動前往手機設定，開啟蜥日日記的通知權限。');
+    });
+  }
+
+  function showNotificationSettingsGuide() {
+    Alert.alert(
+      '未開啟通知',
+      '請到手機設定開啟蜥日日記的通知權限。',
+      [
+        { text: '稍後', style: 'cancel' },
+        { text: '前往設定', onPress: openNotificationSettings },
+      ],
+    );
+  }
+
+  async function refreshNotificationSettings(synchronizeAfterGrant = false) {
+    const [preferences, permission] = await Promise.all([
+      getNotificationPreferences(),
+      getNotificationPermissionState(),
+    ]);
+    setReminderEnabled(preferences.reminderEnabled);
+    setSysNotifyEnabled(preferences.systemEnabled && permission.granted);
+    if (synchronizeAfterGrant
+      && preferences.reminderEnabled
+      && preferences.systemEnabled
+      && permission.granted) {
+      await synchronizeAllEnabledReminders();
+    }
+  }
 
   useEffect(() => {
-    getNotificationPreferences().then(preferences => {
-      setReminderEnabled(preferences.reminderEnabled);
-      setSysNotifyEnabled(preferences.systemEnabled);
+    void refreshNotificationSettings();
+    const subscription = AppState.addEventListener('change', nextState => {
+      if (nextState === 'active' && awaitingNotificationSettingsRef.current) {
+        awaitingNotificationSettingsRef.current = false;
+        void refreshNotificationSettings(true);
+      }
     });
+    return () => subscription.remove();
   }, []);
 
   const handleReminderToggle = async (value: boolean) => {
+    if (notificationSettingsBusy) return;
+    setNotificationSettingsBusy(true);
     setReminderEnabled(value);
-    await saveNotificationPreferences({ reminderEnabled: value, systemEnabled: sysNotifyEnabled });
-    if (!value) await cancelAllLizLogNotifications();
+    let previous: Awaited<ReturnType<typeof getNotificationPreferences>> | null = null;
+    try {
+      previous = await getNotificationPreferences();
+      const next = {
+        ...previous,
+        reminderEnabled: value,
+        reminderConfigured: true,
+      };
+      await saveNotificationPreferences(next);
+      if (!value) {
+        await cancelAllLizLogNotifications();
+      } else if (next.systemEnabled) {
+        const granted = await requestNotificationPermission();
+        setSysNotifyEnabled(granted);
+        if (!granted) showNotificationSettingsGuide();
+        else await synchronizeAllEnabledReminders();
+      }
+    } catch {
+      if (previous) {
+        await saveNotificationPreferences(previous).catch(() => undefined);
+        setReminderEnabled(previous.reminderEnabled);
+      } else {
+        await refreshNotificationSettings().catch(() => undefined);
+      }
+      Alert.alert('無法更新通知設定', '請稍後再試。');
+    } finally {
+      setNotificationSettingsBusy(false);
+    }
   };
 
   const handleSystemNotificationToggle = async (value: boolean) => {
-    if (value && !(await requestNotificationPermission())) {
-      setSysNotifyEnabled(false);
-      await saveNotificationPreferences({ reminderEnabled, systemEnabled: false });
-      Alert.alert('未開啟通知', '系統通知權限未允許，可稍後到手機設定中開啟。');
-      return;
-    }
+    if (notificationSettingsBusy) return;
+    setNotificationSettingsBusy(true);
     setSysNotifyEnabled(value);
-    await saveNotificationPreferences({ reminderEnabled, systemEnabled: value });
-    if (!value) {
-      await cancelAllLizLogNotifications();
-    } else if (auth.currentUser) {
-      try {
-        const reminders = await reminderService.getAll(auth.currentUser.uid);
-        await Promise.all(reminders.map(reminder =>
-          scheduleReminderNotification(reminder.ownerId || auth.currentUser!.uid, reminder),
-        ));
-      } catch {
-        Alert.alert('部分提醒未排程', '通知權限已開啟，但部分雲端提醒尚未同步，請確認網路後再試。');
+    let previous: Awaited<ReturnType<typeof getNotificationPreferences>> | null = null;
+    try {
+      previous = await getNotificationPreferences();
+      const next = {
+        ...previous,
+        systemEnabled: value,
+        systemConfigured: true,
+      };
+      // systemEnabled 表示使用者期望；OS 尚未授權時保留 true，返回設定後即可自動同步。
+      await saveNotificationPreferences(next);
+      if (!value) {
+        await cancelAllLizLogNotifications();
+        return;
       }
+
+      const granted = await requestNotificationPermission();
+      setSysNotifyEnabled(granted);
+      if (!granted) {
+        showNotificationSettingsGuide();
+        return;
+      }
+      if (next.reminderEnabled) await synchronizeAllEnabledReminders();
+    } catch {
+      if (previous) {
+        await saveNotificationPreferences(previous).catch(() => undefined);
+        setSysNotifyEnabled(previous.systemEnabled);
+      } else {
+        await refreshNotificationSettings().catch(() => undefined);
+      }
+      Alert.alert('無法更新通知設定', '請稍後再試。');
+    } finally {
+      setNotificationSettingsBusy(false);
     }
   };
 
@@ -192,6 +307,7 @@ export default function SettingsScreen() {
               thumbColor={'#FFFFFF'}
               onValueChange={handleReminderToggle}
               value={reminderEnabled}
+              disabled={notificationSettingsBusy}
               style={{ transform: [{ scaleX: 0.8 }, { scaleY: 0.8 }] }}
             />
           </View>
@@ -202,6 +318,7 @@ export default function SettingsScreen() {
               thumbColor={'#FFFFFF'}
               onValueChange={handleSystemNotificationToggle}
               value={sysNotifyEnabled}
+              disabled={notificationSettingsBusy}
               style={{ transform: [{ scaleX: 0.8 }, { scaleY: 0.8 }] }}
             />
           </View>
@@ -228,7 +345,7 @@ export default function SettingsScreen() {
             </Pressable>
           </View>
           {/* 只對官方帳號顯示 Demo 模式切換 */}
-          {auth.currentUser?.email === 'lizlogapp@gmail.com' && (
+          {demoModeEnabled && (
             <View style={styles.row}>
               <Text style={[styles.label, { color: theme.primary, fontFamily: fontFamilyName }]}>演示數據模式</Text>
               <Switch

@@ -8,7 +8,9 @@ import { FloatingActionBar } from '../../../src/components/FloatingActionBar';
 import { BaseScreen } from '../../../src/components/common/BaseScreen';
 import { STATUS_BAR_HEIGHT } from '../../../src/theme/layoutSettings';
 import { useAuth } from '../../../src/contexts/AuthContext';
+import { getWeatherOption } from '../../../src/data/weatherOptions';
 import { diaryService, petService, DiaryDoc } from '../../../src/services/firestoreService';
+import { formatDiaryDate } from '../../../src/utils/diaryDate';
 /**
  * 有資料時的日記首頁
  * 包含月份選擇器與動態生成的日記卡片
@@ -58,11 +60,22 @@ export default function DiaryScreen() {
   const mappedFirestoreDiaries = firestoreDiaries.map(d => ({
     id: d.id,
     ownerId: d.ownerId || user?.uid,
-    dateStr: d.date, // format this properly if needed
-    weatherIcon: d.weatherIcon?.includes('sunny') ? require('../../../assets/icons/weather-sunny.png') : require('../../../assets/icons/weather-cloudy.png'),
-    title: d.title,
-    image: d.imageUrl ? { uri: d.imageUrl } : null,
-    pets: d.pets
+    dateStr: formatDiaryDate(d.date),
+    weatherIcon: getWeatherOption(d.weatherIcon).source,
+    title: d.title?.trim() === '標題' ? '' : (d.title?.trim() || ''),
+    image: (d.thumbnailUrls?.[0] || d.thumbnailUrl || d.imageUrls?.[0] || d.imageUrl)
+      ? { uri: d.thumbnailUrls?.[0] || d.thumbnailUrl || d.imageUrls?.[0] || d.imageUrl }
+      : null,
+    pets: (d.pets || []).map(pet => ({
+      ...pet,
+      states: {
+        ...pet.states,
+        bask: Boolean(pet.states?.bask || Number.parseFloat(d.records?.bask || '') > 0),
+        feed: Boolean(pet.states?.feed || (d.records?.feed && d.records.feed !== '無')),
+        bath: Boolean(pet.states?.bath || Number.parseFloat(d.records?.bath || '') > 0),
+        poop: Boolean(pet.states?.poop || d.records?.poop === '有'),
+      },
+    })),
   }));
 
   const diariesToShow = isDemoMode ? mockDiaries : mappedFirestoreDiaries;
@@ -322,10 +335,10 @@ export default function DiaryScreen() {
                     <Text style={[styles.metricText, { color: theme.primary, fontFamily: fontFamilyName }]}>{pet.humid}</Text>
                     
                     <View style={styles.metricIconsBlock}>
-                      <Image source={pet.states.bask ? require('../../../assets/icons/category-basking-active.png') : require('../../../assets/icons/category-basking-default.png')} style={[styles.stateIcon, { tintColor: theme.primary }]} />
-                      <Image source={pet.states.feed ? require('../../../assets/icons/category-food-active.png') : require('../../../assets/icons/category-food-default.png')} style={[styles.stateIcon, { tintColor: theme.primary }]} />
-                      <Image source={pet.states.bath ? require('../../../assets/icons/category-bath-active.png') : require('../../../assets/icons/category-bath-default.png')} style={[styles.stateIcon, { tintColor: theme.primary }]} />
-                      <Image source={pet.states.poop ? require('../../../assets/icons/category-poop-active.png') : require('../../../assets/icons/category-poop-default.png')} style={[styles.stateIcon, { tintColor: theme.primary }]} />
+                      <Image source={pet.states?.bask ? require('../../../assets/icons/category-basking-active.png') : require('../../../assets/icons/category-basking-default.png')} style={styles.stateIcon} />
+                      <Image source={pet.states?.feed ? require('../../../assets/icons/category-food-active.png') : require('../../../assets/icons/category-food-default.png')} style={styles.stateIcon} />
+                      <Image source={pet.states?.bath ? require('../../../assets/icons/category-bath-active.png') : require('../../../assets/icons/category-bath-default.png')} style={styles.stateIcon} />
+                      <Image source={pet.states?.poop ? require('../../../assets/icons/category-poop-active.png') : require('../../../assets/icons/category-poop-default.png')} style={styles.stateIcon} />
                     </View>
                   </View>
                 ))}

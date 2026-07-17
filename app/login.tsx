@@ -102,7 +102,7 @@ export default function LoginScreen() {
       await signInWithCredential(auth, credential);
       // 成功後 _layout.tsx 會監聽 auth state 改變並自動導航
     } catch (error: any) {
-      console.error('Google sign-in error:', error);
+      if (__DEV__) console.warn('Google sign-in error code:', error?.code ?? 'unknown');
       Alert.alert('錯誤', 'Google 帳號登入失敗，請稍後再試');
     } finally {
       setIsGoogleLoading(false);
@@ -110,7 +110,7 @@ export default function LoginScreen() {
   };
 
   const handleAuthError = (error: any) => {
-    console.error('Auth error detail:', error);
+    if (__DEV__) console.warn('Auth error code:', error?.code ?? 'unknown');
     let errorMessage = '發生錯誤，請稍後再試';
     if (error.code === 'auth/email-already-in-use') {
       errorMessage = '該電子郵件已被註冊過';
@@ -124,8 +124,6 @@ export default function LoginScreen() {
       errorMessage = 'Firebase 尚未啟用「電子郵件/密碼」登入方式，請至 Firebase 控制台啟用它！';
     } else if (error.code) {
       errorMessage = `${errorMessage} (${error.code})`;
-    } else if (error.message) {
-      errorMessage = `${errorMessage} (${error.message})`;
     }
     Alert.alert('錯誤', errorMessage);
   };
@@ -143,6 +141,7 @@ export default function LoginScreen() {
       // 檢查信箱是否驗證
       if (!user.emailVerified) {
         try {
+          auth.languageCode = 'zh-TW';
           await sendEmailVerification(user);
         } catch {
           // Firebase 可能因寄送頻率限制拒絕重寄；仍需立即登出未驗證帳號。
@@ -167,6 +166,7 @@ export default function LoginScreen() {
 
     setIsLoading(true);
     try {
+      auth.languageCode = 'zh-TW';
       await sendPasswordResetEmail(auth, normalizedEmail);
       Alert.alert('已發送', '密碼重設信已寄出，請檢查您的收件匣。');
     } catch (error) {
@@ -187,7 +187,9 @@ export default function LoginScreen() {
     }
     setIsRegLoading(true);
     try {
-      const userCredential = await createUserWithEmailAndPassword(auth, regEmail, regPassword);
+      const normalizedEmail = regEmail.trim();
+      auth.languageCode = 'zh-TW';
+      const userCredential = await createUserWithEmailAndPassword(auth, normalizedEmail, regPassword);
       const user = userCredential.user;
       
       // 寄送驗證信
@@ -197,6 +199,9 @@ export default function LoginScreen() {
       await signOut(auth);
       
       setRegisterModalVisible(false);
+      setEmail(normalizedEmail);
+      setPassword('');
+      router.replace('/');
       
       Alert.alert(
         '註冊成功！',
@@ -269,6 +274,12 @@ export default function LoginScreen() {
                   value={password}
                   onChangeText={setPassword}
                   secureTextEntry={!showPassword}
+                  selectionColor="#333333"
+                  cursorColor="#333333"
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  spellCheck={false}
+                  autoComplete="current-password"
                   editable={!anyLoading}
                   placeholder="請輸入密碼"
                   placeholderTextColor="#C0C0C0"
@@ -413,6 +424,12 @@ export default function LoginScreen() {
                     value={regPassword}
                     onChangeText={setRegPassword}
                     secureTextEntry={!showRegPassword}
+                    selectionColor="#333333"
+                    cursorColor="#333333"
+                    autoCapitalize="none"
+                    autoCorrect={false}
+                    spellCheck={false}
+                    autoComplete="new-password"
                     editable={!isRegLoading}
                     placeholder="請輸入密碼"
                     placeholderTextColor="#C0C0C0"
@@ -439,6 +456,12 @@ export default function LoginScreen() {
                     value={regConfirmPassword}
                     onChangeText={setRegConfirmPassword}
                     secureTextEntry={!showRegConfirmPassword}
+                    selectionColor="#333333"
+                    cursorColor="#333333"
+                    autoCapitalize="none"
+                    autoCorrect={false}
+                    spellCheck={false}
+                    autoComplete="new-password"
                     editable={!isRegLoading}
                     placeholder="再次輸入密碼"
                     placeholderTextColor="#C0C0C0"
@@ -581,6 +604,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     height: '100%',
+    zIndex: 2,
   },
   eyeText: {
     fontSize: getFontSize(14, 'medium'),

@@ -8,7 +8,8 @@ import { getThemeTokens } from '../../src/theme/themeSettings';
 import { getFontSize } from '../../src/theme/typographySettings';
 import { BaseScreen } from '../../src/components/common/BaseScreen';
 import { useAuth } from '../../src/contexts/AuthContext';
-import { diaryService, petService, DiaryDoc } from '../../src/services/firestoreService';
+import { diaryService, petService, DiaryDoc, PetDoc } from '../../src/services/firestoreService';
+import { formatDiaryDate, parseDiaryDate } from '../../src/utils/diaryDate';
 
 // 引入從 temp 新增進來的 SVG 圖示
 // 引入從 temp 新增進來並翻成英文避免組件撞名的 SVG 圖示
@@ -23,14 +24,14 @@ import IconBath from '../../assets/icons/icon-bath.svg';
 import IconFeed from '../../assets/icons/icon-feed.svg';
 
 export default function AnalyticsScreen() {
-  const { themeId, fontFamilyName, isDemoMode } = useTheme();
+  const { themeId, fontFamilyName } = useTheme();
   const theme = getThemeTokens(themeId);
   const router = useRouter();
   const { user } = useAuth();
 
   // 延用與首頁相同的寵物切換狀態
-  const [availablePets, setAvailablePets] = useState<string[]>([]);
-  const [currentPetName, setCurrentPetName] = useState<string>('未設定');
+  const [availablePets, setAvailablePets] = useState<(PetDoc & { id: string })[]>([]);
+  const [currentPetId, setCurrentPetId] = useState<string>('');
   const [isDropdownVisible, setIsDropdownVisible] = useState<boolean>(false);
   const [isRecordsExpanded, setIsRecordsExpanded] = useState<boolean>(false);
   const [expandedChart, setExpandedChart] = useState<string | null>(null);
@@ -40,25 +41,77 @@ export default function AnalyticsScreen() {
 
   React.useEffect(() => {
     if (!user) return;
-    petService.getAll(user.uid).then(pets => {
-      setAvailablePets(pets.map(p => p.name));
-      if (pets.length > 0) {
-        setCurrentPetName(pets[0].name);
-      } else {
-        setCurrentPetName('未設定');
-      }
-
-      diaryService.getAll(user.uid).then(entries => {
-        setDiaryEntries(entries);
-      });
+    let active = true;
+    void petService.getAll(user.uid).then(pets => {
+      if (!active) return;
+      setAvailablePets(pets);
+      setCurrentPetId(current => pets.some(pet => pet.id === current) ? current : (pets[0]?.id || ''));
     });
+    const unsubscribe = diaryService.onDiariesChanged(user.uid, entries => {
+      if (active) setDiaryEntries(entries);
+    });
+    return () => {
+      active = false;
+      unsubscribe();
+    };
   }, [user]);
+
+  const currentPet = availablePets.find(pet => pet.id === currentPetId);
+  const currentPetName = currentPet?.name || '未設定';
+  const findPetData = React.useCallback((entry: DiaryDoc) => {
+    const direct = entry.pets?.find(pet => pet.petId === currentPetId);
+    if (direct) return direct;
+    const indexed = entry.petIds?.indexOf(currentPetId) ?? -1;
+    if (indexed >= 0 && entry.pets?.[indexed]) return entry.pets[indexed];
+    return entry.pets?.find(pet => !pet.petId && pet.name === currentPetName);
+  }, [currentPetId, currentPetName]);
+
+  const petEntries = React.useMemo(() => diaryEntries
+    .filter(entry => Boolean(findPetData(entry)))
+    .sort((a, b) => (parseDiaryDate(b.date)?.getTime() || 0) - (parseDiaryDate(a.date)?.getTime() || 0)), [diaryEntries, findPetData]);
+
+  const hasValue = (value: unknown) => value !== undefined
+    && value !== null
+    && String(value).trim() !== ''
+    && String(value).trim() !== '-';
+
+  const getMetric = (
+    key: keyof NonNullable<DiaryDoc['records']>,
+    unit = '',
+    stateKey?: keyof NonNullable<DiaryDoc['pets'][number]['states']>,
+  ) => {
+    if (stateKey) {
+      const latest = petEntries[0];
+      if (!latest) return { value: '-', updatedAt: '-' };
+      const raw = latest.records?.[key];
+      if (hasValue(raw)) {
+        const display = unit && Number.isFinite(Number.parseFloat(String(raw))) ? `${raw}${unit}` : String(raw);
+        return { value: display, updatedAt: formatDiaryDate(latest.date) };
+      }
+      return {
+        value: findPetData(latest)?.states?.[stateKey] ? '有' : '無',
+        updatedAt: formatDiaryDate(latest.date),
+      };
+    }
+
+    const match = petEntries.find(entry => {
+      const raw = entry.records?.[key];
+      return hasValue(raw);
+    });
+    if (!match) return { value: '-', updatedAt: '-' };
+    const raw = match.records?.[key];
+    if (hasValue(raw)) {
+      const display = unit && Number.isFinite(Number.parseFloat(String(raw))) ? `${raw}${unit}` : String(raw);
+      return { value: display, updatedAt: formatDiaryDate(match.date) };
+    }
+    return {
+      value: '-',
+      updatedAt: formatDiaryDate(match.date),
+    };
+  };
 
   // 從日記資料運算最新狀態
   const computeLatestStatus = () => {
-    const petEntries = diaryEntries.filter(e => 
-      e.pets?.some(p => p.name === currentPetName)
-    );
     if (petEntries.length === 0) {
       return {
         temp: { current: '-', avg: '-', high: '-', low: '-', updatedAt: '-' },
@@ -67,35 +120,57 @@ export default function AnalyticsScreen() {
         feed: { value: '-', updatedAt: '-' },
         bath: { value: '-', updatedAt: '-' },
         poop: { value: '-', updatedAt: '-' },
+        molt: { value: '-', updatedAt: '-' },
         weight: { value: '-', updatedAt: '-' },
         length: { value: '-', updatedAt: '-' },
       };
     }
-    const latest = petEntries[0]; // 已依 date desc 排序
-    const petData = latest.pets?.find(p => p.name === currentPetName);
-    const temps = petEntries.map(e => parseFloat(e.pets?.find(p => p.name === currentPetName)?.temp || '0')).filter(v => v > 0);
-    const humids = petEntries.map(e => parseFloat(e.pets?.find(p => p.name === currentPetName)?.humid || '0')).filter(v => v > 0);
+    const temperatureEntries = petEntries.map(entry => {
+      const recordValue = entry.records?.temp;
+      return {
+        entry,
+        value: Number.parseFloat(String(hasValue(recordValue) ? recordValue : (findPetData(entry)?.temp ?? ''))),
+      };
+    }).filter(item => Number.isFinite(item.value) && item.value > 0);
+    const humidityEntries = petEntries.map(entry => {
+      const recordValue = entry.records?.humid;
+      return {
+        entry,
+        value: Number.parseFloat(String(hasValue(recordValue) ? recordValue : (findPetData(entry)?.humid ?? ''))),
+      };
+    }).filter(item => Number.isFinite(item.value) && item.value >= 0);
+    const todayKey = new Date();
+    const isTodayEntry = (entry: DiaryDoc) => {
+      const parsed = parseDiaryDate(entry.date);
+      return Boolean(parsed
+        && parsed.getFullYear() === todayKey.getFullYear()
+        && parsed.getMonth() === todayKey.getMonth()
+        && parsed.getDate() === todayKey.getDate());
+    };
+    const temps = temperatureEntries.filter(item => isTodayEntry(item.entry)).map(item => item.value);
+    const humids = humidityEntries.filter(item => isTodayEntry(item.entry)).map(item => item.value);
     return {
       temp: {
-        current: petData?.temp || '-',
+        current: temperatureEntries[0]?.value.toString() || '-',
         avg: temps.length > 0 ? (temps.reduce((a,b)=>a+b,0)/temps.length).toFixed(1) : '-',
         high: temps.length > 0 ? Math.max(...temps).toString() : '-',
         low: temps.length > 0 ? Math.min(...temps).toString() : '-',
-        updatedAt: latest.date || '-',
+        updatedAt: temperatureEntries[0] ? formatDiaryDate(temperatureEntries[0].entry.date) : '-',
       },
       humid: {
-        current: petData?.humid || '-',
+        current: humidityEntries[0]?.value.toString() || '-',
         avg: humids.length > 0 ? (humids.reduce((a,b)=>a+b,0)/humids.length).toFixed(1) : '-',
         high: humids.length > 0 ? Math.max(...humids).toString() : '-',
         low: humids.length > 0 ? Math.min(...humids).toString() : '-',
-        updatedAt: latest.date || '-',
+        updatedAt: humidityEntries[0] ? formatDiaryDate(humidityEntries[0].entry.date) : '-',
       },
-      bask: { value: petData?.states?.bask ? '已曬曬' : '未曬曬', updatedAt: latest.date || '-' },
-      feed: { value: petData?.states?.feed ? '已餵食' : '未餵食', updatedAt: latest.date || '-' },
-      bath: { value: petData?.states?.bath ? '已泡澡' : '未泡澡', updatedAt: latest.date || '-' },
-      poop: { value: petData?.states?.poop ? '已排便' : '未排便', updatedAt: latest.date || '-' },
-      weight: { value: latest.records?.weight || '-', updatedAt: latest.date || '-' },
-      length: { value: latest.records?.length || '-', updatedAt: latest.date || '-' },
+      bask: getMetric('bask', ' 分鐘', 'bask'),
+      feed: getMetric('feed', '', 'feed'),
+      bath: getMetric('bath', ' 分鐘', 'bath'),
+      poop: getMetric('poop', '', 'poop'),
+      molt: getMetric('molt', '', 'molt'),
+      weight: getMetric('weight', ' 公克'),
+      length: getMetric('length', ' 公分'),
     };
   };
 
@@ -114,18 +189,27 @@ export default function AnalyticsScreen() {
     const key = keyMap[chartName];
     if (!key) return [];
 
-    const maxPoints = period === '日' ? 7 : period === '週' ? 7 : period === '月' ? 10 : 12;
-    return diaryEntries
-      .filter(entry => entry.pets?.some(pet => pet.name === currentPetName))
-      .sort((a, b) => a.date.localeCompare(b.date))
+    const windowDays = period === '日' ? 1 : period === '週' ? 7 : period === '月' ? 31 : 366;
+    const maxPoints = period === '日' ? 12 : period === '週' ? 7 : period === '月' ? 31 : 12;
+    const datedEntries = petEntries.map(entry => ({ entry, date: parseDiaryDate(entry.date) })).filter(item => item.date);
+    const anchor = datedEntries.reduce<Date | null>((latest, item) => !latest || item.date!.getTime() > latest.getTime() ? item.date : latest, null);
+    const cutoff = anchor ? new Date(anchor.getFullYear(), anchor.getMonth(), anchor.getDate() - windowDays + 1) : null;
+    return [...petEntries]
+      .sort((a, b) => (parseDiaryDate(a.date)?.getTime() || 0) - (parseDiaryDate(b.date)?.getTime() || 0))
+      .filter(entry => {
+        const date = parseDiaryDate(entry.date);
+        return !cutoff || Boolean(date && date >= cutoff && date <= anchor!);
+      })
       .map(entry => {
-        const pet = entry.pets.find(item => item.name === currentPetName);
+        const pet = findPetData(entry);
         const fallback = key === 'temp' ? pet?.temp : key === 'humid' ? pet?.humid : undefined;
-        const raw = entry.records?.[key] ?? fallback;
-        const val = typeof raw === 'number' ? raw : Number.parseFloat(raw || '');
-        const date = new Date(entry.date);
+        const recordValue = entry.records?.[key];
+        const raw = hasValue(recordValue) ? recordValue : fallback;
+        let val = typeof raw === 'number' ? raw : Number.parseFloat(raw || '');
+        if (key === 'appetite' && val <= 0) val = Number.NaN;
+        const date = parseDiaryDate(entry.date);
         return {
-          label: Number.isNaN(date.getTime()) ? entry.date : `${date.getMonth() + 1}/${date.getDate()}`,
+          label: date ? `${date.getMonth() + 1}/${date.getDate()}` : entry.date,
           val,
         };
       })
@@ -136,13 +220,13 @@ export default function AnalyticsScreen() {
   const chartButtons = [
     { text: '溫度變化圖', Icon: IconTemp },
     { text: '濕度變化圖', Icon: IconHumid },
+    { text: '飲食變化圖', Icon: IconFeed },
     { text: '日照變化圖', Icon: IconBask },
     { text: '泡澡變化圖', Icon: IconBath },
-    { text: '飲食變化圖', Icon: IconFeed },
-    { text: '體重變化圖', Icon: IconWeight },
-    { text: '身長變化圖', Icon: IconLength },
     { text: '排便日曆', Icon: IconPoop },
     { text: '蛻皮日曆', Icon: IconMolt },
+    { text: '身長變化圖', Icon: IconLength },
+    { text: '體重變化圖', Icon: IconWeight },
   ];
 
   return (
@@ -195,18 +279,18 @@ export default function AnalyticsScreen() {
               >
                 {availablePets.map((pet, idx) => (
                   <Pressable
-                    key={pet}
+                    key={pet.id}
                     style={[
                       styles.dropdownItem,
                       idx === availablePets.length - 1 && { marginBottom: 0 }
                     ]}
                     onPress={() => {
-                      setCurrentPetName(pet);
+                      setCurrentPetId(pet.id);
                       setIsDropdownVisible(false);
                     }}
                   >
                     <Text style={[styles.dropdownItemText, { color: theme.primary, fontFamily: fontFamilyName }]}>
-                      {pet}
+                      {pet.name}
                     </Text>
                   </Pressable>
                 ))}
@@ -304,6 +388,18 @@ export default function AnalyticsScreen() {
               <Text style={[styles.recordFooter, { color: theme.primary, fontFamily: fontFamilyName }]}>更新時間  {latestStatus.poop.updatedAt}</Text>
             </View>
 
+            {/* 蛻皮卡片 */}
+            <View style={[styles.recordCard, { backgroundColor: theme.background }]}>
+              <View style={styles.recordTitleRow}>
+                <IconMolt width={24} height={24} color={theme.primary} style={styles.recordIcon} />
+                <Text style={[styles.recordTitle, { color: theme.primary, fontFamily: fontFamilyName }]}>蛻皮</Text>
+              </View>
+              <View style={styles.recordContent}>
+                <Text style={[styles.recordText, { color: theme.primary, fontFamily: fontFamilyName }]}>{latestStatus.molt.value}</Text>
+              </View>
+              <Text style={[styles.recordFooter, { color: theme.primary, fontFamily: fontFamilyName }]}>更新時間  {latestStatus.molt.updatedAt}</Text>
+            </View>
+
             {/* 體重卡片 */}
             <View style={[styles.recordCard, { backgroundColor: theme.background }]}>
               <View style={styles.recordTitleRow}>
@@ -343,7 +439,7 @@ export default function AnalyticsScreen() {
           } else if (btn.text === '濕度變化圖') {
             yAxisLabels = ['100%', '80%', '60%', '40%', '20%', '0%'];
           } else if (btn.text === '日照變化圖') {
-            yAxisLabels = ['12h', '10h', '8h', '6h', '4h', '2h', '0h'];
+            yAxisLabels = ['720m', '600m', '480m', '360m', '240m', '120m', '0m'];
           } else if (btn.text === '泡澡變化圖') {
             yAxisLabels = ['60m', '50m', '40m', '30m', '20m', '10m', '0m'];
           } else if (btn.text === '飲食變化圖') {
@@ -372,7 +468,7 @@ export default function AnalyticsScreen() {
             } else if (btn.text === '身長變化圖') {
               heightPercent = (data.val / 50) * 100;
             } else if (btn.text === '日照變化圖') {
-              heightPercent = (data.val / 12) * 100;
+              heightPercent = (data.val / 720) * 100;
             } else if (btn.text === '泡澡變化圖') {
               heightPercent = (data.val / 60) * 100;
             } else if (btn.text === '飲食變化圖') {
@@ -440,8 +536,7 @@ export default function AnalyticsScreen() {
                       const calMonth = calendarDate.getMonth() + 1;
                       const daysInMonth = new Date(calYear, calMonth, 0).getDate();
                       const firstDayOffset = new Date(calYear, calMonth - 1, 1).getDay(); // 0:日, 1:一
-                      const totalCells = daysInMonth + firstDayOffset;
-                      const rows = Math.ceil(totalCells / 7);
+                      const rows = 6;
                       
                       const today = new Date();
                       const isCurrentMonth = today.getFullYear() === calYear && today.getMonth() + 1 === calMonth;
@@ -450,17 +545,17 @@ export default function AnalyticsScreen() {
                       // 從共用資料中心取得事件日期
                       // 從日記數據計算事件日期
                       const eventDays: number[] = [];
-                      const stateKey = btn.text === '排便日曆' ? 'poop' : null;
-                      diaryEntries.forEach(entry => {
-                        const petData = entry.pets?.find(p => p.name === currentPetName);
-                        if (stateKey && petData?.states?.[stateKey]) {
-                          // 解析日期字串
-                          const dateMatch = entry.date?.match(/(\d{4})\/(\d{2})\/(\d{2})/);
-                          if (dateMatch) {
-                            const [, yr, mo, dy] = dateMatch;
-                            if (parseInt(yr) === calYear && parseInt(mo) === calMonth) {
-                              eventDays.push(parseInt(dy));
-                            }
+                      const stateKey: 'poop' | 'molt' = btn.text === '排便日曆' ? 'poop' : 'molt';
+                      petEntries.forEach(entry => {
+                        const petData = findPetData(entry);
+                        const recordValue = entry.records?.[stateKey];
+                        const hasRecordedEvent = recordValue === '有'
+                          || (Number.isFinite(Number.parseFloat(recordValue || '')) && Number.parseFloat(recordValue || '') > 0)
+                          || Boolean(petData?.states?.[stateKey]);
+                        if (hasRecordedEvent) {
+                          const parsed = parseDiaryDate(entry.date);
+                          if (parsed && parsed.getFullYear() === calYear && parsed.getMonth() + 1 === calMonth) {
+                            eventDays.push(parsed.getDate());
                           }
                         }
                       });

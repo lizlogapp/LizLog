@@ -13,11 +13,13 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { BaseScreen } from '../../src/components/common/BaseScreen';
-import { ReminderItem, petIdToName } from '../../src/data/mockDiaryData';
+import { ReminderItem } from '../../src/data/mockDiaryData';
 import { paletteColors } from '../../src/theme/themeColorSettings';
 import { useAuth } from '../../src/contexts/AuthContext';
 import { diaryService, petService, reminderService, PetDoc } from '../../src/services/firestoreService';
 import { sensorService, SensorData } from '../../src/services/sensorService';
+import { usePetSnapshot } from '../../src/contexts/PetSnapshotContext';
+import { getWeatherOption } from '../../src/data/weatherOptions';
 import {
   STATUS_BAR_HEIGHT,
   TAB_BAR_HEIGHT,
@@ -39,15 +41,43 @@ const PAGE_HEIGHT = H - STATUS_BAR_HEIGHT - TAB_BAR_HEIGHT - (PANEL_CONTENT_MARG
 
 const IMAGE_PADDING = 64;
 
+export function isReminderDueToday(reminder: {
+  frequencyType: string;
+  startDate?: string;
+  everyNDays?: string;
+  selectedWeekDays?: number[];
+}, now = new Date()) {
+  const today = new Date(now);
+  today.setHours(0, 0, 0, 0);
+
+  if (reminder.frequencyType === 'daily') return true;
+  if (reminder.frequencyType === 'weekly') {
+    return reminder.selectedWeekDays?.includes(today.getDay()) ?? false;
+  }
+
+  if (!reminder.startDate) return false;
+  const start = new Date(reminder.startDate.replace(/\//g, '-'));
+  if (Number.isNaN(start.getTime())) return false;
+  start.setHours(0, 0, 0, 0);
+  const elapsedDays = Math.floor((today.getTime() - start.getTime()) / 86_400_000);
+  if (reminder.frequencyType === 'once') return elapsedDays === 0;
+  if (reminder.frequencyType === 'everyN') {
+    const interval = Number.parseInt(reminder.everyNDays || '', 10);
+    return elapsedDays >= 0 && interval > 0 && elapsedDays % interval === 0;
+  }
+  return false;
+}
+
 export default function HomeScreen() {
   const insets = useSafeAreaInsets();
   const DYNAMIC_PAGE_HEIGHT = H - STATUS_BAR_HEIGHT - TAB_BAR_HEIGHT - insets.bottom - (PANEL_CONTENT_MARGIN + CONTENT_PAGE_MARGIN) * 2;
 
   const { isReady } = useAppLoad();
-  const { themeId, fontFamilyName, isDemoMode } = useTheme();
+  const { themeId, fontFamilyName } = useTheme();
   const theme = getThemeTokens(themeId);
   const router = useRouter();
   const { user } = useAuth();
+  const { setSnapshot } = usePetSnapshot();
 
   const [loadingComplete, setLoadingComplete] = useState(true);
   const [allPets, setAllPets] = useState<(PetDoc & { id: string })[]>([]); 
@@ -69,95 +99,89 @@ export default function HomeScreen() {
 
   const [reminders, setReminders] = useState<ReminderItem[]>([]); // 預設空陣列
 
-  const isReminderDueToday = (reminder: {
-    frequencyType: string;
-    startDate?: string;
-    everyNDays?: string;
-    selectedWeekDays?: number[];
-  }) => {
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-
-    if (reminder.frequencyType === 'daily') return true;
-    if (reminder.frequencyType === 'weekly') {
-      return reminder.selectedWeekDays?.includes(today.getDay()) ?? false;
-    }
-
-    const start = reminder.startDate ? new Date(reminder.startDate.replace(/\//g, '-')) : null;
-    if (!start || Number.isNaN(start.getTime())) return reminder.frequencyType === 'once';
-    start.setHours(0, 0, 0, 0);
-    const elapsedDays = Math.floor((today.getTime() - start.getTime()) / 86_400_000);
-    if (reminder.frequencyType === 'once') return elapsedDays === 0;
-    if (reminder.frequencyType === 'everyN') {
-      const interval = Number.parseInt(reminder.everyNDays || '', 10);
-      return elapsedDays >= 0 && interval > 0 && elapsedDays % interval === 0;
-    }
-    return false;
-  };
-
   useEffect(() => {
-    if (user) {
-      // Load pets
-      petService.getAll(user.uid).then(pets => {
-        setAllPets(pets);
-        if (!currentPet && pets.length > 0) {
-          setCurrentPet(pets[0]);
-        } else if (pets.length === 0) {
-          setCurrentPet(null);
-        }
-
-        // Load latest diary
-        diaryService.getAll(user.uid).then(diaries => {
-          if (diaries.length > 0) {
-            const latest = diaries[0];
-            const d = new Date(latest.date);
-            const monthNames = ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC'];
-            setLatestDiary({
-              id: latest.id,
-              ownerId: latest.ownerId || user.uid,
-              day: String(d.getDate()).padStart(2, '0'),
-              month: monthNames[d.getMonth()],
-              weatherIcon: latest.weatherIcon?.includes('sunny') ? require('../../assets/icons/weather-sunny.png') : require('../../assets/icons/weather-cloudy.png'),
-              imageUrl: latest.imageUrl ? { uri: latest.imageUrl } : null,
-            });
-          } else {
-            setLatestDiary(null);
-          }
-        });
-
-        const mutedPetIds = pets
-          .filter(p => p.coParents?.some(cp => cp.uid === user.uid && cp.muteReminders))
-          .map(p => p.id);
-
-        // Load reminders
-        reminderService.getAll(user.uid).then(fsReminders => {
-          const active = fsReminders.filter(r => 
-            r.isOn && 
-            isReminderDueToday(r) &&
-            !mutedPetIds.includes(r.petId) &&
-            (!r.pets || !r.pets.some((pId: string) => mutedPetIds.includes(pId)))
-          );
-          const today = new Date();
-          const dateStr = `${today.getMonth() + 1}/${today.getDate()}`;
-          setReminders(active.map(r => ({
-          id: r.id,
-          pets: r.pets,
-          title: r.type + (r.note ? `（${r.note}）` : ''),
-          date: dateStr,
-          tagColor: r.tagColor,
-          checked: false,
-        })));
-        });
-      });
-    } else {
+    if (!user) {
       setAllPets([]);
       setCurrentPet(null);
+      return;
+    }
+
+    return petService.onPetsChanged(user.uid, pets => {
+      setAllPets(pets);
+      setCurrentPet(previousPet => {
+        if (pets.length === 0) return null;
+        if (!previousPet) return pets[0];
+        return pets.find(pet => pet.id === previousPet.id) || pets[0];
+      });
+    });
+  }, [user]);
+
+  useEffect(() => {
+    if (!user) {
       setLatestDiary(null);
+      return;
+    }
+
+    return diaryService.onDiariesChanged(user.uid, diaries => {
+      const latest = diaries[0];
+      if (!latest) {
+        setLatestDiary(null);
+        return;
+      }
+      const date = new Date(latest.date);
+      const monthNames = ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC'];
+      const imageUrl = latest.thumbnailUrls?.[0]
+        || latest.thumbnailUrl
+        || latest.imageUrls?.[0]
+        || latest.imageUrl;
+      setLatestDiary({
+        id: latest.id,
+        ownerId: latest.ownerId || user.uid,
+        day: Number.isNaN(date.getTime()) ? '--' : String(date.getDate()).padStart(2, '0'),
+        month: Number.isNaN(date.getTime()) ? '---' : monthNames[date.getMonth()],
+        weatherIcon: getWeatherOption(latest.weatherIcon).source,
+        imageUrl: imageUrl ? { uri: imageUrl } : null,
+      });
+    });
+  }, [user]);
+
+  useEffect(() => {
+    if (!user) {
       setReminders([]);
       setIsConnected(false);
       setSensorData(null);
+      return;
     }
-  }, [isDemoMode, user]);
+
+    const petNameById = new Map(allPets.map(pet => [pet.id, pet.name]));
+    const mutedPetIds = new Set(allPets
+      .filter(pet => pet.coParents?.some(member => member.uid === user.uid && member.muteReminders))
+      .map(pet => pet.id));
+
+    return reminderService.onRemindersChanged(user.uid, cloudReminders => {
+      const today = new Date();
+      const dateStr = `${today.getMonth() + 1}/${today.getDate()}`;
+      const active = cloudReminders.filter(reminder => {
+        const targetPetIds = reminder.pets?.length ? reminder.pets : [reminder.petId];
+        return reminder.isOn
+          && isReminderDueToday(reminder, today)
+          && !targetPetIds.some(petId => mutedPetIds.has(petId));
+      });
+      setReminders(active.map(reminder => {
+        const targetPetIds = reminder.pets?.length ? reminder.pets : [reminder.petId];
+        const petNames = targetPetIds.map(petId => petNameById.get(petId) || '已刪除的寵物');
+        const typeText = reminder.types?.length ? reminder.types.join('、') : reminder.type;
+        return {
+          id: reminder.id,
+          pets: petNames,
+          title: typeText + (reminder.note ? `（${reminder.note}）` : ''),
+          date: dateStr,
+          tagColor: reminder.tagColor,
+          checked: false,
+        };
+      }));
+    });
+  }, [allPets, user]);
 
   useEffect(() => {
     if (!currentPet) {
@@ -166,6 +190,8 @@ export default function HomeScreen() {
       return;
     }
 
+    setIsConnected(false);
+    setSensorData(null);
     let unsubscribe = () => {};
     const loadSensor = async () => {
       const sensorId = await sensorService.resolveSensorId(currentPet, allPets);
@@ -240,6 +266,31 @@ export default function HomeScreen() {
   const toggleIcon = (key: keyof typeof activeIcons) => {
     setActiveIcons((prev) => ({ ...prev, [key]: !prev[key] }));
   };
+
+  useEffect(() => {
+    setActiveIcons({ basking: false, food: false, bath: false, poop: false });
+  }, [currentPet?.id]);
+
+  useEffect(() => {
+    if (!currentPet) {
+      setSnapshot(null);
+      return;
+    }
+
+    setSnapshot({
+      petId: currentPet.id,
+      ownerId: currentPet.ownerId || user?.uid || '',
+      hasIotDevice: Boolean(currentPet.sensorId || currentPet.sharedSensorPetId),
+      temp: sensorData ? sensorData.temperature.toFixed(1) : '-',
+      humid: sensorData ? sensorData.humidity.toFixed(0) : '-',
+      states: {
+        bask: activeIcons.basking,
+        feed: activeIcons.food,
+        bath: activeIcons.bath,
+        poop: activeIcons.poop,
+      },
+    });
+  }, [activeIcons, currentPet, sensorData, setSnapshot, user?.uid]);
 
   return (
     <View style={styles.container}>
@@ -374,6 +425,7 @@ export default function HomeScreen() {
           </Pressable>
         ) : (
           <View style={[styles.reminderCardBlock, { backgroundColor: theme.background }]}>
+            <Text style={[styles.reminderSectionTitle, { color: theme.primary, fontFamily: fontFamilyName }]}>今日提醒</Text>
             {(() => {
               const MAX_VISIBLE = 3;
               const visible = reminders.slice(0, MAX_VISIBLE);
@@ -652,6 +704,12 @@ const styles = StyleSheet.create({
     marginBottom: 16,
     gap: 6,
     boxShadow: 'inset 2px 2px 7px rgba(0, 0, 0, 0.25)',
+  },
+  reminderSectionTitle: {
+    fontSize: getFontSize(14, 'medium'),
+    fontWeight: '600',
+    paddingHorizontal: 10,
+    paddingTop: 4,
   },
   reminderEmptyBlock: {
     width: '96%',

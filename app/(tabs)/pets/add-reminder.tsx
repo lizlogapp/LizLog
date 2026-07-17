@@ -8,6 +8,7 @@ import {
   TextInput,
   Modal,
   Alert,
+  Linking,
 } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useTheme } from '../../../src/theme/ThemeContext';
@@ -18,7 +19,10 @@ import { BaseScreen } from '../../../src/components/common/BaseScreen';
 import { FloatingActionBar } from '../../../src/components/FloatingActionBar';
 import { useAuth } from '../../../src/contexts/AuthContext';
 import { reminderService, petService, PetDoc } from '../../../src/services/firestoreService';
-import { scheduleReminderNotification } from '../../../src/services/notificationService';
+import {
+  ReminderNotificationInput,
+  synchronizeEligibleReminderNotifications,
+} from '../../../src/services/notificationService';
 
 const defaultTypes = ['餵食', '換水', '清掃', '用藥', '驅蟲', '回診'];
 const weekDays = ['日', '一', '二', '三', '四', '五', '六'];
@@ -45,9 +49,11 @@ export default function AddReminderScreen() {
   // 寵物名單
   const [petList, setPetList] = useState<{ id: string; name: string }[]>([]);
   const [selectedPets, setSelectedPets] = useState<string[]>(targetPetId ? [targetPetId] : []);
+  const [isPetListReady, setIsPetListReady] = useState(false);
 
   useEffect(() => {
     if (user) {
+      setIsPetListReady(false);
       petService.getAll(user.uid).then(pets => {
         if (pets.length === 0) {
           Alert.alert('提示', '目前尚無寵物資料，請先新增寵物', [
@@ -62,12 +68,25 @@ export default function AddReminderScreen() {
               && (role.isMainOwner || role.permission !== 'view');
           });
           setPetList(writablePets.map(p => ({ id: p.id, name: p.name })));
-          if (selectedPets.length === 0) {
-            const defaultPet = pets.find(p => p.id === id) || pets[0];
-            setSelectedPets([defaultPet.id]);
+          if (writablePets.length === 0) {
+            Alert.alert('無法新增提醒', '目前沒有可編輯的寵物，請先新增寵物或請主飼主調整共同飼育權限。', [
+              { text: '確定', onPress: () => router.replace('/(tabs)/pets') }
+            ]);
+          } else {
+            setSelectedPets(current => {
+              const writableIds = new Set(writablePets.map(p => p.id));
+              const validSelection = current.filter(petIdValue => writableIds.has(petIdValue));
+              if (validSelection.length > 0) return validSelection;
+              const defaultPet = writablePets.find(p => p.id === targetPetId) || writablePets[0];
+              return [defaultPet.id];
+            });
           }
         }
-      });
+      }).catch(() => {
+        Alert.alert('無法讀取寵物', '請確認網路連線後再試。', [
+          { text: '確定', onPress: () => router.replace('/(tabs)/pets') }
+        ]);
+      }).finally(() => setIsPetListReady(true));
     }
   }, [user, targetPetId, ownerId]);
 
@@ -80,9 +99,17 @@ export default function AddReminderScreen() {
   };
 
   // 類型
-  const [selectedType, setSelectedType] = useState('');
+  const [selectedTypes, setSelectedTypes] = useState<string[]>(['餵食']);
   const [customType, setCustomType] = useState('');
   const [isAddingCustom, setIsAddingCustom] = useState(false);
+
+  const toggleType = (type: string) => {
+    setSelectedTypes(previous =>
+      previous.includes(type)
+        ? previous.filter(value => value !== type)
+        : [...previous, type],
+    );
+  };
 
   // 標籤顏色
   const [tagColor, setTagColor] = useState(tagColors[0]);
@@ -97,8 +124,8 @@ export default function AddReminderScreen() {
   const [hour, setHour] = useState('12');
   const [minute, setMinute] = useState('00');
 
-  // 備註
-  const [note, setNote] = useState('');
+  // 事項
+  const [note, setNote] = useState('餵食');
 
   // 日曆彈窗
   const [showCalendar, setShowCalendar] = useState(false);
@@ -116,16 +143,20 @@ export default function AddReminderScreen() {
     if (reminderId && user) {
       reminderService.getById(ownerId || user.uid, reminderId).then(data => {
         if (!data) return;
-        setSelectedPets(data.pets || []);
+        setSelectedPets(data.pets?.length ? data.pets : [data.petId]);
         
-        if (defaultTypes.includes(data.type)) {
-          setSelectedType(data.type);
-          setIsAddingCustom(false);
-        } else {
-          setSelectedType('');
-          setIsAddingCustom(true);
-          setCustomType(data.type);
-        }
+        const dataWithTypes = data as typeof data & { types?: string[] };
+        const storedTypes = dataWithTypes.types?.length
+          ? dataWithTypes.types
+          : (data.type || '').split(/[、,，]/);
+        const normalizedTypes = Array.from(
+          new Set(storedTypes.map(type => type.trim()).filter(Boolean)),
+        );
+        const presetTypes = normalizedTypes.filter(type => defaultTypes.includes(type));
+        const customTypes = normalizedTypes.filter(type => !defaultTypes.includes(type));
+        setSelectedTypes(presetTypes);
+        setIsAddingCustom(customTypes.length > 0);
+        setCustomType(customTypes.join('、'));
 
         setTagColor(data.tagColor || tagColors[0]);
         setFrequency((data.frequencyType as Frequency) || 'once');
@@ -144,8 +175,78 @@ export default function AddReminderScreen() {
   }, [reminderId, user, ownerId]);
 
   const handleSave = async () => {
-    const finalType = isAddingCustom ? customType : selectedType;
-    const finalTime = `${hour.padStart(2, '0')}:${minute.padStart(2, '0')}`;
+    if (!user || !isPetListReady) return;
+    if (petList.length === 0 || selectedPets.length === 0) {
+      Alert.alert('尚未新增寵物', '請先新增寵物，再建立提醒。', [
+        { text: '前往寵物頁', onPress: () => router.replace('/(tabs)/pets') },
+      ]);
+      return;
+    }
+    const writablePetIds = new Set(petList.map(pet => pet.id));
+    if (selectedPets.some(petIdValue => !writablePetIds.has(petIdValue))) {
+      Alert.alert('寵物資料已變更', '部分寵物已刪除或不再具有編輯權限，請重新選擇。');
+      return;
+    }
+
+    const customTypes = isAddingCustom
+      ? customType.split(/[、,，]/).map(type => type.trim()).filter(Boolean)
+      : [];
+    const finalTypes = Array.from(new Set([...selectedTypes, ...customTypes]));
+    if (finalTypes.length === 0) {
+      Alert.alert('提示', '請選擇或輸入提醒類型。');
+      return;
+    }
+    if (frequency === 'weekly' && selectedWeekDays.length === 0) {
+      Alert.alert('提示', '請至少選擇一個星期。');
+      return;
+    }
+    if (frequency === 'everyN' && (!Number.isFinite(Number(everyNDays)) || Number(everyNDays) < 1)) {
+      Alert.alert('提示', '提醒間隔必須大於 0 天。');
+      return;
+    }
+    const numericHour = Number(hour);
+    const numericMinute = Number(minute);
+    if (!Number.isInteger(numericHour) || numericHour < 0 || numericHour > 23
+      || !Number.isInteger(numericMinute) || numericMinute < 0 || numericMinute > 59) {
+      Alert.alert('提示', '請輸入有效的提醒時間。');
+      return;
+    }
+    const finalTime = `${String(numericHour).padStart(2, '0')}:${String(numericMinute).padStart(2, '0')}`;
+    let effectiveStartDate = startDate;
+    if ((frequency === 'once' || frequency === 'everyN') && !effectiveStartDate) {
+      const today = new Date();
+      effectiveStartDate = [
+        today.getFullYear(),
+        String(today.getMonth() + 1).padStart(2, '0'),
+        String(today.getDate()).padStart(2, '0'),
+      ].join('/');
+    }
+    if (frequency === 'once') {
+      const match = effectiveStartDate?.match(/^(\d{4})[/-](\d{1,2})[/-](\d{1,2})$/);
+      const scheduledAt = match
+        ? new Date(
+            Number(match[1]),
+            Number(match[2]) - 1,
+            Number(match[3]),
+            numericHour,
+            numericMinute,
+            0,
+            0,
+          )
+        : new Date(Number.NaN);
+      if (Number.isNaN(scheduledAt.getTime())
+        || !match
+        || scheduledAt.getFullYear() !== Number(match[1])
+        || scheduledAt.getMonth() !== Number(match[2]) - 1
+        || scheduledAt.getDate() !== Number(match[3])) {
+        Alert.alert('提示', '請選擇有效的提醒日期。');
+        return;
+      }
+      if (scheduledAt.getTime() <= Date.now()) {
+        Alert.alert('提醒時間已過', '單次提醒不會自動延到明天，請選擇稍後的日期或時間。');
+        return;
+      }
+    }
     let finalFreq = '';
     if (frequency === 'once') finalFreq = '單次';
     else if (frequency === 'daily') finalFreq = '每天';
@@ -156,12 +257,13 @@ export default function AddReminderScreen() {
     }
 
     const newData = {
-      petId: targetPetId || selectedPets[0],
-      type: finalType,
+      petId: selectedPets[0],
+      type: finalTypes.join('、'),
+      types: finalTypes,
       freq: finalFreq,
       frequencyType: frequency,
       everyNDays,
-      startDate,
+      startDate: effectiveStartDate,
       selectedWeekDays,
       time: finalTime,
       pets: selectedPets,
@@ -170,16 +272,47 @@ export default function AddReminderScreen() {
       tagColor,
     };
 
-    if (user) {
-      const resolvedOwnerId = ownerId || user.uid;
-      try {
-        const savedId = reminderId || await reminderService.add(resolvedOwnerId, newData);
-        if (reminderId) await reminderService.update(resolvedOwnerId, reminderId, newData);
-        await scheduleReminderNotification(resolvedOwnerId, { ...newData, id: savedId });
-        router.navigate({ pathname: '/(tabs)/pets/reminder', params: { id: targetPetId, ownerId } });
-      } catch {
-        Alert.alert('錯誤', '提醒儲存或通知排程失敗，請稍後再試。');
+    const resolvedOwnerId = ownerId || user.uid;
+    try {
+      const savedId = reminderId || await reminderService.add(resolvedOwnerId, newData);
+      if (reminderId) await reminderService.update(resolvedOwnerId, reminderId, newData);
+      const [allReminders, allPets] = await Promise.all([
+        reminderService.getAll(user.uid),
+        petService.getAll(user.uid),
+      ]);
+      const syncResult = await synchronizeEligibleReminderNotifications(
+        user.uid,
+        allReminders as ReminderNotificationInput[],
+        allPets,
+      ).catch(() => null);
+      const scheduled = Boolean(syncResult
+        && !syncResult.failedReminderIds.includes(savedId)
+        && syncResult.permissionGranted
+        && syncResult.preferencesEnabled);
+      const navigateToReminderList = () => router.navigate({
+        pathname: '/(tabs)/pets/reminder',
+        params: { id: selectedPets[0], ownerId: resolvedOwnerId },
+      });
+      if (!scheduled) {
+        Alert.alert(
+          '提醒已儲存',
+          '通知尚未成功排程，請確認提醒開關與手機通知權限。',
+          [
+            { text: '稍後', onPress: navigateToReminderList },
+            {
+              text: '前往設定',
+              onPress: () => {
+                navigateToReminderList();
+                void Linking.openSettings();
+              },
+            },
+          ],
+        );
+        return;
       }
+      navigateToReminderList();
+    } catch (error) {
+      Alert.alert('錯誤', error instanceof Error ? error.message : '提醒儲存或通知排程失敗，請稍後再試。');
     }
   };
 
@@ -256,14 +389,14 @@ export default function AddReminderScreen() {
                 style={[
                   styles.chip,
                   {
-                    backgroundColor: selectedType === t ? theme.primary : 'transparent',
+                    backgroundColor: selectedTypes.includes(t) ? theme.primary : 'transparent',
                     borderColor: theme.primary,
                   },
                 ]}
-                onPress={() => { setSelectedType(t); setIsAddingCustom(false); }}
+                onPress={() => toggleType(t)}
               >
                 <Text style={[styles.chipText, {
-                  color: selectedType === t ? theme.background : theme.primary,
+                  color: selectedTypes.includes(t) ? theme.background : theme.primary,
                   fontFamily: fontFamilyName,
                 }]}>{t}</Text>
               </Pressable>
@@ -277,7 +410,7 @@ export default function AddReminderScreen() {
                   borderColor: theme.primary,
                 },
               ]}
-              onPress={() => { setIsAddingCustom(true); setSelectedType(''); }}
+              onPress={() => setIsAddingCustom(previous => !previous)}
             >
               <Text style={[styles.chipText, {
                 color: isAddingCustom ? theme.background : theme.primary,
@@ -321,24 +454,28 @@ export default function AddReminderScreen() {
             ))}
           </View>
 
-          {/* 每N天 → 輸入天數 + 起始日期 */}
-          {frequency === 'everyN' && (
+          {/* 單次／每 N 天都需要可選日期；每 N 天另顯示間隔。 */}
+          {(frequency === 'once' || frequency === 'everyN') && (
             <View style={styles.subSection}>
-              <View style={styles.everyNRow}>
-                <Text style={[styles.subLabel, { color: theme.primary, fontFamily: fontFamilyName }]}>每</Text>
-                <TextInput
-                  style={[styles.nInput, { color: theme.text, fontFamily: fontFamilyName, borderColor: theme.primary }]}
-                  value={everyNDays}
-                  onChangeText={setEveryNDays}
-                  keyboardType="number-pad"
-                  maxLength={3}
-                  textAlign="center"
-                />
-                <Text style={[styles.subLabel, { color: theme.primary, fontFamily: fontFamilyName }]}>天</Text>
-              </View>
+              {frequency === 'everyN' && (
+                <View style={styles.everyNRow}>
+                  <Text style={[styles.subLabel, { color: theme.primary, fontFamily: fontFamilyName }]}>每</Text>
+                  <TextInput
+                    style={[styles.nInput, { color: theme.text, fontFamily: fontFamilyName, borderColor: theme.primary }]}
+                    value={everyNDays}
+                    onChangeText={setEveryNDays}
+                    keyboardType="number-pad"
+                    maxLength={3}
+                    textAlign="center"
+                  />
+                  <Text style={[styles.subLabel, { color: theme.primary, fontFamily: fontFamilyName }]}>天</Text>
+                </View>
+              )}
 
               <View style={styles.dateRow}>
-                <Text style={[styles.subLabel, { color: theme.primary, fontFamily: fontFamilyName }]}>起始日期</Text>
+                <Text style={[styles.subLabel, { color: theme.primary, fontFamily: fontFamilyName }]}>
+                  {frequency === 'once' ? '提醒日期' : '起始日期'}
+                </Text>
                 <Pressable
                   style={[styles.dateButton, { borderColor: theme.primary }]}
                   onPress={() => setShowCalendar(true)}
@@ -406,12 +543,12 @@ export default function AddReminderScreen() {
 
           <View style={styles.divider} />
 
-          {/* ========== 備註 ========== */}
+          {/* ========== 事項 ========== */}
           <View style={styles.noteRow}>
-            <Text style={labelStyle}>備註</Text>
+            <Text style={labelStyle}>事項</Text>
             <TextInput
               style={[styles.noteInput, { color: theme.text, fontFamily: fontFamilyName, borderBottomColor: theme.text + '20' }]}
-              placeholder="食物添加維生素"
+              placeholder="餵食"
               placeholderTextColor={theme.text + '40'}
               value={note}
               onChangeText={setNote}
@@ -463,8 +600,7 @@ export default function AddReminderScreen() {
             {(() => {
               const daysInMonth = getDaysInMonth(pickerYear, pickerMonth);
               const firstDay = getFirstDayOfMonth(pickerYear, pickerMonth);
-              const totalCells = firstDay + daysInMonth;
-              const rows = Math.ceil(totalCells / 7);
+              const rows = 6;
               return Array.from({ length: rows }).map((_, rowIdx) => (
                 <View key={rowIdx} style={styles.calWeekRow}>
                   {Array.from({ length: 7 }).map((_, colIdx) => {
@@ -670,6 +806,7 @@ const styles = StyleSheet.create({
   },
   modalContent: {
     width: '85%',
+    minHeight: 362,
     backgroundColor: '#FFFEFA',
     borderRadius: 20,
     padding: 20,

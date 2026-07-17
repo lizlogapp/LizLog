@@ -176,8 +176,7 @@ export default function CalendarFilterScreen() {
             const firstDay = getFirstDayOfMonth(selectedYear, month);
             const diaryDays = getDiaryDays(month);
             const monthCount = getMonthDiaryCount(month);
-            const totalCells = firstDay + daysInMonth;
-            const rows = Math.ceil(totalCells / 7);
+            const rows = 6;
 
             return (
               <View key={month} style={[styles.monthBlock, { backgroundColor: theme.background }]}>

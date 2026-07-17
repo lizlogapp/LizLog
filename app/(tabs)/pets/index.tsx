@@ -31,6 +31,7 @@ interface PetData {
  * 計算年齡，回傳格式：「2歲 10個月」或「5個月」
  */
 function calcAge(birthDate: Date): string {
+  if (Number.isNaN(birthDate.getTime())) return '生日未設定';
   const now = new Date();
   let years = now.getFullYear() - birthDate.getFullYear();
   let months = now.getMonth() - birthDate.getMonth();
@@ -65,8 +66,8 @@ export default function PetsScreen() {
     id: p.id,
     name: p.name,
     species: p.species,
-    birthDate: new Date(p.birthDate.replace(/\//g, '-')),
-    imageUri: p.imageUrl ? { uri: p.imageUrl } : null,
+    birthDate: new Date((p.birthDate || '').replace(/\//g, '-')),
+    imageUri: (p.thumbnailUrl || p.imageUrl) ? { uri: p.thumbnailUrl || p.imageUrl } : null,
     ownerId: p.ownerId || (user ? user.uid : ''),
   }));
 
@@ -147,7 +148,7 @@ export default function PetsScreen() {
         <Pressable
           style={({ pressed }) => [
             styles.addButton,
-            { backgroundColor: theme.background, borderColor: theme.primary, borderWidth: 1 },
+            { backgroundColor: theme.background },
             { opacity: pressed ? 0.7 : 1 },
           ]}
           onPress={() => router.push('/(tabs)/pets/join')}

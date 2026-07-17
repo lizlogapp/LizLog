@@ -65,10 +65,6 @@ export default function DatePickerModal({ visible, currentDate, onClose, onSelec
         date: new Date(displayYear, displayMonth + 1, nextDay - 1)
       });
     }
-    // Optimization to avoid rendering empty week at the end
-    if (days.length === 42 && !days[35].isCurrentMonth) {
-      return days.slice(0, 35);
-    }
     return days;
   };
 
@@ -200,6 +196,7 @@ const styles = StyleSheet.create({
   },
   calendarContainer: {
     width: 320,
+    minHeight: 410,
     backgroundColor: '#FFFFFF',
     borderRadius: 16,
     padding: 20,

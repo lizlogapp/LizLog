@@ -14,10 +14,8 @@ service cloud.firestore {
       return get(/databases/$(database)/documents/users/$(ownerId)/pets/$(petId)).data;
     }
 
-    function canViewPet(ownerId, petId) {
-      return isOwner(ownerId) || (
-        signedIn() && pet(ownerId, petId).coParentIds.hasAny([request.auth.uid])
-      );
+    function petAfter(ownerId, petId) {
+      return getAfter(/databases/$(database)/documents/users/$(ownerId)/pets/$(petId)).data;
     }
 
     function canEditPet(ownerId, petId) {
@@ -33,31 +31,120 @@ service cloud.firestore {
         && pet(ownerId, data.petId).editorIds.hasAll(data.editorIds);
     }
 
-    function diaryAccessMatchesPet(ownerId, data) {
+    function recordAccessMatchesPetAfter(ownerId, data) {
+      return data.accessUserIds.hasAll(petAfter(ownerId, data.petId).coParentIds)
+        && petAfter(ownerId, data.petId).coParentIds.hasAll(data.accessUserIds)
+        && data.editorIds.hasAll(petAfter(ownerId, data.petId).editorIds)
+        && petAfter(ownerId, data.petId).editorIds.hasAll(data.editorIds);
+    }
+
+    function diaryPetAclContains(ownerId, data, index) {
+      return data.petIds.size() <= index || (
+        canEditPet(ownerId, data.petIds[index])
+        && pet(ownerId, data.petIds[index]).coParentIds.hasAll(data.accessUserIds)
+        && pet(ownerId, data.petIds[index]).editorIds.hasAll(data.editorIds)
+      );
+    }
+
+    function validSelfRevokeRecord(ownerId, before, after) {
+      return signedIn()
+        && request.auth.uid != ownerId
+        && before.accessUserIds.hasAny([request.auth.uid])
+        && after.accessUserIds.toSet()
+          == before.accessUserIds.toSet().difference([request.auth.uid].toSet())
+        && after.editorIds.toSet()
+          == before.editorIds.toSet().difference([request.auth.uid].toSet())
+        && !getAfter(/databases/$(database)/documents/users/$(ownerId)/pets/$(before.petId))
+          .data.coParentIds.hasAny([request.auth.uid])
+        && after.diff(before).affectedKeys()
+          .hasOnly(['accessUserIds', 'editorIds', 'updatedAt']);
+    }
+
+    function validSelfRevokeDiary(ownerId, before, after) {
+      return signedIn()
+        && request.auth.uid != ownerId
+        && before.accessUserIds.hasAny([request.auth.uid])
+        && after.aclRevisionPetId is string
+        && before.petIds.hasAny([after.aclRevisionPetId])
+        && after.accessUserIds.toSet()
+          == before.accessUserIds.toSet().difference([request.auth.uid].toSet())
+        && after.editorIds.toSet()
+          == before.editorIds.toSet().difference([request.auth.uid].toSet())
+        && !petAfter(ownerId, after.aclRevisionPetId).coParentIds.hasAny([request.auth.uid])
+        && after.diff(before).affectedKeys()
+          .hasOnly(['accessUserIds', 'editorIds', 'aclRevisionPetId', 'updatedAt']);
+    }
+
+    function diaryAccessMatchesPets(ownerId, data) {
       return data.petIds.size() > 0
-        && data.accessUserIds.hasAll(pet(ownerId, data.petIds[0]).coParentIds)
-        && pet(ownerId, data.petIds[0]).coParentIds.hasAll(data.accessUserIds)
-        && data.editorIds.hasAll(pet(ownerId, data.petIds[0]).editorIds)
-        && pet(ownerId, data.petIds[0]).editorIds.hasAll(data.editorIds);
+        && data.accessUserIds.hasAny([ownerId])
+        && data.editorIds.hasAny([ownerId])
+        && (
+          (data.petIds.size() > 10
+            && isOwner(ownerId)
+            && data.accessUserIds.size() == 1
+            && data.editorIds.size() == 1)
+          || (data.petIds.size() <= 10
+            && diaryPetAclContains(ownerId, data, 0)
+            && diaryPetAclContains(ownerId, data, 1)
+            && diaryPetAclContains(ownerId, data, 2)
+            && diaryPetAclContains(ownerId, data, 3)
+            && diaryPetAclContains(ownerId, data, 4)
+            && diaryPetAclContains(ownerId, data, 5)
+            && diaryPetAclContains(ownerId, data, 6)
+            && diaryPetAclContains(ownerId, data, 7)
+            && diaryPetAclContains(ownerId, data, 8)
+            && diaryPetAclContains(ownerId, data, 9))
+        );
     }
 
     function validInviteJoin(ownerId, petId) {
       let code = request.resource.data.lastInviteCode;
       let invitePath = /databases/$(database)/documents/invites/$(code);
+      let invite = get(invitePath).data;
+      let newMember = request.resource.data.coParents[request.resource.data.coParents.size() - 1];
       return signedIn()
         && code is string
         && exists(invitePath)
-        && get(invitePath).data.ownerId == ownerId
-        && get(invitePath).data.petId == petId
-        && request.resource.data.coParentIds.hasAny([request.auth.uid])
+        && invite.ownerId == ownerId
+        && invite.petId == petId
+        && invite.expiresAt > request.time
+        && invite.permission in ['edit', 'view']
+        && !resource.data.coParentIds.hasAny([request.auth.uid])
+        && request.resource.data.coParentIds.toSet()
+          == resource.data.coParentIds.toSet().union([request.auth.uid].toSet())
+        && request.resource.data.coParentIds.size() == resource.data.coParentIds.size() + 1
+        && request.resource.data.editorIds.toSet() == (
+          invite.permission == 'edit'
+            ? resource.data.editorIds.toSet().union([request.auth.uid].toSet())
+            : resource.data.editorIds.toSet()
+        )
+        && request.resource.data.coParents.hasAll(resource.data.coParents)
+        && request.resource.data.coParents.size() == resource.data.coParents.size() + 1
+        && newMember.keys().hasOnly(['uid', 'name', 'isMainOwner', 'permission', 'muteReminders'])
+        && newMember.uid == request.auth.uid
+        && newMember.name is string
+        && newMember.name.size() > 0
+        && newMember.name.size() <= 80
+        && newMember.isMainOwner == false
+        && newMember.permission == invite.permission
+        && newMember.muteReminders == false
         && request.resource.data.diff(resource.data).affectedKeys()
           .hasOnly(['coParents', 'coParentIds', 'editorIds', 'lastInviteCode', 'updatedAt']);
     }
 
-    function validSelfLeave() {
+    function validSelfLeave(ownerId) {
       return signedIn()
+        && request.auth.uid != ownerId
         && resource.data.coParentIds.hasAny([request.auth.uid])
-        && !request.resource.data.coParentIds.hasAny([request.auth.uid])
+        && request.resource.data.ownerId == ownerId
+        && request.resource.data.coParentIds.toSet()
+          == resource.data.coParentIds.toSet().difference([request.auth.uid].toSet())
+        && request.resource.data.coParentIds.size() == resource.data.coParentIds.size() - 1
+        && request.resource.data.editorIds.toSet()
+          == resource.data.editorIds.toSet().difference([request.auth.uid].toSet())
+        && request.resource.data.coParents.hasOnly(resource.data.coParents)
+        && request.resource.data.coParents.size() == resource.data.coParents.size() - 1
         && request.resource.data.diff(resource.data).affectedKeys()
           .hasOnly(['coParents', 'coParentIds', 'editorIds', 'updatedAt']);
     }
@@ -72,9 +159,12 @@ service cloud.firestore {
           && request.resource.data.ownerId == ownerId
           && request.resource.data.coParentIds.hasAny([ownerId])
           && request.resource.data.editorIds.hasAny([ownerId]);
-        allow update: if isOwner(ownerId)
+        allow update: if (isOwner(ownerId)
+            && request.resource.data.ownerId == ownerId
+            && request.resource.data.coParentIds.hasAny([ownerId])
+            && request.resource.data.editorIds.hasAny([ownerId]))
           || validInviteJoin(ownerId, petId)
-          || validSelfLeave()
+          || validSelfLeave(ownerId)
           || (canEditPet(ownerId, petId)
             && !request.resource.data.diff(resource.data).affectedKeys()
               .hasAny(['ownerId', 'coParents', 'coParentIds', 'editorIds']));
@@ -87,9 +177,11 @@ service cloud.firestore {
         allow create: if request.resource.data.ownerId == ownerId
           && canEditPet(ownerId, request.resource.data.petId)
           && recordAccessMatchesPet(ownerId, request.resource.data);
-        allow update: if canEditPet(ownerId, resource.data.petId)
-          && request.resource.data.ownerId == ownerId
-          && recordAccessMatchesPet(ownerId, request.resource.data);
+        allow update: if (canEditPet(ownerId, resource.data.petId)
+            && request.resource.data.ownerId == ownerId
+            && (isOwner(ownerId) || request.resource.data.petId == resource.data.petId)
+            && recordAccessMatchesPetAfter(ownerId, request.resource.data))
+          || validSelfRevokeRecord(ownerId, resource.data, request.resource.data);
         allow delete: if canEditPet(ownerId, resource.data.petId);
       }
 
@@ -99,38 +191,91 @@ service cloud.firestore {
         allow create: if request.resource.data.ownerId == ownerId
           && canEditPet(ownerId, request.resource.data.petId)
           && recordAccessMatchesPet(ownerId, request.resource.data);
-        allow update: if canEditPet(ownerId, resource.data.petId)
-          && request.resource.data.ownerId == ownerId
-          && recordAccessMatchesPet(ownerId, request.resource.data);
+        allow update: if (canEditPet(ownerId, resource.data.petId)
+            && request.resource.data.ownerId == ownerId
+            && (isOwner(ownerId) || request.resource.data.petId == resource.data.petId)
+            && recordAccessMatchesPetAfter(ownerId, request.resource.data))
+          || validSelfRevokeRecord(ownerId, resource.data, request.resource.data);
         allow delete: if canEditPet(ownerId, resource.data.petId);
       }
 
       match /diaries/{recordId} {
         allow get, list: if isOwner(ownerId)
-          || (signedIn() && resource.data.accessUserIds.hasAny([request.auth.uid]));
+          || (signedIn()
+            && resource.data.accessUserIds.hasAny([request.auth.uid]));
         allow create: if request.resource.data.ownerId == ownerId
-          && diaryAccessMatchesPet(ownerId, request.resource.data)
-          && canEditPet(ownerId, request.resource.data.petIds[0]);
-        allow update: if resource.data.petIds.size() > 0
-          && canEditPet(ownerId, resource.data.petIds[0])
+          && diaryAccessMatchesPets(ownerId, request.resource.data);
+        allow update: if validSelfRevokeDiary(ownerId, resource.data, request.resource.data)
+          || (signedIn()
+            && resource.data.editorIds.hasAny([request.auth.uid])
+            && request.resource.data.ownerId == ownerId
+            && (isOwner(ownerId)
+              ? (request.resource.data.petIds.size() > 0
+                && request.resource.data.accessUserIds.hasAny([ownerId])
+                && request.resource.data.editorIds.hasAny([ownerId]))
+              : (diaryAccessMatchesPets(ownerId, request.resource.data)
+                && request.resource.data.accessUserIds.toSet() == resource.data.accessUserIds.toSet()
+                && request.resource.data.editorIds.toSet() == resource.data.editorIds.toSet())));
+        allow delete: if isOwner(ownerId)
+          || (signedIn()
+            && resource.data.editorIds.hasAny([request.auth.uid])
+            && diaryAccessMatchesPets(ownerId, resource.data));
+      }
+
+      match /cleanupTasks/{taskId} {
+        allow read, create, update, delete: if isOwner(ownerId)
+          && (request.resource == null || request.resource.data.ownerId == ownerId);
+      }
+
+      match /uploadUsage/{day} {
+        allow read: if isOwner(ownerId);
+        allow create: if isOwner(ownerId)
           && request.resource.data.ownerId == ownerId
-          && diaryAccessMatchesPet(ownerId, request.resource.data);
-        allow delete: if resource.data.petIds.size() > 0
-          && canEditPet(ownerId, resource.data.petIds[0]);
+          && request.resource.data.day == day
+          && request.resource.data.imageCount == 1;
+        allow update: if isOwner(ownerId)
+          && request.resource.data.ownerId == ownerId
+          && request.resource.data.day == day
+          && request.resource.data.imageCount == resource.data.imageCount + 1
+          && request.resource.data.imageCount <= 30;
+        allow delete: if false;
       }
     }
 
     match /invites/{code} {
       allow get: if signedIn();
-      allow list: if false;
+      // 供主要飼育者刪除寵物時清理自己建立的尚未使用邀請；查詢必須限制 ownerId。
+      allow list: if signedIn() && resource.data.ownerId == request.auth.uid;
       allow create: if signedIn()
         && request.resource.data.ownerId == request.auth.uid
-        && request.resource.data.code == code;
+        && request.resource.data.code == code
+        && request.resource.data.petId is string
+        && request.resource.data.permission in ['edit', 'view']
+        && request.resource.data.expiresAt > request.time
+        && exists(/databases/$(database)/documents/users/$(request.auth.uid)/pets/$(request.resource.data.petId));
       allow update: if false;
       allow delete: if signedIn() && (
         resource.data.ownerId == request.auth.uid
         || pet(resource.data.ownerId, resource.data.petId).coParentIds.hasAny([request.auth.uid])
+        || petAfter(resource.data.ownerId, resource.data.petId).coParentIds.hasAny([request.auth.uid])
       );
+    }
+
+    // collectionGroup 查詢需以 recursive wildcard 明確授權；呼叫端同時以相同 ACL 欄位限制查詢。
+    match /{path=**}/pets/{petId} {
+      allow list: if signedIn() && resource.data.coParentIds.hasAny([request.auth.uid]);
+    }
+
+    match /{path=**}/reminders/{recordId} {
+      allow list: if signedIn() && resource.data.accessUserIds.hasAny([request.auth.uid]);
+    }
+
+    match /{path=**}/medical/{recordId} {
+      allow list: if signedIn() && resource.data.accessUserIds.hasAny([request.auth.uid]);
+    }
+
+    match /{path=**}/diaries/{recordId} {
+      allow list: if signedIn() && resource.data.accessUserIds.hasAny([request.auth.uid]);
     }
 
     match /{document=**} {

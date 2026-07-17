@@ -19,6 +19,7 @@ import { BaseScreen } from '../../../src/components/common/BaseScreen';
 import { FloatingActionBar } from '../../../src/components/FloatingActionBar';
 import { useAuth } from '../../../src/contexts/AuthContext';
 import { petService, PetDoc } from '../../../src/services/firestoreService';
+import { createImageVariants } from '../../../src/services/imageService';
 import * as ImagePicker from 'expo-image-picker';
 
 export default function AddPetScreen() {
@@ -42,6 +43,7 @@ export default function AddPetScreen() {
   const [humidMax, setHumidMax] = useState('50');
   const [imageUri, setImageUri] = useState('');
   const [isSaving, setIsSaving] = useState(false);
+  const [isImageProcessing, setIsImageProcessing] = useState(false);
 
   useEffect(() => {
     if (isEditing && id && user) {
@@ -88,10 +90,33 @@ export default function AddPetScreen() {
     const result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ['images'],
       allowsEditing: true,
-      aspect: [1, 1],
+      aspect: [16, 9],
       quality: 0.8,
     });
-    if (!result.canceled && result.assets[0]?.uri) setImageUri(result.assets[0].uri);
+    if (!result.canceled && result.assets[0]?.uri) {
+      setIsImageProcessing(true);
+      try {
+        const variants = await createImageVariants(result.assets[0].uri);
+        setImageUri(variants.displayUri);
+      } catch (error) {
+        Alert.alert('圖片處理失敗', error instanceof Error ? error.message : '無法處理選取的圖片，請改選其他圖片。');
+      } finally {
+        setIsImageProcessing(false);
+      }
+    }
+  };
+
+  const saveErrorMessage = (error: unknown) => {
+    const code = typeof error === 'object' && error !== null && 'code' in error
+      ? String((error as { code?: string }).code || '')
+      : '';
+    if (code.startsWith('storage/')) {
+      return '照片上傳失敗，請確認網路連線或重新登入後再試。';
+    }
+    if (error instanceof Error && !error.message.startsWith('Firebase Storage:')) {
+      return error.message;
+    }
+    return isEditing ? '更新失敗，請稍後再試。' : '新增失敗，請稍後再試。';
   };
 
   return (
@@ -111,7 +136,7 @@ export default function AddPetScreen() {
             {
               id: 'confirm',
               onPress: async () => {
-                if (isSaving) return;
+                if (isSaving || isImageProcessing) return;
                 if (!name.trim()) {
                   Alert.alert('提示', '請填寫寵物名字');
                   return;
@@ -124,6 +149,7 @@ export default function AddPetScreen() {
                 setIsSaving(true);
                 try {
                   let savedPetId: string;
+                  let createdPetId: string | null = null;
                   if (isEditing && typeof id === 'string') {
                     savedPetId = id;
                     await petService.update(ownerId || user.uid, id, {
@@ -138,7 +164,6 @@ export default function AddPetScreen() {
                       humidMin: parseInt(humidMin) || 30,
                       humidMax: parseInt(humidMax) || 50,
                     });
-                    Alert.alert('成功', `已更新寵物：${name}`);
                   } else {
                     savedPetId = await petService.add(user.uid, {
                       name,
@@ -152,18 +177,39 @@ export default function AddPetScreen() {
                       humidMin: parseInt(humidMin) || 30,
                       humidMax: parseInt(humidMax) || 50,
                     });
+                    createdPetId = savedPetId;
                   }
 
-                  const resolvedOwnerId = ownerId || user.uid;
+                  const resolvedOwnerId = isEditing ? (ownerId || user.uid) : user.uid;
                   if (imageUri && !imageUri.startsWith('http')) {
-                    const imageUrl = await petService.uploadImage(resolvedOwnerId, savedPetId, imageUri);
-                    await petService.update(resolvedOwnerId, savedPetId, { imageUrl });
+                    try {
+                      const uploaded = await petService.uploadImage(resolvedOwnerId, savedPetId, imageUri, user.uid);
+                      await petService.update(resolvedOwnerId, savedPetId, uploaded);
+                    } catch (error) {
+                      if (createdPetId) {
+                        try {
+                          await petService.delete(user.uid, createdPetId);
+                        } catch (rollbackError) {
+                          if (__DEV__) {
+                            const rollbackCode = typeof rollbackError === 'object' && rollbackError !== null && 'code' in rollbackError
+                              ? String((rollbackError as { code?: string }).code || 'unknown')
+                              : 'unknown';
+                            console.warn('Pet rollback failed:', rollbackCode);
+                          }
+                          throw new Error('照片上傳失敗，且未能自動清除暫存寵物資料，請回寵物頁確認後再試。');
+                        }
+                      }
+                      throw error;
+                    }
                   }
 
-                  Alert.alert('成功', isEditing ? `已更新寵物：${name}` : `已新增寵物：${name}`);
-                  router.back();
-                } catch {
-                  Alert.alert('錯誤', isEditing ? '更新失敗，請稍後再試' : '新增失敗，請稍後再試');
+                  Alert.alert(
+                    '成功',
+                    isEditing ? `已更新寵物：${name}` : `已新增寵物：${name}`,
+                  );
+                  router.replace('/(tabs)/pets');
+                } catch (error) {
+                  Alert.alert('錯誤', saveErrorMessage(error));
                 } finally {
                   setIsSaving(false);
                 }
@@ -186,14 +232,15 @@ export default function AddPetScreen() {
           onPress={pickImage}
         >
           {imageUri ? <Image source={{ uri: imageUri }} style={StyleSheet.absoluteFillObject} resizeMode="cover" /> : null}
-          {/* 照片佔位圖示（同新增日記頁面樣式） */}
-          <View style={styles.addPhotoButton}>
-            <Image
-              source={require('../../../assets/icons/icon-image.png')}
-              style={[styles.addPhotoIcon, { tintColor: '#FFFFFF' }]}
-              resizeMode="contain"
-            />
-          </View>
+          {!imageUri && (
+            <View style={styles.addPhotoButton}>
+              <Image
+                source={require('../../../assets/icons/icon-image.png')}
+                style={[styles.addPhotoIcon, { tintColor: '#FFFFFF' }]}
+                resizeMode="contain"
+              />
+            </View>
+          )}
         </Pressable>
 
 
@@ -399,8 +446,7 @@ export default function AddPetScreen() {
             {(() => {
               const daysInMonth = getDaysInMonth(pickerYear, pickerMonth);
               const firstDay = getFirstDayOfMonth(pickerYear, pickerMonth);
-              const totalCells = firstDay + daysInMonth;
-              const rows = Math.ceil(totalCells / 7);
+              const rows = 6;
               return Array.from({ length: rows }).map((_, rowIdx) => (
                 <View key={rowIdx} style={styles.weekRow}>
                   {Array.from({ length: 7 }).map((_, colIdx) => {
@@ -573,6 +619,7 @@ const styles = StyleSheet.create({
   },
   modalContent: {
     width: '85%',
+    minHeight: 362,
     backgroundColor: '#FFFEFA',
     borderRadius: 20,
     padding: 20,

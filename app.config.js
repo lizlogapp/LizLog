@@ -13,5 +13,6 @@ module.exports = ({ config }) => ({
   extra: {
     ...(config.extra ?? {}),
     firebase,
+    enableDemoMode: process.env.EXPO_PUBLIC_ENABLE_DEMO_MODE === 'true',
   },
 });

@@ -6,7 +6,9 @@ import {
   StyleSheet,
   Dimensions,
   Pressable,
+  Alert,
 } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { useTheme } from '../src/theme/ThemeContext';
@@ -26,6 +28,7 @@ const PAGE_LEFT = PANEL_CONTENT_MARGIN + CONTENT_PAGE_MARGIN;
 const PAGE_TOP = STATUS_BAR_HEIGHT + PANEL_CONTENT_MARGIN + CONTENT_PAGE_MARGIN;
 const PAGE_WIDTH = W - (PANEL_CONTENT_MARGIN + CONTENT_PAGE_MARGIN) * 2;
 const PAGE_HEIGHT = H - STATUS_BAR_HEIGHT - TAB_BAR_HEIGHT - (PANEL_CONTENT_MARGIN + CONTENT_PAGE_MARGIN) * 2;
+const ONBOARDING_SEEN_KEY = 'lizlog:onboarding-seen:v1';
 
 const onboardingSteps = [
   {
@@ -53,12 +56,26 @@ export default function OnboardingScreen() {
   const router = useRouter();
 
   const [stepIndex, setStepIndex] = useState(0);
+  const [isCompleting, setIsCompleting] = useState(false);
 
-  const handleNext = () => {
+  React.useEffect(() => {
+    // 「已顯示」與「已完成」語意分開：歡迎頁一旦呈現，即使中途關閉 App 也不重複播放。
+    void AsyncStorage.setItem(ONBOARDING_SEEN_KEY, 'true');
+  }, []);
+
+  const handleNext = async () => {
+    if (isCompleting) return;
     if (stepIndex < onboardingSteps.length - 1) {
       setStepIndex((prev) => prev + 1);
     } else {
-      router.replace('/login');
+      setIsCompleting(true);
+      try {
+        await AsyncStorage.setItem(ONBOARDING_SEEN_KEY, 'true');
+        router.replace('/login');
+      } catch {
+        setIsCompleting(false);
+        Alert.alert('無法完成設定', '請稍後再試。');
+      }
     }
   };
 
@@ -73,7 +90,7 @@ export default function OnboardingScreen() {
   };
 
   return (
-    <Pressable style={styles.container} onPress={handleNext}>
+    <Pressable style={styles.container} onPress={handleNext} disabled={isCompleting}>
       <View style={[styles.page, pageStyle]}>
 
         {/* 標題區 */}
