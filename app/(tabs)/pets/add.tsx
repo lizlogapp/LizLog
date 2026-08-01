@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -19,7 +19,12 @@ import { BaseScreen } from '../../../src/components/common/BaseScreen';
 import { FloatingActionBar } from '../../../src/components/FloatingActionBar';
 import { useAuth } from '../../../src/contexts/AuthContext';
 import { petService, PetDoc } from '../../../src/services/firestoreService';
-import { createImageVariants } from '../../../src/services/imageService';
+import {
+  ImagePipelineError,
+  imagePipelineDiagnostic,
+  imagePipelineMessage,
+  logImagePipelineError,
+} from '../../../src/services/imageService';
 import * as ImagePicker from 'expo-image-picker';
 
 export default function AddPetScreen() {
@@ -32,7 +37,7 @@ export default function AddPetScreen() {
   const isEditing = !!id;
 
   const [name, setName] = useState('');
-  const [species, setSpecies] = useState('鬆獅蜥');
+  const [species, setSpecies] = useState('');
   const [birthday, setBirthday] = useState('');
   const [homeDate, setHomeDate] = useState('');
   const [gender, setGender] = useState('');
@@ -43,14 +48,14 @@ export default function AddPetScreen() {
   const [humidMax, setHumidMax] = useState('50');
   const [imageUri, setImageUri] = useState('');
   const [isSaving, setIsSaving] = useState(false);
-  const [isImageProcessing, setIsImageProcessing] = useState(false);
+  const savingLock = useRef(false);
 
   useEffect(() => {
     if (isEditing && id && user) {
       petService.getById(ownerId || user.uid, id).then(doc => {
         if (doc) {
           setName(doc.name || '');
-          setSpecies(doc.species || '鬆獅蜥');
+          setSpecies(doc.species || '');
           setBirthday(doc.birthDate || '');
           setHomeDate(doc.homeDate || '');
           setGender(doc.gender || '');
@@ -94,15 +99,8 @@ export default function AddPetScreen() {
       quality: 0.8,
     });
     if (!result.canceled && result.assets[0]?.uri) {
-      setIsImageProcessing(true);
-      try {
-        const variants = await createImageVariants(result.assets[0].uri);
-        setImageUri(variants.displayUri);
-      } catch (error) {
-        Alert.alert('圖片處理失敗', error instanceof Error ? error.message : '無法處理選取的圖片，請改選其他圖片。');
-      } finally {
-        setIsImageProcessing(false);
-      }
+      // Keep the original URI for preview. Main/thumbnail JPEGs are created once on save.
+      setImageUri(result.assets[0].uri);
     }
   };
 
@@ -136,7 +134,7 @@ export default function AddPetScreen() {
             {
               id: 'confirm',
               onPress: async () => {
-                if (isSaving || isImageProcessing) return;
+                if (savingLock.current || isSaving) return;
                 if (!name.trim()) {
                   Alert.alert('提示', '請填寫寵物名字');
                   return;
@@ -146,10 +144,10 @@ export default function AddPetScreen() {
                   return;
                 }
 
+                savingLock.current = true;
                 setIsSaving(true);
                 try {
                   let savedPetId: string;
-                  let createdPetId: string | null = null;
                   if (isEditing && typeof id === 'string') {
                     savedPetId = id;
                     await petService.update(ownerId || user.uid, id, {
@@ -177,29 +175,48 @@ export default function AddPetScreen() {
                       humidMin: parseInt(humidMin) || 30,
                       humidMax: parseInt(humidMax) || 50,
                     });
-                    createdPetId = savedPetId;
                   }
 
                   const resolvedOwnerId = isEditing ? (ownerId || user.uid) : user.uid;
                   if (imageUri && !imageUri.startsWith('http')) {
                     try {
-                      const uploaded = await petService.uploadImage(resolvedOwnerId, savedPetId, imageUri, user.uid);
-                      await petService.update(resolvedOwnerId, savedPetId, uploaded);
-                    } catch (error) {
-                      if (createdPetId) {
-                        try {
-                          await petService.delete(user.uid, createdPetId);
-                        } catch (rollbackError) {
-                          if (__DEV__) {
-                            const rollbackCode = typeof rollbackError === 'object' && rollbackError !== null && 'code' in rollbackError
-                              ? String((rollbackError as { code?: string }).code || 'unknown')
-                              : 'unknown';
-                            console.warn('Pet rollback failed:', rollbackCode);
-                          }
-                          throw new Error('照片上傳失敗，且未能自動清除暫存寵物資料，請回寵物頁確認後再試。');
-                        }
+                      const uploaded = await petService.uploadImage(
+                        resolvedOwnerId,
+                        savedPetId,
+                        imageUri,
+                        user.uid,
+                        !isEditing,
+                      );
+                      try {
+                        await petService.update(resolvedOwnerId, savedPetId, uploaded);
+                      } catch (error) {
+                        // updateDoc 可能已在伺服器成功，只是裝置斷線沒有收到回應。
+                        // 保留固定路徑的已上傳照片，避免刪掉文件已引用的有效物件；
+                        // 下一次編輯重試會覆寫同一路徑，不會累積版本化孤兒檔。
+                        throw new ImagePipelineError(
+                          'writeback',
+                          '照片網址寫回失敗。',
+                          typeof error === 'object' && error !== null && 'code' in error
+                            ? String((error as { code?: unknown }).code || 'unknown')
+                            : 'unknown',
+                          { cause: error },
+                        );
                       }
-                      throw error;
+                    } catch (error) {
+                      logImagePipelineError(error);
+                      if (isEditing) {
+                        Alert.alert(
+                          '基本資料已更新',
+                          `${imagePipelineMessage(error)}\n舊照片已保留，請留在本頁重試。\n錯誤代碼：${imagePipelineDiagnostic(error)}`,
+                        );
+                        return;
+                      }
+                      Alert.alert(
+                        '寵物資料已保留',
+                        `${imagePipelineMessage(error)}\n寵物資料已保留，請從編輯頁重新上傳照片。\n錯誤代碼：${imagePipelineDiagnostic(error)}`,
+                        [{ text: '知道了', onPress: () => router.replace('/(tabs)/pets') }],
+                      );
+                      return;
                     }
                   }
 
@@ -211,6 +228,7 @@ export default function AddPetScreen() {
                 } catch (error) {
                   Alert.alert('錯誤', saveErrorMessage(error));
                 } finally {
+                  savingLock.current = false;
                   setIsSaving(false);
                 }
               },
@@ -253,8 +271,6 @@ export default function AddPetScreen() {
             <View style={[styles.inputCard, { backgroundColor: theme.background }]}>
               <TextInput
                 style={inputStyle}
-                placeholder="編輯寵物名字"
-                placeholderTextColor={theme.text + '50'}
                 value={name}
                 onChangeText={setName}
                 maxLength={20}
@@ -268,8 +284,6 @@ export default function AddPetScreen() {
             <View style={[styles.inputCard, { backgroundColor: theme.background }]}>
               <TextInput
                 style={inputStyle}
-                placeholder="鬆獅蜥"
-                placeholderTextColor={theme.text + '50'}
                 value={species}
                 onChangeText={setSpecies}
               />
@@ -351,8 +365,6 @@ export default function AddPetScreen() {
             <View style={[styles.inputCard, { backgroundColor: theme.background }]}>
               <TextInput
                 style={inputStyle}
-                placeholder="編輯標籤綽號"
-                placeholderTextColor={theme.text + '50'}
                 value={tag}
                 onChangeText={setTag}
               />

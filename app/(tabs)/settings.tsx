@@ -33,7 +33,7 @@ import {
   getNotificationPermissionState,
   getNotificationPreferences,
   ReminderNotificationInput,
-  requestNotificationPermission,
+  requestNotificationPermissionState,
   saveNotificationPreferences,
   synchronizeEligibleReminderNotifications,
 } from '../../src/services/notificationService';
@@ -48,6 +48,8 @@ export default function SettingsScreen() {
   const [sysNotifyEnabled, setSysNotifyEnabled] = useState(false);
   const [notificationSettingsBusy, setNotificationSettingsBusy] = useState(false);
   const awaitingNotificationSettingsRef = useRef(false);
+  const completedNotificationSettingsRoundTripRef = useRef(false);
+  const appStateRef = useRef(AppState.currentState);
   const [isAboutExpanded, setIsAboutExpanded] = useState(false);
   const [showTermsModal, setShowTermsModal] = useState(false);
   const [showPrivacyModal, setShowPrivacyModal] = useState(false);
@@ -76,22 +78,33 @@ export default function SettingsScreen() {
       pets,
     );
     if (result.failedReminderIds.length > 0) {
-      Alert.alert('部分提醒未排程', '部分提醒的時間或頻率設定不完整，請逐筆檢查。');
+      const hasLocalScheduleFailure = Object.values(result.failureReasons).some(
+        reason => reason === 'schedule-failed' || reason === 'verification-failed',
+      );
+      Alert.alert(
+        '部分提醒未排程',
+        hasLocalScheduleFailure
+          ? '手機通知權限已開啟，但部分本機排程未完成。請稍後再切換提醒開關重試。'
+          : '部分提醒的時間或頻率設定不完整，請逐筆檢查。',
+      );
     }
   }
 
   function openNotificationSettings() {
     awaitingNotificationSettingsRef.current = true;
+    completedNotificationSettingsRoundTripRef.current = false;
     Linking.openSettings().catch(() => {
       awaitingNotificationSettingsRef.current = false;
       Alert.alert('無法開啟設定', '請手動前往手機設定，開啟蜥日日記的通知權限。');
     });
   }
 
-  function showNotificationSettingsGuide() {
+  function showNotificationSettingsGuide(channelDisabled = false) {
     Alert.alert(
-      '未開啟通知',
-      '請到手機設定開啟蜥日日記的通知權限。',
+      channelDisabled ? '照護提醒通知已關閉' : '未開啟通知',
+      channelDisabled
+        ? 'App 通知權限已開啟，但「照護提醒」通知類別仍為關閉，請到手機設定開啟該類別。'
+        : '請到手機設定開啟蜥日日記的通知權限。',
       [
         { text: '稍後', style: 'cancel' },
         { text: '前往設定', onPress: openNotificationSettings },
@@ -99,14 +112,32 @@ export default function SettingsScreen() {
     );
   }
 
-  async function refreshNotificationSettings(synchronizeAfterGrant = false) {
-    const [preferences, permission] = await Promise.all([
+  async function refreshNotificationSettings(
+    synchronizeIfReady = false,
+    showSettingsResult = false,
+  ) {
+    const [storedPreferences, permission] = await Promise.all([
       getNotificationPreferences(),
       getNotificationPermissionState(),
     ]);
+    let preferences = storedPreferences;
+    const shouldAdoptGrantedPermission = permission.granted
+      && !storedPreferences.systemConfigured;
+    if (shouldAdoptGrantedPermission && !storedPreferences.systemEnabled) {
+      preferences = {
+        ...storedPreferences,
+        systemEnabled: true,
+        systemConfigured: true,
+      };
+      await saveNotificationPreferences(preferences);
+    }
     setReminderEnabled(preferences.reminderEnabled);
     setSysNotifyEnabled(preferences.systemEnabled && permission.granted);
-    if (synchronizeAfterGrant
+    if (showSettingsResult && permission.appGranted && !permission.channelEnabled) {
+      showNotificationSettingsGuide(true);
+      return;
+    }
+    if (synchronizeIfReady
       && preferences.reminderEnabled
       && preferences.systemEnabled
       && permission.granted) {
@@ -117,9 +148,22 @@ export default function SettingsScreen() {
   useEffect(() => {
     void refreshNotificationSettings();
     const subscription = AppState.addEventListener('change', nextState => {
-      if (nextState === 'active' && awaitingNotificationSettingsRef.current) {
-        awaitingNotificationSettingsRef.current = false;
-        void refreshNotificationSettings(true);
+      const previousState = appStateRef.current;
+      appStateRef.current = nextState;
+      if (awaitingNotificationSettingsRef.current && nextState !== 'active') {
+        completedNotificationSettingsRoundTripRef.current = true;
+      }
+      if (nextState === 'active' && previousState !== 'active') {
+        const returnedFromSettings = awaitingNotificationSettingsRef.current
+          && completedNotificationSettingsRoundTripRef.current;
+        if (returnedFromSettings) {
+          awaitingNotificationSettingsRef.current = false;
+          completedNotificationSettingsRoundTripRef.current = false;
+        }
+        // 任何從背景回到 App 的路徑都重新確認並補排程；只有確定是本頁
+        // 開啟系統設定時，才額外顯示頻道仍關閉的引導。
+        // 背景同步失敗不應在每次開啟 App 時打斷使用者；只有使用者主動切換設定時才顯示錯誤。
+        void refreshNotificationSettings(true, returnedFromSettings).catch(() => undefined);
       }
     });
     return () => subscription.remove();
@@ -138,14 +182,6 @@ export default function SettingsScreen() {
         reminderConfigured: true,
       };
       await saveNotificationPreferences(next);
-      if (!value) {
-        await cancelAllLizLogNotifications();
-      } else if (next.systemEnabled) {
-        const granted = await requestNotificationPermission();
-        setSysNotifyEnabled(granted);
-        if (!granted) showNotificationSettingsGuide();
-        else await synchronizeAllEnabledReminders();
-      }
     } catch {
       if (previous) {
         await saveNotificationPreferences(previous).catch(() => undefined);
@@ -154,6 +190,27 @@ export default function SettingsScreen() {
         await refreshNotificationSettings().catch(() => undefined);
       }
       Alert.alert('無法更新通知設定', '請稍後再試。');
+      setNotificationSettingsBusy(false);
+      return;
+    }
+
+    try {
+      if (!value) {
+        await cancelAllLizLogNotifications();
+      } else if (previous?.systemEnabled) {
+        const permission = await requestNotificationPermissionState();
+        setSysNotifyEnabled(permission.granted);
+        if (!permission.granted) {
+          showNotificationSettingsGuide(permission.appGranted && !permission.channelEnabled);
+        } else {
+          await synchronizeAllEnabledReminders();
+        }
+      }
+    } catch {
+      Alert.alert(
+        '提醒設定已更新',
+        '設定已儲存，但本機通知尚未同步。這不是資料儲存失敗，請稍後再試。',
+      );
     } finally {
       setNotificationSettingsBusy(false);
     }
@@ -164,27 +221,16 @@ export default function SettingsScreen() {
     setNotificationSettingsBusy(true);
     setSysNotifyEnabled(value);
     let previous: Awaited<ReturnType<typeof getNotificationPreferences>> | null = null;
+    let next: Awaited<ReturnType<typeof getNotificationPreferences>> | null = null;
     try {
       previous = await getNotificationPreferences();
-      const next = {
+      next = {
         ...previous,
         systemEnabled: value,
         systemConfigured: true,
       };
       // systemEnabled 表示使用者期望；OS 尚未授權時保留 true，返回設定後即可自動同步。
       await saveNotificationPreferences(next);
-      if (!value) {
-        await cancelAllLizLogNotifications();
-        return;
-      }
-
-      const granted = await requestNotificationPermission();
-      setSysNotifyEnabled(granted);
-      if (!granted) {
-        showNotificationSettingsGuide();
-        return;
-      }
-      if (next.reminderEnabled) await synchronizeAllEnabledReminders();
     } catch {
       if (previous) {
         await saveNotificationPreferences(previous).catch(() => undefined);
@@ -193,6 +239,29 @@ export default function SettingsScreen() {
         await refreshNotificationSettings().catch(() => undefined);
       }
       Alert.alert('無法更新通知設定', '請稍後再試。');
+      setNotificationSettingsBusy(false);
+      return;
+    }
+
+    try {
+      if (!value) {
+        await cancelAllLizLogNotifications();
+        return;
+      }
+
+      const permission = await requestNotificationPermissionState();
+      setSysNotifyEnabled(permission.granted);
+      if (!permission.granted) {
+        showNotificationSettingsGuide(permission.appGranted && !permission.channelEnabled);
+        return;
+      }
+      if (next?.reminderEnabled) await synchronizeAllEnabledReminders();
+    } catch {
+      await refreshNotificationSettings().catch(() => undefined);
+      Alert.alert(
+        '系統通知設定已儲存',
+        '目前無法完成本機通知排程；已授權通知時不需要再次開啟權限，請稍後重試。',
+      );
     } finally {
       setNotificationSettingsBusy(false);
     }

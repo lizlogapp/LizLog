@@ -67,12 +67,12 @@ export default function MedicalDetailScreen() {
 
   const renderRow = (label: string, content: React.ReactNode) => (
     <View style={styles.row}>
-      <Text style={[styles.rowLabel, { color: theme.primary, fontFamily: fontFamilyName }]}>
+      <Text selectable style={[styles.rowLabel, { color: theme.primary, fontFamily: fontFamilyName }]}>
         {label}
       </Text>
       <View style={styles.rowContent}>
         {typeof content === 'string' ? (
-          <Text style={[styles.rowText, { color: theme.text, fontFamily: fontFamilyName }]}>
+          <Text selectable style={[styles.rowText, { color: theme.text, fontFamily: fontFamilyName }]}>
             {content}
           </Text>
         ) : (
@@ -123,7 +123,7 @@ export default function MedicalDetailScreen() {
 
           {/* Header */}
           <View style={styles.header}>
-            <Text style={[styles.headerTitle, { color: theme.primary, fontFamily: fontFamilyName }]}>
+            <Text selectable style={[styles.headerTitle, { color: theme.primary, fontFamily: fontFamilyName }]}>
               {data.title}
             </Text>
           </View>
@@ -133,7 +133,7 @@ export default function MedicalDetailScreen() {
           {/* Visit Section */}
           {data.visit && (
             <View style={styles.section}>
-              <Text style={[styles.sectionTitle, { color: theme.primary, fontFamily: fontFamilyName }]}>就診</Text>
+              <Text selectable style={[styles.sectionTitle, { color: theme.primary, fontFamily: fontFamilyName }]}>就診</Text>
 
               {renderRow('日期', data.visit.date)}
               {renderRow('地點', data.visit.hospital)}
@@ -143,7 +143,7 @@ export default function MedicalDetailScreen() {
               {data.visit.advice && data.visit.advice.length > 0 && renderRow('醫囑', (
                 <View>
                   {data.visit.advice.map((item: string, index: number) => (
-                    <Text key={index} style={[styles.rowText, { color: theme.text, fontFamily: fontFamilyName, marginBottom: 4 }]}>
+                    <Text selectable key={index} style={[styles.rowText, { color: theme.text, fontFamily: fontFamilyName, marginBottom: 4 }]}>
                       {item}
                     </Text>
                   ))}
@@ -170,7 +170,7 @@ export default function MedicalDetailScreen() {
           {/* Medication Section */}
           {data.medication && (
             <View style={styles.section}>
-              <Text style={[styles.sectionTitle, { color: theme.primary, fontFamily: fontFamilyName }]}>用藥</Text>
+              <Text selectable style={[styles.sectionTitle, { color: theme.primary, fontFamily: fontFamilyName }]}>用藥</Text>
 
               {renderRow('起始', data.medication.startDate)}
               {renderRow('結束', data.medication.endDate)}
@@ -181,7 +181,7 @@ export default function MedicalDetailScreen() {
               {data.medication.note && data.medication.note.length > 0 && renderRow('備註', (
                 <View>
                   {data.medication.note.map((item: string, index: number) => (
-                    <Text key={index} style={[styles.rowText, { color: theme.text, fontFamily: fontFamilyName, marginBottom: 4 }]}>
+                    <Text selectable key={index} style={[styles.rowText, { color: theme.text, fontFamily: fontFamilyName, marginBottom: 4 }]}>
                       {item}
                     </Text>
                   ))}

@@ -457,20 +457,34 @@ export default function AnalyticsScreen() {
           const displayTab = availableTabs.includes(activeChartTab) ? activeChartTab : '週';
           
           const currentMockData = buildChartData(btn.text, displayTab);
+          const dynamicScaleUnit: Record<string, string> = {
+            '日照變化圖': 'm',
+            '泡澡變化圖': 'm',
+            '體重變化圖': 'g',
+            '身長變化圖': 'cm',
+          };
+          const isDynamicScaleChart = btn.text in dynamicScaleUnit;
+          const dynamicMaximum = isDynamicScaleChart && currentMockData.length > 0
+            ? Math.max(0, ...currentMockData.map(point => point.val))
+            : 0;
+          if (isDynamicScaleChart) {
+            const unit = dynamicScaleUnit[btn.text];
+            yAxisLabels = Array.from({ length: 6 }, (_, labelIndex) => {
+              const value = dynamicMaximum * ((5 - labelIndex) / 5);
+              const formatted = Number.isInteger(value)
+                ? String(value)
+                : value.toFixed(1).replace(/\.0$/, '');
+              return `${formatted}${unit}`;
+            });
+          }
 
           // 預先計算每個點的高度比例，用於折線圖或長條圖
           const processedData = currentMockData.map((data: any) => {
             let heightPercent = 0;
             if (btn.text === '溫度變化圖') {
               heightPercent = ((data.val - 10) / 30) * 100;
-            } else if (btn.text === '體重變化圖') {
-              heightPercent = (data.val / 500) * 100;
-            } else if (btn.text === '身長變化圖') {
-              heightPercent = (data.val / 50) * 100;
-            } else if (btn.text === '日照變化圖') {
-              heightPercent = (data.val / 720) * 100;
-            } else if (btn.text === '泡澡變化圖') {
-              heightPercent = (data.val / 60) * 100;
+            } else if (isDynamicScaleChart) {
+              heightPercent = dynamicMaximum > 0 ? (data.val / dynamicMaximum) * 100 : 0;
             } else if (btn.text === '飲食變化圖') {
               heightPercent = ((data.val - 1) / 4) * 100;
             } else {
@@ -621,7 +635,7 @@ export default function AnalyticsScreen() {
                                     ]}>
                                       <Text style={[
                                         { fontSize: getFontSize(14, 'medium'), color: '#333333', fontFamily: fontFamilyName },
-                                        isToday && { color: bgColor, fontWeight: 'bold' }
+                                        isToday && { color: '#333333', fontWeight: 'bold' }
                                       ]}>{dayNum}</Text>
                                     </View>
                                   )}

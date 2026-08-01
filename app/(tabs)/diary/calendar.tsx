@@ -8,6 +8,7 @@ import { FloatingActionBar } from '../../../src/components/FloatingActionBar';
 import { BaseScreen } from '../../../src/components/common/BaseScreen';
 import { useAuth } from '../../../src/contexts/AuthContext';
 import { diaryService, petService, DiaryDoc } from '../../../src/services/firestoreService';
+import { parseDiaryDate, toDiaryDateKey } from '../../../src/utils/diaryDate';
 
 export default function CalendarFilterScreen() {
   const router = useRouter();
@@ -56,6 +57,19 @@ export default function CalendarFilterScreen() {
   const [selectedYear, setSelectedYear] = useState<number>(currentYearInt);
   const [isYearDropdownVisible, setIsYearDropdownVisible] = useState(false);
   const [isSearchVisible, setIsSearchVisible] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+
+  const normalizedQuery = searchQuery.trim().toLocaleLowerCase('zh-Hant');
+  const filteredDiaries = firestoreDiaries.filter(diary => {
+    if (!normalizedQuery) return true;
+    const searchable = [
+      diary.title,
+      diary.content,
+      diary.date,
+      ...(diary.pets || []).map(pet => pet.name),
+    ].filter(Boolean).join(' ').toLocaleLowerCase('zh-Hant');
+    return searchable.includes(normalizedQuery);
+  });
 
   const months = Array.from({ length: 12 }, (_, i) => i + 1);
 
@@ -63,9 +77,9 @@ export default function CalendarFilterScreen() {
     if (isDemoMode) {
       return 0;
     }
-    return firestoreDiaries.filter(d => {
-      const date = new Date(d.date);
-      return date.getFullYear() === selectedYear && (date.getMonth() + 1) === month;
+    return filteredDiaries.filter(d => {
+      const date = parseDiaryDate(d.date);
+      return date?.getFullYear() === selectedYear && (date.getMonth() + 1) === month;
     }).length;
   };
 
@@ -83,9 +97,9 @@ export default function CalendarFilterScreen() {
     if (isDemoMode) return [];
     
     const days = new Set<number>();
-    firestoreDiaries.forEach(d => {
-      const date = new Date(d.date);
-      if (date.getFullYear() === selectedYear && (date.getMonth() + 1) === month) {
+    filteredDiaries.forEach(d => {
+      const date = parseDiaryDate(d.date);
+      if (date?.getFullYear() === selectedYear && (date.getMonth() + 1) === month) {
         days.add(date.getDate());
       }
     });
@@ -121,6 +135,9 @@ export default function CalendarFilterScreen() {
                 placeholder="搜尋"
                 placeholderTextColor={theme.text + '80'}
                 autoFocus
+                value={searchQuery}
+                onChangeText={setSearchQuery}
+                returnKeyType="search"
               />
             </View>
           ) : (
@@ -217,18 +234,13 @@ export default function CalendarFilterScreen() {
                               ]}
                               onPress={() => {
                                 if (hasDiary) {
-                                  const diary = firestoreDiaries.find(item => {
-                                    const date = new Date(item.date);
-                                    return date.getFullYear() === selectedYear
-                                      && date.getMonth() + 1 === month
-                                      && date.getDate() === dayNum;
+                                  router.push({
+                                    pathname: '/(tabs)/diary',
+                                    params: {
+                                      date: toDiaryDateKey(new Date(selectedYear, month - 1, dayNum)),
+                                      ...(searchQuery.trim() ? { q: searchQuery.trim() } : {}),
+                                    },
                                   });
-                                  if (diary) {
-                                    router.push({
-                                      pathname: '/(tabs)/diary/view',
-                                      params: { id: diary.id, ownerId: diary.ownerId || user?.uid },
-                                    });
-                                  }
                                 }
                               }}
                             >

@@ -1,7 +1,7 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 
 /** 載入動畫最短顯示時間（避免閃爍） */
-export const MIN_LOAD_DISPLAY_MS = 600;
+export const MIN_LOAD_DISPLAY_MS = 1300;
 
 export type AppInitFn = () => Promise<void>;
 

@@ -1,9 +1,9 @@
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import React, { useState } from 'react';
-import { Animated, View, Text, StyleSheet, Pressable, ScrollView, Image, TextInput, Alert, Modal, PanResponder } from 'react-native';
+import { Animated, View, Text, StyleSheet, Pressable, ScrollView, Image, TextInput, Alert, Modal, PanResponder, KeyboardAvoidingView, Platform } from 'react-native';
 import { useTheme } from '../../../src/theme/ThemeContext';
 import { getThemeTokens } from '../../../src/theme/themeSettings';
-import { getFontSize } from '../../../src/theme/typographySettings';
+import { buildLineHeight, getFontSize } from '../../../src/theme/typographySettings';
 import { FloatingActionBar } from '../../../src/components/FloatingActionBar';
 import { BaseScreen } from '../../../src/components/common/BaseScreen';
 import Slider from '@react-native-community/slider';
@@ -130,6 +130,7 @@ export default function AddDiaryScreen() {
   const [attachments, setAttachments] = useState<SelectedAttachment[]>([]);
   const [isSaving, setIsSaving] = useState(false);
   const [contentInputHeight, setContentInputHeight] = useState(44);
+  const scrollRef = React.useRef<ScrollView>(null);
   const [appetite, setAppetite] = useState(0); // 食慾狀態，預設 0 (未檢測)
   const [poopState, setPoopState] = useState('無'); // 排便狀態，預設 '無'
   const [moltState, setMoltState] = useState('無');
@@ -147,8 +148,6 @@ export default function AddDiaryScreen() {
   const [bathActive, setBathActive] = useState(false);
   const [poopActive, setPoopActive] = useState(false);
   const [moltActive, setMoltActive] = useState(false);
-  const weightDirtyRef = React.useRef(false);
-  const lengthDirtyRef = React.useRef(false);
 
   // 預設帶入當日日期
   const [selectedDate, setSelectedDate] = useState(new Date());
@@ -304,49 +303,6 @@ export default function AddDiaryScreen() {
     return () => { active = false; };
   }, [isEditing, petDocuments, selectedPetIds, snapshot]);
 
-  React.useEffect(() => {
-    if (!user || isEditing) return;
-    if (selectedPetIds.length !== 1) {
-      weightDirtyRef.current = false;
-      lengthDirtyRef.current = false;
-      setWeight('');
-      setLength('');
-      return;
-    }
-    const petId = selectedPetIds[0];
-    const selectedPet = petDocuments.find(pet => pet.id === petId);
-    if (!selectedPet) return;
-
-    let active = true;
-    weightDirtyRef.current = false;
-    lengthDirtyRef.current = false;
-    setWeight('');
-    setLength('');
-
-    void diaryService.getAll(user.uid).then(entries => {
-      if (!active) return;
-      const matchesPet = (entry: DiaryDoc) => entry.petIds?.includes(petId)
-        || entry.pets?.some((pet, index) => pet.petId === petId
-          || (!pet.petId && entry.petIds?.[index] === petId)
-          || (!pet.petId && pet.name === selectedPet.name));
-      const relevant = entries.filter(matchesPet).sort((a, b) => (
-        (parseDiaryDate(b.date)?.getTime() || 0) - (parseDiaryDate(a.date)?.getTime() || 0)
-      ));
-      const previousWeight = relevant.find(entry => {
-        const value = entry.records?.weight?.trim();
-        return value && value !== '0';
-      })?.records?.weight || '';
-      const previousLength = relevant.find(entry => {
-        const value = entry.records?.length?.trim();
-        return value && value !== '0';
-      })?.records?.length || '';
-      if (!weightDirtyRef.current) setWeight(previousWeight);
-      if (!lengthDirtyRef.current) setLength(previousLength);
-    }).catch(() => undefined);
-
-    return () => { active = false; };
-  }, [isEditing, petDocuments, selectedPetIds, user]);
-
   const togglePet = (petId: string) => {
     const pet = petDocuments.find(item => item.id === petId);
     if (!pet) return;
@@ -450,6 +406,7 @@ export default function AddDiaryScreen() {
     const remoteAttachments = attachments
       .filter(file => file.url)
       .map(file => ({ name: file.name, url: file.url as string, mimeType: file.mimeType }));
+    const normalizedRecord = (value: string | undefined) => value?.trim() || '-';
     const newData: Omit<DiaryDoc, 'id'> = {
       status: 'published',
       date: dateKey,
@@ -476,15 +433,15 @@ export default function AddDiaryScreen() {
         },
       })),
       records: {
-        temp: hasSinglePet ? temp : '',
-        humid: hasSinglePet ? humid : '',
-        weight: hasSinglePet ? weight : '',
-        length: hasSinglePet ? length : '',
-        bask: baskMinutes,
-        bath: bathMinutes,
+        temp: hasSinglePet ? normalizedRecord(temp) : '-',
+        humid: hasSinglePet ? normalizedRecord(humid) : '-',
+        weight: hasSinglePet ? normalizedRecord(weight) : '-',
+        length: hasSinglePet ? normalizedRecord(length) : '-',
+        bask: normalizedRecord(baskMinutes),
+        bath: normalizedRecord(bathMinutes),
         poop: poopState,
         molt: moltState,
-        feed: feedState,
+        feed: normalizedRecord(feedState),
         appetite,
       },
     };
@@ -561,18 +518,21 @@ export default function AddDiaryScreen() {
       }
     >
       <View style={{ flex: 1 }}>
-        {/* 背景點擊攔截 */}
-        {isPetDropdownVisible && (
-          <Pressable
-            style={[StyleSheet.absoluteFill, { zIndex: 900, backgroundColor: 'transparent' }]}
-            onPress={() => setIsPetDropdownVisible(false)}
-          />
-        )}
-
+        <KeyboardAvoidingView
+          style={{ flex: 1 }}
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          keyboardVerticalOffset={24}
+        >
         <ScrollView
-          contentContainerStyle={styles.scrollContent}
+          ref={scrollRef}
+          contentContainerStyle={[
+            styles.scrollContent,
+            isDiaryExpanded && styles.scrollContentWithKeyboard,
+          ]}
           showsVerticalScrollIndicator={false}
           scrollEnabled={!isDraggingImage}
+          keyboardShouldPersistTaps="handled"
+          automaticallyAdjustKeyboardInsets
         >
           {/* ===== 卡片一：照片 + 寵物標籤 + 日期資訊 ===== */}
           <View style={[styles.mainCard, { backgroundColor: theme.background }]}>
@@ -597,41 +557,6 @@ export default function AddDiaryScreen() {
                   ))}
                 </Pressable>
 
-                {/* 寵物選擇下拉選單 */}
-                {isPetDropdownVisible && (
-                  <View style={[styles.petDropdownModal, { backgroundColor: theme.background }]}>
-                    <ScrollView
-                      style={styles.petDropdownScroll}
-                      showsVerticalScrollIndicator={false}
-                      bounces={false}
-                    >
-                      <Pressable
-                        style={[
-                          styles.petDropdownItem,
-                          allOwnerGroupPetsSelected && { backgroundColor: 'rgba(255, 195, 0, 0.3)', borderWidth: 1.5, borderColor: theme.accentHot },
-                        ]}
-                        onPress={toggleAllPets}
-                      >
-                        <Text style={[styles.petDropdownItemText, { color: theme.primary, fontFamily: fontFamilyName }]}>全部</Text>
-                      </Pressable>
-                      {petDocuments.map((pet, idx) => (
-                        <Pressable
-                          key={pet.id}
-                          style={[
-                            styles.petDropdownItem,
-                            selectedPetIds.includes(pet.id) && { backgroundColor: 'rgba(255, 195, 0, 0.3)', borderWidth: 1.5, borderColor: theme.accentHot },
-                            idx === petDocuments.length - 1 && { marginBottom: 0 },
-                          ]}
-                          onPress={() => togglePet(pet.id)}
-                        >
-                          <Text style={[styles.petDropdownItemText, { color: theme.primary, fontFamily: fontFamilyName }]}>
-                            {pet.name}
-                          </Text>
-                        </Pressable>
-                      ))}
-                    </ScrollView>
-                  </View>
-                )}
               </View>
             </View>
 
@@ -650,7 +575,6 @@ export default function AddDiaryScreen() {
                 ))}
                 <Pressable accessibilityRole="button" accessibilityLabel="新增日記照片" style={[styles.diaryImageAddButton, { borderColor: theme.primary }]} onPress={pickDiaryImages}>
                   <Text style={[styles.diaryImageAddText, { color: theme.primary }]}>＋</Text>
-                  <Text style={[styles.diaryImageAddLabel, { color: theme.primary, fontFamily: fontFamilyName }]}>add</Text>
                 </Pressable>
               </ScrollView>
             </View>}
@@ -772,6 +696,8 @@ export default function AddDiaryScreen() {
                         }}
                         multiline
                         selectTextOnFocus
+                        placeholder="-"
+                        placeholderTextColor={valueColor + '80'}
                       />
                     ) : ['泡澡', '日照', '體重', '身長', '溫度', '濕度'].includes(item.label) ? (
                       <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }}>
@@ -793,10 +719,8 @@ export default function AddDiaryScreen() {
                               setBaskMinutes(value);
                               setBaskActive(Number.parseFloat(value) > 0);
                             } else if (item.label === '體重') {
-                              weightDirtyRef.current = true;
                               setWeight(value);
                             } else if (item.label === '身長') {
-                              lengthDirtyRef.current = true;
                               setLength(value);
                             } else if (item.label === '溫度') {
                               setTemp(value);
@@ -806,6 +730,8 @@ export default function AddDiaryScreen() {
                           }}
                           keyboardType="numeric"
                           selectTextOnFocus
+                          placeholder="-"
+                          placeholderTextColor={valueColor + '80'}
                         />
                         <Text style={[styles.recordValue, { color: labelColor, fontFamily: fontFamilyName }]}>
                           {item.label === '泡澡' || item.label === '日照' ? '分鐘' :
@@ -852,12 +778,12 @@ export default function AddDiaryScreen() {
           </View>
 
           {/* ===== 卡片三：寫日記（可展開） ===== */}
-          <Pressable
+          {!isDiaryExpanded && <Pressable
             style={[styles.actionCard, { backgroundColor: theme.background }]}
-            onPress={() => setIsDiaryExpanded(!isDiaryExpanded)}
+            onPress={() => setIsDiaryExpanded(true)}
           >
             <IconDiaryWrite width={28} height={28} color={theme.primary} />
-          </Pressable>
+          </Pressable>}
 
           {isDiaryExpanded && (
             <View style={[styles.diaryEditCard, { backgroundColor: theme.background }]}>
@@ -871,7 +797,7 @@ export default function AddDiaryScreen() {
               />
               {/* 內容編輯 */}
               <TextInput
-                style={[styles.diaryContentInput, { color: valueColor, fontFamily: fontFamilyName, height: contentInputHeight }]}
+                style={[styles.diaryContentInput, { color: titleValueColor, fontFamily: fontFamilyName, height: contentInputHeight }]}
                 value={diaryContent}
                 onChangeText={setDiaryContent}
                 onContentSizeChange={event => setContentInputHeight(Math.max(44, event.nativeEvent.contentSize.height))}
@@ -879,11 +805,67 @@ export default function AddDiaryScreen() {
                 placeholderTextColor={theme.primary + '80'}
                 multiline
                 textAlignVertical="top"
+                scrollEnabled={false}
+                onFocus={() => setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 180)}
               />
             </View>
           )}
 
         </ScrollView>
+        </KeyboardAvoidingView>
+
+        <Modal
+          visible={isPetDropdownVisible}
+          transparent
+          animationType="fade"
+          onRequestClose={() => setIsPetDropdownVisible(false)}
+        >
+          <Pressable style={styles.petPickerOverlay} onPress={() => setIsPetDropdownVisible(false)}>
+            <Pressable
+              style={[styles.petPickerCard, { backgroundColor: theme.background }]}
+              onPress={event => event.stopPropagation()}
+            >
+              <Text style={[styles.petPickerTitle, { color: theme.primary, fontFamily: fontFamilyName }]}>選擇寵物（可多選）</Text>
+              <ScrollView
+                style={styles.petDropdownScroll}
+                contentContainerStyle={styles.petPickerList}
+                showsVerticalScrollIndicator
+                nestedScrollEnabled
+                keyboardShouldPersistTaps="handled"
+              >
+                <Pressable
+                  style={[
+                    styles.petDropdownItem,
+                    allOwnerGroupPetsSelected && styles.petDropdownItemActive,
+                  ]}
+                  onPress={toggleAllPets}
+                >
+                  <Text style={[styles.petDropdownItemText, { color: theme.primary, fontFamily: fontFamilyName }]}>全部</Text>
+                </Pressable>
+                {petDocuments.map(pet => (
+                  <Pressable
+                    key={pet.id}
+                    style={[
+                      styles.petDropdownItem,
+                      selectedPetIds.includes(pet.id) && styles.petDropdownItemActive,
+                    ]}
+                    onPress={() => togglePet(pet.id)}
+                  >
+                    <Text style={[styles.petDropdownItemText, { color: theme.primary, fontFamily: fontFamilyName }]}>
+                      {selectedPetIds.includes(pet.id) ? `✓ ${pet.name}` : pet.name}
+                    </Text>
+                  </Pressable>
+                ))}
+              </ScrollView>
+              <Pressable
+                style={[styles.petPickerDone, { backgroundColor: theme.primary }]}
+                onPress={() => setIsPetDropdownVisible(false)}
+              >
+                <Text style={[styles.petPickerDoneText, { color: theme.background, fontFamily: fontFamilyName }]}>完成</Text>
+              </Pressable>
+            </Pressable>
+          </Pressable>
+        </Modal>
 
         <DatePickerModal
           visible={isDatePickerVisible}
@@ -938,6 +920,9 @@ const styles = StyleSheet.create({
     paddingTop: 8,
     paddingBottom: 120,
     gap: 16,
+  },
+  scrollContentWithKeyboard: {
+    paddingBottom: 360,
   },
 
   // ===== 主卡片（照片 + 資訊） =====
@@ -1052,23 +1037,37 @@ const styles = StyleSheet.create({
     fontSize: getFontSize(16, 'medium'),
     fontWeight: '600',
   },
-  petDropdownModal: {
-    position: 'absolute',
-    top: '100%',
-    left: 0,
-    width: 150,
-    backgroundColor: '#FFFFFF',
-    borderRadius: 8,
-    padding: 12,
+  petPickerOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.35)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 24,
+  },
+  petPickerCard: {
+    width: '100%',
+    maxWidth: 360,
+    maxHeight: '72%',
+    borderRadius: 20,
+    padding: 20,
     shadowColor: '#000000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.15,
-    shadowRadius: 8,
-    elevation: 8,
-    zIndex: 2000,
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.25,
+    shadowRadius: 12,
+    elevation: 12,
+  },
+  petPickerTitle: {
+    fontSize: getFontSize(18, 'medium'),
+    fontWeight: '600',
+    textAlign: 'center',
+    marginBottom: 14,
   },
   petDropdownScroll: {
-    maxHeight: 280,
+    maxHeight: 360,
+  },
+  petPickerList: {
+    paddingBottom: 4,
+    gap: 8,
   },
   petDropdownItem: {
     paddingVertical: 10,
@@ -1078,7 +1077,7 @@ const styles = StyleSheet.create({
     borderBottomLeftRadius: 4,
     borderTopRightRadius: 16,
     borderBottomRightRadius: 16,
-    marginBottom: 8,
+    minHeight: 44,
   },
   petDropdownItemActive: {
     backgroundColor: 'rgba(255, 195, 0, 0.3)',
@@ -1087,6 +1086,17 @@ const styles = StyleSheet.create({
   },
   petDropdownItemText: {
     fontSize: getFontSize(16, 'medium'),
+  },
+  petPickerDone: {
+    minHeight: 48,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 16,
+  },
+  petPickerDoneText: {
+    fontSize: getFontSize(16, 'medium'),
+    fontWeight: '600',
   },
 
   // ===== 資訊區 =====
@@ -1264,6 +1274,7 @@ const styles = StyleSheet.create({
   },
   diaryContentInput: {
     fontSize: getFontSize(16, 'medium'),
+    lineHeight: buildLineHeight(getFontSize(16, 'medium')),
     minHeight: 44,
     padding: 0,
     textAlign: 'justify',

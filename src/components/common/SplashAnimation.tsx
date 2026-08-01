@@ -9,35 +9,22 @@ interface SplashAnimationProps {
 export const SplashAnimation: React.FC<SplashAnimationProps> = ({ isLoading, onFinish }) => {
   const lightOpacity = useRef(new Animated.Value(1)).current;
   const darkOpacity = useRef(new Animated.Value(0)).current;
-  const logoOpacity = useRef(new Animated.Value(0)).current;
   const containerOpacity = useRef(new Animated.Value(1)).current;
   const [sequenceComplete, setSequenceComplete] = useState(false);
   const [visible, setVisible] = useState(true);
 
   useEffect(() => {
     const sequence = Animated.sequence([
-      Animated.delay(180),
+      Animated.delay(250),
       Animated.parallel([
         Animated.timing(lightOpacity, {
           toValue: 0,
-          duration: 420,
+          duration: 500,
           useNativeDriver: true,
         }),
         Animated.timing(darkOpacity, {
           toValue: 1,
-          duration: 420,
-          useNativeDriver: true,
-        }),
-      ]),
-      Animated.parallel([
-        Animated.timing(darkOpacity, {
-          toValue: 0,
-          duration: 420,
-          useNativeDriver: true,
-        }),
-        Animated.timing(logoOpacity, {
-          toValue: 1,
-          duration: 420,
+          duration: 500,
           useNativeDriver: true,
         }),
       ]),
@@ -48,14 +35,14 @@ export const SplashAnimation: React.FC<SplashAnimationProps> = ({ isLoading, onF
     });
 
     return () => sequence.stop();
-  }, [darkOpacity, lightOpacity, logoOpacity]);
+  }, [darkOpacity, lightOpacity]);
 
   useEffect(() => {
     if (isLoading || !sequenceComplete) return;
 
     const fadeOut = Animated.timing(containerOpacity, {
       toValue: 0,
-      duration: 320,
+      duration: 200,
       useNativeDriver: true,
     });
 
@@ -85,11 +72,6 @@ export const SplashAnimation: React.FC<SplashAnimationProps> = ({ isLoading, onF
         <Animated.Image
           source={require('../../../assets/illustrations/lizard-head-dark.png')}
           style={[styles.image, { opacity: darkOpacity }]}
-          resizeMode="contain"
-        />
-        <Animated.Image
-          source={require('../../../assets/branding/logos/logo-image.png')}
-          style={[styles.image, { opacity: logoOpacity }]}
           resizeMode="contain"
         />
       </View>

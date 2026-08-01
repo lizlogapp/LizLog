@@ -68,7 +68,7 @@ export default function JoinScreen() {
           輸入邀請碼
         </Text>
         <Text style={[styles.subtitle, { color: theme.primary + '80', fontFamily: fontFamilyName }]}>
-          輸入飼主分享的邀請馬，加入共同飼育。
+          輸入飼主分享的邀請碼，加入共同飼育。
         </Text>
 
         <TextInput

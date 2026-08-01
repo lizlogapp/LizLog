@@ -20,12 +20,16 @@ import { FloatingActionBar } from '../../../src/components/FloatingActionBar';
 import { useAuth } from '../../../src/contexts/AuthContext';
 import { petService, PetDoc, reminderService } from '../../../src/services/firestoreService';
 import {
+  cancelReminderNotification,
+  claimNotificationSetupGuide,
   getNotificationPermissionState,
   getNotificationPreferences,
+  getNotificationScheduleFailureCopy,
   getReminderTypes,
   ReminderNotificationInput,
-  requestNotificationPermission,
+  requestNotificationPermissionState,
   saveNotificationPreferences,
+  scheduleReminderNotificationDetailed,
   synchronizeEligibleReminderNotifications,
 } from '../../../src/services/notificationService';
 
@@ -43,17 +47,22 @@ export default function ReminderScreen() {
   const theme = getThemeTokens(themeId);
   const { user } = useAuth();
   const [reminders, setReminders] = useState<ReminderNotificationInput[]>([]);
+  const [hasLoadedReminders, setHasLoadedReminders] = useState(false);
   const [petsById, setPetsById] = useState<Record<string, PetDoc & { id: string }>>({});
   const [pendingIds, setPendingIds] = useState<Set<string>>(new Set());
   const permissionPromptedRef = useRef(false);
   const awaitingSettingsRef = useRef(false);
+  const completedSettingsRoundTripRef = useRef(false);
+  const appStateRef = useRef(AppState.currentState);
 
   React.useEffect(() => {
     if (!user) {
       setReminders([]);
       setPetsById({});
+      setHasLoadedReminders(false);
       return;
     }
+    setHasLoadedReminders(false);
 
     const unsubscribePets = petService.onPetsChanged(user.uid, pets => {
       setPetsById(Object.fromEntries(pets.map(pet => [pet.id, pet])));
@@ -78,6 +87,7 @@ export default function ReminderScreen() {
             ))
           : visibleReminders,
       );
+      setHasLoadedReminders(true);
 
     });
 
@@ -120,16 +130,19 @@ export default function ReminderScreen() {
 
   const openNotificationSettings = useCallback(() => {
     awaitingSettingsRef.current = true;
+    completedSettingsRoundTripRef.current = false;
     Linking.openSettings().catch(() => {
       awaitingSettingsRef.current = false;
       Alert.alert('無法開啟設定', '請手動前往手機設定，開啟蜥日日記的通知權限。');
     });
   }, []);
 
-  const showNotificationSettingsGuide = useCallback(() => {
+  const showNotificationSettingsGuide = useCallback((channelDisabled = false) => {
     Alert.alert(
-      '尚未開啟通知',
-      '請到手機設定開啟蜥日日記的通知權限，提醒才能在 App 關閉時顯示。',
+      channelDisabled ? '照護提醒通知已關閉' : '尚未開啟通知',
+      channelDisabled
+        ? 'App 通知權限已開啟，但「照護提醒」通知類別仍為關閉，請到手機設定開啟該類別。'
+        : '請到手機設定開啟蜥日日記的通知權限，提醒才能在 App 關閉時顯示。',
       [
         { text: '稍後', style: 'cancel' },
         { text: '前往設定', onPress: openNotificationSettings },
@@ -137,11 +150,11 @@ export default function ReminderScreen() {
     );
   }, [openNotificationSettings]);
 
-  const enableNotificationsAndSynchronize = useCallback(async () => {
+  const enableNotificationsAndSynchronize = useCallback(async (showFailures = false) => {
     if (!user) return;
-    const granted = await requestNotificationPermission();
-    if (!granted) {
-      showNotificationSettingsGuide();
+    const permission = await requestNotificationPermissionState();
+    if (!permission.granted) {
+      showNotificationSettingsGuide(permission.appGranted && !permission.channelEnabled);
       return;
     }
 
@@ -163,44 +176,44 @@ export default function ReminderScreen() {
       allReminders as ReminderNotificationInput[],
       allPets,
     );
-    if (result.failedReminderIds.length > 0) {
-      Alert.alert('部分提醒未排程', '部分提醒的時間或頻率設定不完整，請逐筆檢查。');
+    if (showFailures && result.failedReminderIds.length > 0) {
+      const hasLocalScheduleFailure = Object.values(result.failureReasons).some(
+        reason => reason === 'schedule-failed' || reason === 'verification-failed',
+      );
+      Alert.alert(
+        '部分提醒未排程',
+        hasLocalScheduleFailure
+          ? '手機通知權限已開啟，但部分本機排程未完成。請稍後再切換提醒開關重試。'
+          : '部分提醒的時間或頻率設定不完整，請逐筆檢查。',
+      );
     }
   }, [showNotificationSettingsGuide, user]);
 
-  const synchronizeFreshNotifications = useCallback(async () => {
-    if (!user) return null;
-    const [allReminders, allPets] = await Promise.all([
-      reminderService.getAll(user.uid),
-      petService.getAll(user.uid),
-    ]);
-    return synchronizeEligibleReminderNotifications(
-      user.uid,
-      allReminders as ReminderNotificationInput[],
-      allPets,
-    );
-  }, [user]);
-
   const promptForNotificationAccess = useCallback(async () => {
-    if (!user || permissionPromptedRef.current) return;
+    if (!user || !hasLoadedReminders || reminders.length === 0 || permissionPromptedRef.current) return;
     const [preferences, permission] = await Promise.all([
       getNotificationPreferences(),
       getNotificationPermissionState(),
     ]);
     const userTurnedNotificationsOff = preferences.systemConfigured && !preferences.systemEnabled;
     if (!preferences.reminderEnabled || userTurnedNotificationsOff) return;
-    if (preferences.systemEnabled && permission.granted) return;
+    if (permission.granted
+      && (!preferences.systemConfigured || preferences.systemEnabled)) {
+      await enableNotificationsAndSynchronize(false);
+      return;
+    }
 
+    if (!(await claimNotificationSetupGuide())) return;
     permissionPromptedRef.current = true;
     Alert.alert(
       '開啟提醒通知',
       '開啟通知後，即使沒有開啟 App，也能在設定時間收到照護提醒。',
       [
         { text: '稍後', style: 'cancel' },
-        { text: '開啟通知', onPress: () => void enableNotificationsAndSynchronize() },
+        { text: '開啟通知', onPress: () => void enableNotificationsAndSynchronize(true) },
       ],
     );
-  }, [enableNotificationsAndSynchronize, user]);
+  }, [enableNotificationsAndSynchronize, hasLoadedReminders, reminders.length, user]);
 
   useFocusEffect(useCallback(() => {
     void promptForNotificationAccess();
@@ -208,13 +221,26 @@ export default function ReminderScreen() {
 
   React.useEffect(() => {
     const subscription = AppState.addEventListener('change', nextState => {
-      if (nextState === 'active' && awaitingSettingsRef.current) {
-        awaitingSettingsRef.current = false;
-        void enableNotificationsAndSynchronize();
+      const previousState = appStateRef.current;
+      appStateRef.current = nextState;
+      if (awaitingSettingsRef.current && nextState !== 'active') {
+        completedSettingsRoundTripRef.current = true;
+      }
+      if (nextState === 'active' && previousState !== 'active') {
+        const returnedFromSettings = awaitingSettingsRef.current
+          && completedSettingsRoundTripRef.current;
+        permissionPromptedRef.current = false;
+        if (returnedFromSettings) {
+          awaitingSettingsRef.current = false;
+          completedSettingsRoundTripRef.current = false;
+          void enableNotificationsAndSynchronize(true);
+        } else {
+          void promptForNotificationAccess();
+        }
       }
     });
     return () => subscription.remove();
-  }, [enableNotificationsAndSynchronize]);
+  }, [enableNotificationsAndSynchronize, promptForNotificationAccess]);
 
   const toggleReminder = async (reminder: ReminderNotificationInput) => {
     if (!user) return;
@@ -229,38 +255,43 @@ export default function ReminderScreen() {
       previous.map(item => reminderKey(item) === key ? { ...item, isOn: nextIsOn } : item),
     );
 
-    let persisted = false;
     try {
       await reminderService.update(resolvedOwnerId, reminder.id, { isOn: nextIsOn });
-      persisted = true;
-      const result = await synchronizeFreshNotifications();
+    } catch (error) {
+      setReminders(previous =>
+        previous.map(item => reminderKey(item) === key ? { ...item, isOn: previousIsOn } : item),
+      );
+      Alert.alert('無法切換提醒', error instanceof Error ? error.message : '請確認網路連線後再試。');
+      setPending(key, false);
+      return;
+    }
+
+    try {
       if (nextIsOn) {
-        const scheduled = Boolean(result
-          && !result.failedReminderIds.includes(reminder.id)
-          && result.permissionGranted
-          && result.preferencesEnabled);
-        if (!scheduled) {
+        const scheduleResult = await scheduleReminderNotificationDetailed(
+          resolvedOwnerId,
+          { ...reminder, isOn: true, petNames: getPetNames(reminder) },
+        );
+        if (!scheduleResult.scheduled) {
+          const copy = getNotificationScheduleFailureCopy(scheduleResult);
           Alert.alert(
-            '提醒已開啟，但通知尚未排程',
-            '請確認提醒時間尚未過期，並開啟 App 與手機的通知設定。',
-            [
-              { text: '稍後', style: 'cancel' },
-              { text: '前往設定', onPress: openNotificationSettings },
-            ],
+            copy.title,
+            copy.message,
+            copy.shouldOpenSystemSettings
+              ? [
+                  { text: '稍後', style: 'cancel' },
+                  { text: '前往設定', onPress: openNotificationSettings },
+                ]
+              : [{ text: '確定' }],
           );
         }
+      } else {
+        await cancelReminderNotification(resolvedOwnerId, reminder.id);
       }
-    } catch (error) {
-      if (!persisted) {
-        setReminders(previous =>
-          previous.map(item => reminderKey(item) === key ? { ...item, isOn: previousIsOn } : item),
-        );
-      }
+    } catch {
       Alert.alert(
-        persisted ? '提醒已更新，但通知未同步' : '無法切換提醒',
-        persisted
-          ? '請確認通知權限後再試；下次同步會重新排程。'
-          : (error instanceof Error ? error.message : '請確認網路連線後再試。'),
+        '提醒已更新',
+        '資料已成功儲存，但目前無法讀取本機通知狀態。請稍後再切換一次重試。',
       );
     } finally {
       setPending(key, false);
@@ -270,6 +301,7 @@ export default function ReminderScreen() {
   const deleteReminder = (reminder: ReminderNotificationInput) => {
     if (!user) return;
     const key = reminderKey(reminder);
+    if (pendingIds.has(key)) return;
     const resolvedOwnerId = resolveOwnerId(reminder);
     Alert.alert('刪除提醒', '確定要刪除這筆提醒嗎？', [
       { text: '取消', style: 'cancel' },
@@ -281,11 +313,16 @@ export default function ReminderScreen() {
             setPending(key, true);
             try {
               await reminderService.delete(resolvedOwnerId, reminder.id);
-              await synchronizeFreshNotifications();
               setReminders(previous => previous.filter(item => reminderKey(item) !== key));
             } catch {
-              await synchronizeFreshNotifications().catch(() => undefined);
               Alert.alert('無法刪除提醒', '請確認網路連線後再試。');
+              setPending(key, false);
+              return;
+            }
+            try {
+              await cancelReminderNotification(resolvedOwnerId, reminder.id);
+            } catch {
+              Alert.alert('提醒已刪除', '提醒資料已刪除，但本機通知清理未完成，重新開啟 App 後會再次同步。');
             } finally {
               setPending(key, false);
             }

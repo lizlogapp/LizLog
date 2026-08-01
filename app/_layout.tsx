@@ -6,6 +6,7 @@ import { Stack, useRouter, useSegments } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { ThemeProvider as NavigationThemeProvider } from '@react-navigation/native';
 import {
+  AppState,
   ImageBackground,
   Platform,
   StyleSheet,
@@ -21,6 +22,7 @@ import { backgroundImages } from '../src/theme/backgroundImageSettings';
 import { ThemeId, paletteColors } from '../src/theme/themeColorSettings';
 import { STATUS_BAR_HEIGHT, TAB_BAR_HEIGHT } from '../src/theme/layoutSettings';
 import { SplashAnimation } from '../src/components/common/SplashAnimation';
+import { configureTextScaling } from '../src/theme/accessibilitySettings';
 import { petService, reminderService } from '../src/services/firestoreService';
 import {
   ReminderNotificationInput,
@@ -29,6 +31,8 @@ import {
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 const ONBOARDING_SEEN_KEY = 'lizlog:onboarding-seen:v1';
+
+configureTextScaling();
 
 type PendingReminderRoute = {
   ownerId?: string;
@@ -83,7 +87,8 @@ function RootLayoutInner() {
         if (active) setHasSeenOnboarding(value === 'true');
       })
       .catch(() => {
-        if (active) setHasSeenOnboarding(false);
+        // 儲存讀取失敗時不可把既有使用者誤判為第一次開啟，避免歡迎頁反覆出現。
+        if (active) setHasSeenOnboarding(true);
       });
     return () => {
       active = false;
@@ -125,8 +130,9 @@ function RootLayoutInner() {
     let pets: Awaited<ReturnType<typeof petService.getAll>> = [];
     let reminders: ReminderNotificationInput[] = [];
     let lastSignature = '';
+    let appState = AppState.currentState;
 
-    const synchronize = () => {
+    const synchronize = (force = false) => {
       if (!petsReady || !remindersReady) return;
       const signature = JSON.stringify({
         mutedPetIds: pets
@@ -149,7 +155,7 @@ function RootLayoutInner() {
           isOn: reminder.isOn,
         })).sort((left, right) => left.id.localeCompare(right.id)),
       });
-      if (signature === lastSignature) return;
+      if (!force && signature === lastSignature) return;
       lastSignature = signature;
       void synchronizeEligibleReminderNotifications(user.uid, reminders, pets).catch(() => undefined);
     };
@@ -164,7 +170,17 @@ function RootLayoutInner() {
       remindersReady = true;
       synchronize();
     });
+    const appStateSubscription = AppState.addEventListener('change', nextState => {
+      const previousState = appState;
+      appState = nextState;
+      if (nextState === 'active' && previousState !== 'active') {
+        // 從手機系統設定或背景返回時，即使 Firestore 資料沒有變動，
+        // 仍強制重讀 App 權限、Android channel 與使用者偏好並補排程。
+        synchronize(true);
+      }
+    });
     return () => {
+      appStateSubscription.remove();
       unsubscribePets();
       unsubscribeReminders();
     };

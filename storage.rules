@@ -38,38 +38,34 @@ service firebase.storage {
       return firestore.get(/databases/(default)/documents/users/$(ownerId)/$(collectionName)/$(recordId)).data;
     }
 
-    match /users/{ownerId}/pets/{petId}/{filePath=**} {
+    match /users/{ownerId}/pets/{petId}/{fileName} {
       allow read: if signedIn() && (
         request.auth.uid == ownerId
         || pet(ownerId, petId).coParentIds.hasAny([request.auth.uid])
       );
-      // 必須先有對應寵物文件；避免登入者對任意不存在的 petId 寫入孤兒檔案。
-      // 刪除則允許 owner 清理已刪 Firestore 文件留下的不可讀孤兒檔案。
-      allow write: if signedIn() && (
-        (request.resource == null && (
-          request.auth.uid == ownerId
-          || pet(ownerId, petId).editorIds.hasAny([request.auth.uid])
-        ))
-        || (request.resource != null
-          && validImage(filePath)
-          && pet(ownerId, petId).editorIds.hasAny([request.auth.uid]))
-      );
+      // Owner 自己的命名空間只需 Auth 與檔案格式驗證，不依賴跨產品
+      // firestore.get()。共同飼育編輯者才查寵物 ACL。
+      allow write: if signedIn()
+        && request.auth.uid == ownerId
+        && (request.resource == null || validImage(fileName));
+      allow write: if signedIn()
+        && request.auth.uid != ownerId
+        && pet(ownerId, petId).editorIds.hasAny([request.auth.uid])
+        && (request.resource == null || validImage(fileName));
     }
 
-    match /users/{ownerId}/diaries/{recordId}/{filePath=**} {
+    match /users/{ownerId}/diaries/{recordId}/{fileName} {
       allow read: if signedIn() && (
         request.auth.uid == ownerId
         || record(ownerId, 'diaries', recordId).accessUserIds.hasAny([request.auth.uid])
       );
-      allow write: if signedIn() && (
-        (request.resource == null && (
-          request.auth.uid == ownerId
-          || record(ownerId, 'diaries', recordId).editorIds.hasAny([request.auth.uid])
-        ))
-        || (request.resource != null
-          && validImage(filePath)
-          && record(ownerId, 'diaries', recordId).editorIds.hasAny([request.auth.uid]))
-      );
+      allow write: if signedIn()
+        && request.auth.uid == ownerId
+        && (request.resource == null || validImage(fileName));
+      allow write: if signedIn()
+        && request.auth.uid != ownerId
+        && record(ownerId, 'diaries', recordId).editorIds.hasAny([request.auth.uid])
+        && (request.resource == null || validImage(fileName));
     }
 
     match /users/{ownerId}/diaries/{recordId}/attachments/{fileName} {
@@ -77,31 +73,27 @@ service firebase.storage {
         request.auth.uid == ownerId
         || record(ownerId, 'diaries', recordId).accessUserIds.hasAny([request.auth.uid])
       );
-      allow write: if signedIn() && (
-        (request.resource == null && (
-          request.auth.uid == ownerId
-          || record(ownerId, 'diaries', recordId).editorIds.hasAny([request.auth.uid])
-        ))
-        || (request.resource != null
-          && validAttachment(fileName)
-          && record(ownerId, 'diaries', recordId).editorIds.hasAny([request.auth.uid]))
-      );
+      allow write: if signedIn()
+        && request.auth.uid == ownerId
+        && (request.resource == null || validAttachment(fileName));
+      allow write: if signedIn()
+        && request.auth.uid != ownerId
+        && record(ownerId, 'diaries', recordId).editorIds.hasAny([request.auth.uid])
+        && (request.resource == null || validAttachment(fileName));
     }
 
-    match /users/{ownerId}/medical/{recordId}/{filePath=**} {
+    match /users/{ownerId}/medical/{recordId}/{fileName} {
       allow read: if signedIn() && (
         request.auth.uid == ownerId
         || record(ownerId, 'medical', recordId).accessUserIds.hasAny([request.auth.uid])
       );
-      allow write: if signedIn() && (
-        (request.resource == null && (
-          request.auth.uid == ownerId
-          || record(ownerId, 'medical', recordId).editorIds.hasAny([request.auth.uid])
-        ))
-        || (request.resource != null
-          && validImage(filePath)
-          && record(ownerId, 'medical', recordId).editorIds.hasAny([request.auth.uid]))
-      );
+      allow write: if signedIn()
+        && request.auth.uid == ownerId
+        && (request.resource == null || validImage(fileName));
+      allow write: if signedIn()
+        && request.auth.uid != ownerId
+        && record(ownerId, 'medical', recordId).editorIds.hasAny([request.auth.uid])
+        && (request.resource == null || validImage(fileName));
     }
 
     match /{file=**} {

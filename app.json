@@ -7,8 +7,6 @@
     "icon": "./assets/branding/logos/logo-image.png",
     "userInterfaceStyle": "light",
     "splash": {
-      "image": "./assets/branding/logos/logo-image.png",
-      "resizeMode": "contain",
       "backgroundColor": "#FFFEFA"
     },
     "ios": {
@@ -19,7 +17,7 @@
       "icon": "./assets/branding/logos/logo-image.png",
       "adaptiveIcon": {
         "backgroundColor": "#FFFEFA",
-        "foregroundImage": "./assets/branding/logos/logo-image.png"
+        "foregroundImage": "./assets/branding/logos/logo-adaptive-foreground.png"
       },
       "permissions": [
         "android.permission.SCHEDULE_EXACT_ALARM"
@@ -45,6 +43,16 @@
         {
           "color": "#FF7300",
           "defaultChannel": "lizlog-reminders"
+        }
+      ],
+      [
+        "expo-media-library",
+        {
+          "photosPermission": "允許蜥日日記存取相簿中的照片。",
+          "savePhotosPermission": "允許蜥日日記將日記照片儲存到相簿。",
+          "granularPermissions": [
+            "photo"
+          ]
         }
       ]
     ],

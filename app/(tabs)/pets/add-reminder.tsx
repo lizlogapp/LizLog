@@ -1,4 +1,5 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import {
   View,
   Text,
@@ -20,11 +21,14 @@ import { FloatingActionBar } from '../../../src/components/FloatingActionBar';
 import { useAuth } from '../../../src/contexts/AuthContext';
 import { reminderService, petService, PetDoc } from '../../../src/services/firestoreService';
 import {
+  claimNotificationSetupGuide,
+  getNotificationScheduleFailureCopy,
   ReminderNotificationInput,
-  synchronizeEligibleReminderNotifications,
+  scheduleReminderNotificationDetailed,
 } from '../../../src/services/notificationService';
 
 const defaultTypes = ['餵食', '換水', '清掃', '用藥', '驅蟲', '回診'];
+const CUSTOM_TYPES_KEY = 'lizlog:reminder-custom-types:v1';
 const weekDays = ['日', '一', '二', '三', '四', '五', '六'];
 type Frequency = 'once' | 'daily' | 'everyN' | 'weekly';
 
@@ -32,6 +36,17 @@ const tagColors = ['#FF6B6B', '#FF9F43', '#FFD239', '#5CD85A', '#4DB8FF', '#B072
 
 const getDaysInMonth = (y: number, m: number) => new Date(y, m, 0).getDate();
 const getFirstDayOfMonth = (y: number, m: number) => new Date(y, m - 1, 1).getDay();
+const nextFiveMinute = () => {
+  const date = new Date();
+  date.setSeconds(0, 0);
+  date.setMinutes(Math.ceil((date.getMinutes() + 1) / 5) * 5);
+  return date;
+};
+const formatLocalDate = (date: Date) => [
+  date.getFullYear(),
+  String(date.getMonth() + 1).padStart(2, '0'),
+  String(date.getDate()).padStart(2, '0'),
+].join('/');
 
 export default function AddReminderScreen() {
   const router = useRouter();
@@ -45,6 +60,7 @@ export default function AddReminderScreen() {
   const { themeId, fontFamilyName, isDemoMode } = useTheme();
   const theme = getThemeTokens(themeId);
   const { user } = useAuth();
+  const initialReminderDate = useRef(nextFiveMinute()).current;
 
   // 寵物名單
   const [petList, setPetList] = useState<{ id: string; name: string }[]>([]);
@@ -101,7 +117,52 @@ export default function AddReminderScreen() {
   // 類型
   const [selectedTypes, setSelectedTypes] = useState<string[]>(['餵食']);
   const [customType, setCustomType] = useState('');
+  const [rememberedCustomTypes, setRememberedCustomTypes] = useState<string[]>([]);
   const [isAddingCustom, setIsAddingCustom] = useState(false);
+
+  const normalizeTypes = (value: string) => Array.from(new Set(
+    value.split(/[、,，\n]/).map(type => type.trim()).filter(Boolean),
+  ));
+
+  const rememberCustomTypes = (types: string[]) => {
+    setRememberedCustomTypes(previous => {
+      const next = Array.from(new Set([
+        ...previous,
+        ...types.filter(type => !defaultTypes.includes(type)),
+      ]));
+      void AsyncStorage.setItem(CUSTOM_TYPES_KEY, JSON.stringify(next));
+      return next;
+    });
+  };
+
+  const addCustomTypes = () => {
+    const additions = normalizeTypes(customType);
+    if (additions.length === 0) return;
+    rememberCustomTypes(additions);
+    setSelectedTypes(previous => Array.from(new Set([...previous, ...additions])));
+    setCustomType('');
+    setIsAddingCustom(false);
+  };
+
+  useEffect(() => {
+    let active = true;
+    AsyncStorage.getItem(CUSTOM_TYPES_KEY).then(value => {
+      if (!active || !value) return;
+      try {
+        const parsed = JSON.parse(value) as unknown;
+        if (Array.isArray(parsed)) {
+          setRememberedCustomTypes(Array.from(new Set(
+            parsed.filter((item): item is string => typeof item === 'string')
+              .map(item => item.trim())
+              .filter(item => item && !defaultTypes.includes(item)),
+          )));
+        }
+      } catch {
+        // 無效的舊資料直接忽略，不影響新增提醒。
+      }
+    }).catch(() => undefined);
+    return () => { active = false; };
+  }, []);
 
   const toggleType = (type: string) => {
     setSelectedTypes(previous =>
@@ -118,14 +179,16 @@ export default function AddReminderScreen() {
   const [frequency, setFrequency] = useState<Frequency>('once');
   const [everyNDays, setEveryNDays] = useState('2');
   const [selectedWeekDays, setSelectedWeekDays] = useState<number[]>([]);
-  const [startDate, setStartDate] = useState('');
+  const [startDate, setStartDate] = useState(formatLocalDate(initialReminderDate));
 
   // 時間
-  const [hour, setHour] = useState('12');
-  const [minute, setMinute] = useState('00');
+  const [hour, setHour] = useState(String(initialReminderDate.getHours()).padStart(2, '0'));
+  const [minute, setMinute] = useState(String(initialReminderDate.getMinutes()).padStart(2, '0'));
+  const [isSaving, setIsSaving] = useState(false);
+  const savingLock = useRef(false);
 
   // 事項
-  const [note, setNote] = useState('餵食');
+  const [note, setNote] = useState('');
 
   // 日曆彈窗
   const [showCalendar, setShowCalendar] = useState(false);
@@ -152,11 +215,9 @@ export default function AddReminderScreen() {
         const normalizedTypes = Array.from(
           new Set(storedTypes.map(type => type.trim()).filter(Boolean)),
         );
-        const presetTypes = normalizedTypes.filter(type => defaultTypes.includes(type));
         const customTypes = normalizedTypes.filter(type => !defaultTypes.includes(type));
-        setSelectedTypes(presetTypes);
-        setIsAddingCustom(customTypes.length > 0);
-        setCustomType(customTypes.join('、'));
+        setSelectedTypes(normalizedTypes);
+        rememberCustomTypes(customTypes);
 
         setTagColor(data.tagColor || tagColors[0]);
         setFrequency((data.frequencyType as Frequency) || 'once');
@@ -175,7 +236,7 @@ export default function AddReminderScreen() {
   }, [reminderId, user, ownerId]);
 
   const handleSave = async () => {
-    if (!user || !isPetListReady) return;
+    if (!user || !isPetListReady || savingLock.current || isSaving) return;
     if (petList.length === 0 || selectedPets.length === 0) {
       Alert.alert('尚未新增寵物', '請先新增寵物，再建立提醒。', [
         { text: '前往寵物頁', onPress: () => router.replace('/(tabs)/pets') },
@@ -188,10 +249,9 @@ export default function AddReminderScreen() {
       return;
     }
 
-    const customTypes = isAddingCustom
-      ? customType.split(/[、,，]/).map(type => type.trim()).filter(Boolean)
-      : [];
+    const customTypes = isAddingCustom ? normalizeTypes(customType) : [];
     const finalTypes = Array.from(new Set([...selectedTypes, ...customTypes]));
+    if (customTypes.length > 0) rememberCustomTypes(customTypes);
     if (finalTypes.length === 0) {
       Alert.alert('提示', '請選擇或輸入提醒類型。');
       return;
@@ -267,52 +327,76 @@ export default function AddReminderScreen() {
       selectedWeekDays,
       time: finalTime,
       pets: selectedPets,
+      petNames: selectedPets
+        .map(petIdValue => petList.find(pet => pet.id === petIdValue)?.name)
+        .filter((name): name is string => Boolean(name)),
       note,
       isOn: true,
       tagColor,
     };
 
     const resolvedOwnerId = ownerId || user.uid;
+    savingLock.current = true;
+    setIsSaving(true);
     try {
-      const savedId = reminderId || await reminderService.add(resolvedOwnerId, newData);
-      if (reminderId) await reminderService.update(resolvedOwnerId, reminderId, newData);
-      const [allReminders, allPets] = await Promise.all([
-        reminderService.getAll(user.uid),
-        petService.getAll(user.uid),
-      ]);
-      const syncResult = await synchronizeEligibleReminderNotifications(
-        user.uid,
-        allReminders as ReminderNotificationInput[],
-        allPets,
-      ).catch(() => null);
-      const scheduled = Boolean(syncResult
-        && !syncResult.failedReminderIds.includes(savedId)
-        && syncResult.permissionGranted
-        && syncResult.preferencesEnabled);
+      let savedId: string;
+      try {
+        savedId = reminderId || await reminderService.add(resolvedOwnerId, newData);
+        if (reminderId) await reminderService.update(resolvedOwnerId, reminderId, newData);
+      } catch (error) {
+        Alert.alert('提醒儲存失敗', error instanceof Error ? error.message : '請確認網路連線後再試。');
+        return;
+      }
+
+      const savedReminder: ReminderNotificationInput = {
+        id: savedId,
+        ownerId: resolvedOwnerId,
+        ...newData,
+      };
+      const scheduleResult = await scheduleReminderNotificationDetailed(
+        resolvedOwnerId,
+        savedReminder,
+      ).catch(() => ({
+        scheduled: false as const,
+        reason: 'state-read-failed' as const,
+        scheduledNotificationCount: 0,
+      }));
       const navigateToReminderList = () => router.navigate({
         pathname: '/(tabs)/pets/reminder',
         params: { id: selectedPets[0], ownerId: resolvedOwnerId },
       });
-      if (!scheduled) {
+      if (!scheduleResult.scheduled) {
+        const isNotificationSetupIssue = scheduleResult.reason === 'permission-denied'
+          || scheduleResult.reason === 'channel-disabled'
+          || scheduleResult.reason === 'system-disabled'
+          || scheduleResult.reason === 'reminders-disabled';
+        if (isNotificationSetupIssue && !(await claimNotificationSetupGuide())) {
+          navigateToReminderList();
+          return;
+        }
+        const copy = getNotificationScheduleFailureCopy(scheduleResult);
         Alert.alert(
-          '提醒已儲存',
-          '通知尚未成功排程，請確認提醒開關與手機通知權限。',
-          [
-            { text: '稍後', onPress: navigateToReminderList },
-            {
-              text: '前往設定',
-              onPress: () => {
-                navigateToReminderList();
-                void Linking.openSettings();
-              },
-            },
-          ],
+          copy.title,
+          copy.message,
+          copy.shouldOpenSystemSettings
+            ? [
+                { text: '稍後', onPress: navigateToReminderList },
+                {
+                  text: '前往設定',
+                  onPress: () => {
+                    navigateToReminderList();
+                    void Linking.openSettings();
+                  },
+                },
+              ]
+            : [{ text: '確定', onPress: navigateToReminderList }],
         );
         return;
       }
       navigateToReminderList();
-    } catch (error) {
-      Alert.alert('錯誤', error instanceof Error ? error.message : '提醒儲存或通知排程失敗，請稍後再試。');
+    } finally {
+      savingLock.current = false;
+      setIsSaving(false);
     }
   };
 
@@ -383,7 +467,7 @@ export default function AddReminderScreen() {
           {/* ========== 類型 ========== */}
           <Text style={labelStyle}>類型</Text>
           <View style={styles.chipRow}>
-            {defaultTypes.map(t => (
+            {[...defaultTypes, ...rememberedCustomTypes].map(t => (
               <Pressable
                 key={t}
                 style={[
@@ -419,14 +503,27 @@ export default function AddReminderScreen() {
             </Pressable>
           </View>
           {isAddingCustom && (
-            <TextInput
-              style={[styles.customInput, { color: theme.text, fontFamily: fontFamilyName, borderColor: theme.primary + '40' }]}
-              placeholder="輸入自定義類型"
-              placeholderTextColor={paletteColors.XUAN_RI + '60'}
-              value={customType}
-              onChangeText={setCustomType}
-              autoFocus
-            />
+            <View style={styles.customInputRow}>
+              <TextInput
+                style={[styles.customInput, { color: theme.text, fontFamily: fontFamilyName, borderColor: theme.primary + '40' }]}
+                placeholder="輸入自訂類型"
+                placeholderTextColor={paletteColors.XUAN_RI + '60'}
+                value={customType}
+                onChangeText={setCustomType}
+                onSubmitEditing={addCustomTypes}
+                returnKeyType="done"
+                autoFocus
+              />
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="加入自訂提醒類型"
+                style={[styles.customAddButton, { backgroundColor: theme.primary, opacity: customType.trim() ? 1 : 0.45 }]}
+                onPress={addCustomTypes}
+                disabled={!customType.trim()}
+              >
+                <Text style={[styles.customAddButtonText, { color: theme.background, fontFamily: fontFamilyName }]}>加入</Text>
+              </Pressable>
+            </View>
           )}
 
           <View style={styles.divider} />
@@ -548,7 +645,7 @@ export default function AddReminderScreen() {
             <Text style={labelStyle}>事項</Text>
             <TextInput
               style={[styles.noteInput, { color: theme.text, fontFamily: fontFamilyName, borderBottomColor: theme.text + '20' }]}
-              placeholder="餵食"
+              placeholder=""
               placeholderTextColor={theme.text + '40'}
               value={note}
               onChangeText={setNote}
@@ -699,10 +796,28 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   customInput: {
-    marginTop: 8,
+    flex: 1,
     borderBottomWidth: 1,
     paddingVertical: 6,
     fontSize: getFontSize(15, 'medium'),
+  },
+  customInputRow: {
+    marginTop: 8,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  customAddButton: {
+    minWidth: 64,
+    minHeight: 38,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 12,
+  },
+  customAddButtonText: {
+    fontSize: getFontSize(14, 'medium'),
+    fontWeight: '600',
   },
 
   // 每N天

@@ -140,7 +140,9 @@ export default function HomeScreen() {
         day: Number.isNaN(date.getTime()) ? '--' : String(date.getDate()).padStart(2, '0'),
         month: Number.isNaN(date.getTime()) ? '---' : monthNames[date.getMonth()],
         weatherIcon: getWeatherOption(latest.weatherIcon).source,
-        imageUrl: imageUrl ? { uri: imageUrl } : null,
+        imageUrl: imageUrl
+          ? { uri: imageUrl }
+          : require('../../assets/user-uploads/lizard-001.jpg'),
       });
     });
   }, [user]);

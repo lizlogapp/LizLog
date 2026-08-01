@@ -1,4 +1,4 @@
-import { useRouter } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useState, useRef, useEffect } from 'react';
 import { View, Text, StyleSheet, Pressable, Image, Dimensions, ScrollView, PanResponder, TextInput } from 'react-native';
 import { useTheme } from '../../../src/theme/ThemeContext';
@@ -10,13 +10,14 @@ import { STATUS_BAR_HEIGHT } from '../../../src/theme/layoutSettings';
 import { useAuth } from '../../../src/contexts/AuthContext';
 import { getWeatherOption } from '../../../src/data/weatherOptions';
 import { diaryService, petService, DiaryDoc } from '../../../src/services/firestoreService';
-import { formatDiaryDate } from '../../../src/utils/diaryDate';
+import { formatDiaryDate, normalizeDiaryDate, parseDiaryDate } from '../../../src/utils/diaryDate';
 /**
  * 有資料時的日記首頁
  * 包含月份選擇器與動態生成的日記卡片
  */
 export default function DiaryScreen() {
   const router = useRouter();
+  const { date: routeDate, q: routeQuery } = useLocalSearchParams<{ date?: string; q?: string }>();
   const { themeId, fontFamilyName, isDemoMode } = useTheme();
   const theme = getThemeTokens(themeId);
   const colorOrange = theme.primary;
@@ -26,7 +27,10 @@ export default function DiaryScreen() {
   const [isDropdownVisible, setIsDropdownVisible] = useState(false);
   const [isSearchVisible, setIsSearchVisible] = useState(false);
   const [isPetDropdownVisible, setIsPetDropdownVisible] = useState(false);
-  const [availablePets, setAvailablePets] = useState<string[]>(['DELETE', 'CTRL', 'ENTER', 'ALT']);
+  const [availablePets, setAvailablePets] = useState<{ id: string; name: string }[]>([]);
+  const [selectedPetId, setSelectedPetId] = useState('');
+  const [searchQuery, setSearchQuery] = useState(routeQuery || '');
+  const [exactDate, setExactDate] = useState(routeDate || '');
   const isDropdownVisibleRef = useRef(isDropdownVisible);
 
   const [firestoreDiaries, setFirestoreDiaries] = useState<(DiaryDoc & { id: string })[]>([]);
@@ -39,7 +43,7 @@ export default function DiaryScreen() {
 
     petService.getAll(user.uid).then(pets => {
       if (!isActive) return;
-      setAvailablePets(pets.map(p => p.name));
+      setAvailablePets(pets.map(p => ({ id: p.id, name: p.name })));
       
       unsubscribeDiaries = diaryService.onDiariesChanged(user.uid, (diaries) => {
         if (isActive) {
@@ -54,10 +58,45 @@ export default function DiaryScreen() {
     };
   }, [isDemoMode, user]);
 
+  useEffect(() => {
+    setSearchQuery(routeQuery || '');
+    setExactDate(routeDate || '');
+    if (routeQuery) setIsSearchVisible(true);
+    const parsed = parseDiaryDate(routeDate);
+    if (parsed) setSelectedDate(parsed);
+  }, [routeDate, routeQuery]);
+
   // 模擬四張不同組合的卡片資料
   const mockDiaries: any[] = [];
 
-  const mappedFirestoreDiaries = firestoreDiaries.map(d => ({
+  const normalizedQuery = searchQuery.trim().toLocaleLowerCase('zh-Hant');
+  const selectedPetName = availablePets.find(pet => pet.id === selectedPetId)?.name;
+  const filteredFirestoreDiaries = firestoreDiaries.filter(diary => {
+    const parsedDate = parseDiaryDate(diary.date);
+    if (!parsedDate) return false;
+    if (exactDate && normalizeDiaryDate(diary.date) !== exactDate) return false;
+    if (!exactDate && !normalizedQuery && (
+      parsedDate.getFullYear() !== selectedDate.getFullYear()
+      || parsedDate.getMonth() !== selectedDate.getMonth()
+    )) return false;
+    if (selectedPetId && !(
+      diary.petIds?.includes(selectedPetId)
+      || diary.pets?.some(pet => pet.petId === selectedPetId)
+      || diary.pets?.some(pet => !pet.petId && pet.name === selectedPetName)
+    )) return false;
+    if (!normalizedQuery) return true;
+    const searchable = [
+      diary.title,
+      diary.content,
+      diary.date,
+      ...(diary.pets || []).map(pet => pet.name),
+      ...Object.values(diary.records || {}).map(value => String(value)),
+      ...(diary.attachments || []).map(file => file.name),
+    ].filter(Boolean).join(' ').toLocaleLowerCase('zh-Hant');
+    return searchable.includes(normalizedQuery);
+  });
+
+  const mappedFirestoreDiaries = filteredFirestoreDiaries.map(d => ({
     id: d.id,
     ownerId: d.ownerId || user?.uid,
     dateStr: formatDiaryDate(d.date),
@@ -154,6 +193,7 @@ export default function DiaryScreen() {
 
   const handleMonthSelect = (date: Date) => {
     setSelectedDate(date);
+    setExactDate('');
     setIsDropdownVisible(false);
   };
 
@@ -199,19 +239,21 @@ export default function DiaryScreen() {
                   bounces={false}
                   overScrollMode="never"
                 >
-                  {availablePets.map((pet, idx) => (
+                  {[{ id: '', name: '全部寵物' }, ...availablePets].map((pet, idx, pets) => (
                     <Pressable
-                      key={pet}
+                      key={pet.id || 'all'}
                       style={[
                         styles.petDropdownItem,
-                        idx === availablePets.length - 1 && { marginBottom: 0 }
+                        selectedPetId === pet.id && styles.activeItem,
+                        idx === pets.length - 1 && { marginBottom: 0 }
                       ]}
                       onPress={() => {
+                        setSelectedPetId(pet.id);
                         setIsPetDropdownVisible(false);
                       }}
                     >
                       <Text style={[styles.petDropdownItemText, { color: theme.primary, fontFamily: fontFamilyName }]}>
-                        {pet}
+                        {pet.name}
                       </Text>
                     </Pressable>
                   ))}
@@ -228,6 +270,9 @@ export default function DiaryScreen() {
               placeholder="搜尋"
               placeholderTextColor={theme.text + '80'}
               autoFocus
+              value={searchQuery}
+              onChangeText={setSearchQuery}
+              returnKeyType="search"
             />
           </View>
         ) : (
@@ -271,7 +316,12 @@ export default function DiaryScreen() {
           </View>
         )}
 
-        <Pressable onPress={() => setIsSearchVisible(!isSearchVisible)} style={{ zIndex: 1300 }}>
+        <Pressable onPress={() => {
+          setIsSearchVisible(previous => {
+            if (previous) setSearchQuery('');
+            return !previous;
+          });
+        }} style={{ zIndex: 1300 }}>
           <Image source={require('../../../assets/icons/icon-search.png')} style={[styles.headerIcon, { tintColor: theme.primary }]} />
         </Pressable>
       </View>
@@ -350,7 +400,7 @@ export default function DiaryScreen() {
       ) : (
         <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
           <Text style={{ color: colorOrange + '60', fontFamily: fontFamilyName, fontSize: getFontSize(20, 'medium'), marginBottom: 8 }}>
-            {currentMonth}月尚無日記
+            {normalizedQuery ? `找不到符合「${searchQuery.trim()}」的日記` : `${currentMonth}月尚無日記`}
           </Text>
           <Text style={{ color: colorOrange + '40', fontFamily: fontFamilyName, fontSize: getFontSize(14, 'medium'), marginBottom: 40 }}>
             點擊右下角按鈕開始新增

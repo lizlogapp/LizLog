@@ -1,6 +1,8 @@
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import Constants from 'expo-constants';
 import { FirebaseOptions, getApp, getApps, initializeApp } from 'firebase/app';
-import { getAuth } from 'firebase/auth';
+import * as FirebaseAuth from 'firebase/auth';
+import type { Auth, Persistence } from 'firebase/auth';
 import { getDatabase } from 'firebase/database';
 import { getFirestore } from 'firebase/firestore';
 import { getStorage } from 'firebase/storage';
@@ -31,7 +33,22 @@ function getFirebaseConfig(): FirebaseOptions {
 }
 
 const app = getApps().length === 0 ? initializeApp(getFirebaseConfig()) : getApp();
-const auth = getAuth(app);
+const { getAuth, initializeAuth } = FirebaseAuth;
+const getReactNativePersistence = (
+  FirebaseAuth as typeof FirebaseAuth & {
+    getReactNativePersistence: (storage: typeof AsyncStorage) => Persistence;
+  }
+).getReactNativePersistence;
+let auth: Auth;
+try {
+  auth = initializeAuth(app, {
+    persistence: getReactNativePersistence(AsyncStorage),
+  });
+} catch (error) {
+  // Fast refresh can encounter an Auth instance that was already initialized.
+  if ((error as { code?: string }).code !== 'auth/already-initialized') throw error;
+  auth = getAuth(app);
+}
 const db = getFirestore(app);
 const storage = getStorage(app);
 const rtdb = getDatabase(app);

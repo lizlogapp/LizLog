@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState } from 'react';
 import {
   View,
   Text,
@@ -7,14 +7,12 @@ import {
   Pressable,
   Image,
 } from 'react-native';
-import { useRouter, useLocalSearchParams, useFocusEffect } from 'expo-router';
+import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useTheme } from '../../../src/theme/ThemeContext';
 import { getThemeTokens } from '../../../src/theme/themeSettings';
 import { getFontSize } from '../../../src/theme/typographySettings';
-import { paletteColors } from '../../../src/theme/themeColorSettings';
 import { BaseScreen } from '../../../src/components/common/BaseScreen';
 import { FloatingActionBar, FloatingActionItem } from '../../../src/components/FloatingActionBar';
-import LizardIllustration from '../../../assets/illustrations/lizard-6.svg';
 import { useAuth } from '../../../src/contexts/AuthContext';
 import { medicalService } from '../../../src/services/firestoreService';
 
@@ -22,7 +20,7 @@ export default function MedicalScreen() {
   const router = useRouter();
   const { id, ownerId, canEdit: canEditStr } = useLocalSearchParams<{ id: string, ownerId?: string, canEdit?: string }>();
   const canEdit = canEditStr !== 'false';
-  const { themeId, fontFamilyName, isDemoMode } = useTheme();
+  const { themeId, fontFamilyName } = useTheme();
   const theme = getThemeTokens(themeId);
   const { user } = useAuth();
 
@@ -59,18 +57,24 @@ export default function MedicalScreen() {
       }
     >
       <ScrollView
+        style={styles.scrollView}
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.scrollContent}
       >
         {records.length === 0 ? (
           /* 空狀態 */
-          <View style={[styles.emptyCard, { backgroundColor: theme.background }]}>
+          <View style={styles.emptyState}>
             <Text style={[styles.emptyTitle, { color: theme.primary, fontFamily: fontFamilyName }]}>
-              尚無醫護紀錄
+              尚無醫護資料
             </Text>
-            <View style={styles.illustrationWrapper}>
-              <LizardIllustration width={220} height={220} />
-            </View>
+            <Text style={[styles.emptyHint, { color: theme.primary, fontFamily: fontFamilyName }]}>
+              {canEdit ? '點擊右下角按鈕開始新增' : '目前沒有可瀏覽的醫護資料'}
+            </Text>
+            <Image
+              source={require('../../../assets/illustrations/illustration-lizard-03.png')}
+              style={styles.emptyIllustration}
+              fadeDuration={0}
+            />
           </View>
         ) : (
           /* 有資料時的列表 */
@@ -122,40 +126,43 @@ export default function MedicalScreen() {
 }
 
 const styles = StyleSheet.create({
+  scrollView: {
+    flex: 1,
+  },
   scrollContent: {
     flexGrow: 1,
     paddingTop: 16,
     paddingBottom: 120,
   },
-  emptyCard: {
-    backgroundColor: '#FFFEFA',
-    borderRadius: 20,
-    width: '90%',
-    alignSelf: 'center',
-    paddingVertical: 40,
-    paddingHorizontal: 24,
+  emptyState: {
+    flex: 1,
     alignItems: 'center',
-    gap: 16,
-    shadowColor: '#000000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.15,
-    shadowRadius: 8,
-    elevation: 4,
+    justifyContent: 'center',
   },
   emptyTitle: {
     fontSize: getFontSize(20, 'medium'),
-    fontWeight: '600',
-    letterSpacing: 2,
+    fontWeight: '300',
     opacity: 0.6,
+    marginBottom: 8,
   },
-  illustrationWrapper: {
-    alignItems: 'center',
-    justifyContent: 'center',
+  emptyHint: {
+    fontSize: getFontSize(14, 'medium'),
+    fontWeight: '300',
+    opacity: 0.4,
+    marginBottom: 40,
+  },
+  emptyIllustration: {
+    width: 120,
+    height: 120,
+    resizeMode: 'contain',
+    opacity: 0.6,
+    marginTop: 20,
   },
   listContainer: {
     width: '96%',
     alignSelf: 'center',
     gap: 16,
+    justifyContent: 'flex-start',
   },
   recordCard: {
     backgroundColor: '#FFFEFA',

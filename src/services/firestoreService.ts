@@ -26,15 +26,21 @@ import {
   setDoc,
   runTransaction,
   writeBatch,
+  arrayUnion,
 } from 'firebase/firestore';
-import { ref, uploadBytes, getDownloadURL, deleteObject, listAll } from 'firebase/storage';
+import { ref, getDownloadURL, deleteObject, listAll } from 'firebase/storage';
 import { getRandomBytes } from 'expo-crypto';
-import { auth, db, storage } from '../config/firebase';
+import { fetch as expoFetch } from 'expo/fetch';
+import { app, auth, db, storage } from '../config/firebase';
 import {
-  closeLocalBlob,
   createImageVariants,
+  errorCode,
   IMAGE_POLICY,
-  readLocalBlob,
+  type ImageFailureClassification,
+  type ImagePipelinePhase,
+  ImagePipelineError,
+  logImagePipelineError,
+  readLocalBytes,
 } from './imageService';
 import {
   cancelReminderNotification,
@@ -93,6 +99,7 @@ export interface ReminderDoc {
   frequencyType: string;
   time: string;
   pets: string[];        // 關聯的寵物 ID 列表
+  petNames?: string[];   // 本機通知顯示用；舊資料會由目前寵物清單補齊
   note: string;
   isOn: boolean;
   tagColor: string;
@@ -222,15 +229,243 @@ function safeStorageName(name: string): string {
   return name.replace(/[^a-zA-Z0-9._-]/g, '_').slice(-120) || `file-${Date.now()}`;
 }
 
-async function uploadUri(path: string, uri: string, contentType?: string): Promise<string> {
-  const blob = await readLocalBlob(uri);
-  const storageRef = ref(storage, path);
-  try {
-    await uploadBytes(storageRef, blob, contentType ? { contentType } : undefined);
-  } finally {
-    closeLocalBlob(blob);
+type StorageRequestPhase = Exclude<ImagePipelinePhase, 'writeback'>;
+type StorageRequestError = Error & {
+  code: string;
+  phase: StorageRequestPhase;
+  httpStatus?: number;
+  classification: ImageFailureClassification;
+};
+
+function storageCodeFromHttpStatus(status: number, invalidAppCheck = false): string {
+  if (status === 401) {
+    return invalidAppCheck ? 'storage/unauthorized-app' : 'storage/unauthenticated';
   }
-  return getDownloadURL(storageRef);
+  if (status === 403) return 'storage/unauthorized';
+  if (status === 404) return 'storage/object-not-found';
+  if (status === 408 || status === 429 || status >= 500) {
+    return 'storage/retry-limit-exceeded';
+  }
+  return 'storage/unknown';
+}
+
+function storageHttpClassification(
+  status: number,
+  invalidAppCheck: boolean,
+): ImageFailureClassification {
+  if (invalidAppCheck) return 'app-check';
+  if (status === 401) return 'authentication';
+  if (status === 403) return 'security-rules';
+  if (status === 408 || status === 429 || status >= 500) return 'network';
+  return 'protocol';
+}
+
+function storageHttpError(
+  status: number,
+  phase: StorageRequestPhase,
+  invalidAppCheck = false,
+): StorageRequestError {
+  const error = new Error(`Storage ${phase} request failed with HTTP ${status}.`) as StorageRequestError;
+  error.code = storageCodeFromHttpStatus(status, invalidAppCheck);
+  error.phase = phase;
+  error.httpStatus = status;
+  error.classification = storageHttpClassification(status, invalidAppCheck);
+  return error;
+}
+
+function storageProtocolError(
+  message: string,
+  phase: StorageRequestPhase,
+): StorageRequestError {
+  const error = new Error(message) as StorageRequestError;
+  error.code = 'storage/unknown';
+  error.phase = phase;
+  error.classification = 'protocol';
+  return error;
+}
+
+async function hasInvalidAppCheckMarker(response: { text: () => Promise<string> }): Promise<boolean> {
+  try {
+    // 只保留分類結果，不記錄或轉拋完整 response。
+    return (await response.text()).includes('Firebase App Check token is invalid');
+  } catch {
+    return false;
+  }
+}
+
+function isStorageRequestError(error: unknown): error is StorageRequestError {
+  return typeof error === 'object'
+    && error !== null
+    && 'phase' in error
+    && 'classification' in error;
+}
+
+async function expoFetchWithTimeout(
+  url: string,
+  init: NonNullable<Parameters<typeof expoFetch>[1]>,
+  timeoutMs = 45_000,
+) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    return await expoFetch(url, { ...init, signal: controller.signal });
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+function withObjectGeneration(url: string, generation: unknown): string {
+  const value = typeof generation === 'string' && /^[0-9]+$/.test(generation)
+    ? generation
+    : '';
+  if (!value) return url;
+  return `${url}${url.includes('?') ? '&' : '?'}v=${value}`;
+}
+
+function withoutObjectGeneration(url: string): string {
+  const queryStart = url.indexOf('?');
+  if (queryStart < 0) return url;
+  const base = url.slice(0, queryStart);
+  const query = url
+    .slice(queryStart + 1)
+    .split('&')
+    .filter(part => part && !/^v=[0-9]+$/.test(part));
+  return query.length > 0 ? `${base}?${query.join('&')}` : base;
+}
+
+async function uploadUri(
+  path: string,
+  uri: string,
+  stage: 'upload-main' | 'upload-thumbnail',
+  contentType = 'image/jpeg',
+): Promise<string> {
+  const bytes = await readLocalBytes(uri);
+  const storageRef = ref(storage, path);
+  const currentUser = auth.currentUser;
+  if (!currentUser) {
+    const error = new ImagePipelineError(
+      'auth',
+      '登入驗證已失效。',
+      'auth/no-current-user',
+    );
+    logImagePipelineError(error);
+    throw error;
+  }
+
+  // StorageReference normalizes either a bare bucket or a gs:// bucket URL.
+  const bucket = storageRef.bucket;
+  if (!bucket) {
+    throw new ImagePipelineError(stage, '照片儲存空間設定遺失。', 'storage/no-default-bucket');
+  }
+
+  let requestPhase: StorageRequestPhase = 'start';
+  try {
+    const idToken = await currentUser.getIdToken();
+    const appId = app.options.appId;
+    const authorization = `Firebase ${idToken}`;
+    const startHeaders: Record<string, string> = {
+      Authorization: authorization,
+      'Content-Type': 'application/json; charset=utf-8',
+      'X-Goog-Upload-Command': 'start',
+      'X-Goog-Upload-Header-Content-Length': String(bytes.byteLength),
+      'X-Goog-Upload-Header-Content-Type': contentType,
+      'X-Goog-Upload-Protocol': 'resumable',
+    };
+    if (appId) startHeaders['X-Firebase-GMPID'] = appId;
+
+    // Firebase JS Storage 的 React Native uploads 不在官方支援範圍。
+    // 這裡沿用 Firebase resumable protocol，但由 expo/fetch 的原生網路層
+    // 直接傳 Uint8Array，避開 browser XHR 與 Blob 組合。
+    const startUrl =
+      `https://firebasestorage.googleapis.com/v0/b/${encodeURIComponent(bucket)}/o` +
+      `?name=${encodeURIComponent(path)}`;
+    let lastError: unknown;
+    for (let attempt = 0; attempt < 2; attempt += 1) {
+      try {
+        requestPhase = 'start';
+        const startResponse = await expoFetchWithTimeout(startUrl, {
+          method: 'POST',
+          headers: startHeaders,
+          body: JSON.stringify({
+            name: path,
+            size: bytes.byteLength,
+            contentType,
+          }),
+        });
+        if (!startResponse.ok) {
+          throw storageHttpError(
+            startResponse.status,
+            'start',
+            await hasInvalidAppCheckMarker(startResponse),
+          );
+        }
+        if (startResponse.headers.get('x-goog-upload-status') !== 'active') {
+          throw storageProtocolError('Storage upload session did not become active.', 'start');
+        }
+
+        const uploadUrl = startResponse.headers.get('x-goog-upload-url');
+        if (!uploadUrl) {
+          throw storageProtocolError('Storage upload session URL is missing.', 'start');
+        }
+
+        requestPhase = 'finalize';
+        const finalizeResponse = await expoFetchWithTimeout(uploadUrl, {
+          method: 'POST',
+          headers: {
+            Authorization: authorization,
+            'Content-Type': contentType,
+            'X-Goog-Upload-Command': 'upload, finalize',
+            'X-Goog-Upload-Offset': '0',
+          },
+          body: bytes,
+        });
+        if (!finalizeResponse.ok) {
+          throw storageHttpError(
+            finalizeResponse.status,
+            'finalize',
+            await hasInvalidAppCheckMarker(finalizeResponse),
+          );
+        }
+        if (finalizeResponse.headers.get('x-goog-upload-status') !== 'final') {
+          throw storageProtocolError('Storage upload session did not finalize.', 'finalize');
+        }
+
+        let generation: unknown;
+        try {
+          generation = (JSON.parse(await finalizeResponse.text()) as {
+            generation?: unknown;
+          }).generation;
+        } catch {
+          generation = undefined;
+        }
+        return withObjectGeneration(await getDownloadURL(storageRef), generation);
+      } catch (error) {
+        lastError = error;
+        const code = errorCode(error);
+        const retryable = code === 'unknown'
+          || code === 'storage/unknown'
+          || code === 'storage/network-request-failed'
+          || code === 'storage/retry-limit-exceeded';
+        if (!retryable || attempt === 1) throw error;
+      }
+    }
+    throw lastError;
+  } catch (error) {
+    if (error instanceof ImagePipelineError) throw error;
+    const code = errorCode(error);
+    const requestError = isStorageRequestError(error) ? error : undefined;
+    throw new ImagePipelineError(
+      stage,
+      '照片上傳失敗。',
+      code === 'unknown' ? 'storage/network-request-failed' : code,
+      {
+        cause: error,
+        phase: requestError?.phase ?? requestPhase,
+        httpStatus: requestError?.httpStatus,
+        classification: requestError?.classification,
+      },
+    );
+  }
 }
 
 export type UploadedImage = { imageUrl: string; thumbnailUrl: string };
@@ -242,15 +477,17 @@ function localDayKey(date = new Date()): string {
   return `${year}-${month}-${day}`;
 }
 
-async function reserveDailyImageUpload(userId: string): Promise<void> {
+/**
+ * 成功上傳後才記錄用量。這是產品統計，不可反過來讓照片主流程失敗；
+ * 真正的強制額度需由可信任的後端執行，不能依賴可繞過的用戶端計數器。
+ */
+async function recordSuccessfulImageUpload(userId: string): Promise<void> {
   const day = localDayKey();
   const usageRef = doc(db, 'users', userId, 'uploadUsage', day);
   await runTransaction(db, async transaction => {
     const snapshot = await transaction.get(usageRef);
     const current = Number(snapshot.data()?.imageCount || 0);
-    if (current >= IMAGE_POLICY.dailyUploadLimit) {
-      throw new Error(`今日圖片上傳已達 ${IMAGE_POLICY.dailyUploadLimit} 張上限`);
-    }
+    if (current >= IMAGE_POLICY.dailyUploadLimit) return;
     transaction.set(usageRef, {
       ownerId: userId,
       day,
@@ -260,39 +497,111 @@ async function reserveDailyImageUpload(userId: string): Promise<void> {
   });
 }
 
+function imagePairPaths(folder: string, baseName: string): [string, string] {
+  return [`${folder}/${baseName}.jpg`, `${folder}/${baseName}-thumb.jpg`];
+}
+
+async function deleteKnownImagePair(folder: string, baseName: string): Promise<void> {
+  await Promise.all(imagePairPaths(folder, baseName).map(async path => {
+    try {
+      await deleteObject(ref(storage, path));
+    } catch (error) {
+      if (errorCode(error) !== 'storage/object-not-found') throw error;
+    }
+  }));
+}
+
+async function cleanupImagePairAfterFailure(
+  folder: string,
+  baseName: string,
+  stage: 'upload-main' | 'upload-thumbnail',
+): Promise<void> {
+  try {
+    await deleteKnownImagePair(folder, baseName);
+  } catch (error) {
+    logImagePipelineError(new ImagePipelineError(
+      stage,
+      '照片失敗檔案清理未完成。',
+      errorCode(error),
+      { cause: error, classification: 'cleanup' },
+    ));
+  }
+}
+
 async function uploadImagePair(
   folder: string,
   uri: string,
   quotaUserId: string,
   baseName = 'photo',
+  cleanupOnFailure = true,
 ): Promise<UploadedImage> {
   const currentUser = auth.currentUser;
   if (!currentUser) {
-    throw new Error('登入狀態已失效，請重新登入後再試');
+    const error = new ImagePipelineError(
+      'auth',
+      '登入驗證已失效。',
+      'auth/no-current-user',
+    );
+    logImagePipelineError(error);
+    throw error;
   }
 
-  // React Native 使用 Firebase Web SDK 時，確保 Storage request 取得最新登入 token。
-  await currentUser.getIdToken(true);
-  const variants = await createImageVariants(uri);
-  await reserveDailyImageUpload(quotaUserId);
+  try {
+    await currentUser.getIdToken(true);
+  } catch (error) {
+    const wrapped = new ImagePipelineError(
+      'auth',
+      '登入驗證更新失敗。',
+      errorCode(error),
+      { cause: error },
+    );
+    logImagePipelineError(wrapped);
+    throw wrapped;
+  }
 
-  // 循序上傳，避免 Android 上兩個 uploadBytes 同時取得 token 時發生競態。
-  const imageUrl = await uploadUri(
-    `${folder}/${baseName}.jpg`,
-    variants.displayUri,
-    'image/jpeg',
-  );
+  let variants;
+  try {
+    variants = await createImageVariants(uri);
+  } catch (error) {
+    logImagePipelineError(error);
+    throw error;
+  }
+  const [mainPath, thumbnailPath] = imagePairPaths(folder, baseName);
+  let imageUrl: string;
+  try {
+    imageUrl = await uploadUri(mainPath, variants.displayUri, 'upload-main');
+  } catch (error) {
+    if (cleanupOnFailure) {
+      await cleanupImagePairAfterFailure(folder, baseName, 'upload-main');
+    }
+    logImagePipelineError(error);
+    throw error;
+  }
 
-  let thumbnailUrl = imageUrl;
+  let thumbnailUrl: string;
   try {
     thumbnailUrl = await uploadUri(
-      `${folder}/${baseName}-thumb.jpg`,
+      thumbnailPath,
       variants.thumbnailUri,
-      'image/jpeg',
+      'upload-thumbnail',
     );
   } catch (error) {
-    // 縮圖是顯示最佳化；主圖成功時不應因縮圖失敗阻斷資料建立。
-    if (__DEV__) console.warn('Thumbnail upload fallback:', (error as { code?: string })?.code ?? 'unknown');
+    if (cleanupOnFailure) {
+      await cleanupImagePairAfterFailure(folder, baseName, 'upload-thumbnail');
+    }
+    logImagePipelineError(error);
+    throw error;
+  }
+
+  try {
+    await recordSuccessfulImageUpload(quotaUserId);
+  } catch (error) {
+    logImagePipelineError(new ImagePipelineError(
+      'quota',
+      '照片已上傳，但用量紀錄更新失敗。',
+      errorCode(error),
+      { cause: error },
+    ));
   }
 
   return { imageUrl, thumbnailUrl };
@@ -307,16 +616,7 @@ async function deleteStorageFolder(path: string): Promise<void> {
 }
 
 async function deleteKnownPetImages(path: string): Promise<void> {
-  await Promise.all(['photo.jpg', 'photo-thumb.jpg'].map(async fileName => {
-    try {
-      await deleteObject(ref(storage, `${path}/${fileName}`));
-    } catch (error) {
-      const code = typeof error === 'object' && error !== null && 'code' in error
-        ? String((error as { code?: string }).code || '')
-        : '';
-      if (code !== 'storage/object-not-found') throw error;
-    }
-  }));
+  await deleteKnownImagePair(path, 'photo');
 }
 
 type StorageCleanupTask = {
@@ -740,8 +1040,25 @@ export const petService = {
   },
 
   /** 上傳寵物照片至 Firebase Storage */
-  async uploadImage(userId: string, petId: string, uri: string, quotaUserId = userId): Promise<UploadedImage> {
-    return uploadImagePair(`users/${userId}/pets/${petId}`, uri, quotaUserId);
+  async uploadImage(
+    userId: string,
+    petId: string,
+    uri: string,
+    quotaUserId = userId,
+    cleanupOnFailure = true,
+  ): Promise<UploadedImage> {
+    return uploadImagePair(
+      `users/${userId}/pets/${petId}`,
+      uri,
+      quotaUserId,
+      'photo',
+      cleanupOnFailure,
+    );
+  },
+
+  /** 清除新增寵物照片寫回失敗時留下的已上傳檔案。 */
+  async deleteImageFiles(userId: string, petId: string): Promise<void> {
+    await deleteKnownPetImages(`users/${userId}/pets/${petId}`);
   },
 
 };
@@ -924,6 +1241,28 @@ export const medicalService = {
     return docRef.id;
   },
 
+  /** 預先產生固定文件 ID，讓新增重試保持冪等，不會因回應遺失建立重複紀錄。 */
+  reserveId(userId: string): string {
+    return doc(getUserCollection(userId, 'medical')).id;
+  },
+
+  /** 以固定 ID 建立或合併醫護紀錄。 */
+  async saveWithId(
+    userId: string,
+    medicalId: string,
+    data: Omit<MedicalDoc, 'id'>,
+    includeCreatedAt = false,
+  ): Promise<void> {
+    const access = await recordAccessFields(userId, data.petId);
+    await setDoc(getUserDoc(userId, 'medical', medicalId), {
+      ...data,
+      ...access,
+      ownerId: userId,
+      ...(includeCreatedAt ? { createdAt: serverTimestamp() } : {}),
+      updatedAt: serverTimestamp(),
+    }, { merge: true });
+  },
+
   /** 更新醫護紀錄 */
   async update(userId: string, medicalId: string, data: Partial<MedicalDoc>): Promise<void> {
     const docRef = getUserDoc(userId, 'medical', medicalId);
@@ -956,7 +1295,7 @@ export const medicalService = {
       `users/${userId}/medical/${medicalId}`,
       uri,
       quotaUserId,
-      `${Date.now()}-${index}`,
+      `photo-${index}`,
     );
   },
 };
@@ -1106,10 +1445,10 @@ export const diaryService = {
 
   /** 編輯完成或失敗後，只保留目前文件仍引用的日記主圖與縮圖。 */
   async pruneImages(userId: string, diaryId: string, retainedUrls: string[]): Promise<void> {
-    const retained = new Set(retainedUrls.filter(Boolean));
+    const retained = new Set(retainedUrls.filter(Boolean).map(withoutObjectGeneration));
     const result = await listAll(ref(storage, `users/${userId}/diaries/${diaryId}`));
     await Promise.all(result.items.map(async item => {
-      const url = await getDownloadURL(item);
+      const url = withoutObjectGeneration(await getDownloadURL(item));
       if (!retained.has(url)) await deleteObject(item);
     }));
   },
@@ -1124,7 +1463,8 @@ export const diaryService = {
     const url = await uploadUri(
       `users/${userId}/diaries/${diaryId}/attachments/${Date.now()}-${name}`,
       asset.uri,
-      asset.mimeType,
+      'upload-main',
+      asset.mimeType || 'application/octet-stream',
     );
     return { name: asset.name, url, mimeType: asset.mimeType };
   },
@@ -1169,25 +1509,19 @@ export const inviteService = {
       }
 
       const petRef = getUserDoc(data.ownerId, 'pets', data.petId);
-      const petSnapshot = await transaction.get(petRef);
-      if (!petSnapshot.exists()) {
-        return { success: false, message: '找不到該寵物資料' };
-      }
-      const petData = petSnapshot.data() as PetDoc;
-      const coParents = [...(petData.coParents || [])];
-      if (coParents.some(member => member.uid === userId)) {
-        return { success: false, message: '您已經是該寵物的共同飼育者' };
-      }
-
       const permission = data.permission || 'edit';
-      coParents.push({ uid: userId, name: userName, isMainOwner: false, permission, muteReminders: false });
-      const sharingFields = petAccessFields({ ...petData, coParents }, data.ownerId);
-      transaction.update(petRef, {
-        coParents,
-        ...sharingFields,
+      const member = { uid: userId, name: userName, isMainOwner: false, permission, muteReminders: false };
+      const updates: Record<string, unknown> = {
+        coParents: arrayUnion(member),
+        coParentIds: arrayUnion(userId),
         lastInviteCode: normalizedCode,
         updatedAt: serverTimestamp(),
-      });
+      };
+      if (permission === 'edit') updates.editorIds = arrayUnion(userId);
+
+      // 受邀者在加入前無權讀取 pet 文件；改用原子 arrayUnion 盲寫，
+      // 由 Security Rules 的 validInviteJoin 驗證邀請碼、ACL 差異與新增成員。
+      transaction.update(petRef, updates);
       transaction.delete(inviteRef);
       return { success: true, message: '成功加入共同飼育！' };
     });

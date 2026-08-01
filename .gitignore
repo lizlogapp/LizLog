@@ -6,8 +6,13 @@ node_modules/
 # Expo
 .expo/
 dist/
+dist-build-*/
 web-build/
 expo-env.d.ts
+
+# local AI validation output
+.ai/
+.serena/
 
 # Native
 .kotlin/

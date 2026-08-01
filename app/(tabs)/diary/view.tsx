@@ -10,6 +10,7 @@ import {
   Pressable,
   Modal,
   ActivityIndicator,
+  Alert,
 } from 'react-native';
 import Slider from '@react-native-community/slider';
 import { useTheme } from '../../../src/theme/ThemeContext';
@@ -21,6 +22,7 @@ import { appetiteToLabel } from '../../../src/data/mockDiaryData';
 import { useAuth } from '../../../src/contexts/AuthContext';
 import { getWeatherOption } from '../../../src/data/weatherOptions';
 import { diaryService, DiaryDoc } from '../../../src/services/firestoreService';
+import { saveRemoteImageToLibrary } from '../../../src/services/imageService';
 import { formatDiaryDate } from '../../../src/utils/diaryDate';
 
 // SVG Icons
@@ -52,6 +54,7 @@ export default function DiaryViewScreen() {
 
   const [diary, setDiary] = useState<(DiaryDoc & { id: string }) | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   useEffect(() => {
     let isActive = true;
@@ -83,9 +86,7 @@ export default function DiaryViewScreen() {
   const diaryImageUrls = diary?.imageUrls?.length
     ? diary.imageUrls
     : (diary?.imageUrl ? [diary.imageUrl] : []);
-  const diaryImages = diaryImageUrls.length
-    ? diaryImageUrls.map(uri => ({ uri }))
-    : [require('../../../assets/branding/logos/logo-image.png')];
+  const diaryImages = diaryImageUrls.map(uri => ({ uri }));
   const displayDiary = {
     id: diary?.id || '',
     dateStr,
@@ -116,8 +117,15 @@ export default function DiaryViewScreen() {
   };
 
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
-  const [fullscreenImage, setFullscreenImage] = useState<any>(null);
+  const [fullscreenImage, setFullscreenImage] = useState<{ uri: string } | null>(null);
+  const [isDownloadingImage, setIsDownloadingImage] = useState(false);
   const carouselRef = useRef<ScrollView>(null);
+  const canEdit = Boolean(
+    user && diary && (
+      (diary.ownerId || ownerId || user.uid) === user.uid
+      || diary.editorIds?.includes(user.uid)
+    ),
+  );
 
   // 輪播寬度（去掉左右 padding 各 16）
   const cardWidth = SCREEN_WIDTH - 64;
@@ -129,8 +137,44 @@ export default function DiaryViewScreen() {
   };
 
   const handleImageTap = () => {
+    if (displayDiary.carouselImages.length === 0) return;
     const nextIndex = (currentImageIndex + 1) % displayDiary.carouselImages.length;
     carouselRef.current?.scrollTo({ x: nextIndex * cardWidth, animated: true });
+  };
+
+  const confirmDelete = () => {
+    if (!user || !diary || !canEdit || isDeleting) return;
+    Alert.alert('刪除日記', '確定要刪除這篇日記嗎？此動作無法復原。', [
+      { text: '取消', style: 'cancel' },
+      {
+        text: '刪除',
+        style: 'destructive',
+        onPress: async () => {
+          setIsDeleting(true);
+          try {
+            await diaryService.delete(diary.ownerId || ownerId || user.uid, diary.id);
+            router.replace('/(tabs)/diary');
+          } catch {
+            Alert.alert('刪除失敗', '日記尚未刪除，請確認網路後再試一次。');
+          } finally {
+            setIsDeleting(false);
+          }
+        },
+      },
+    ]);
+  };
+
+  const downloadImage = async (uri: string) => {
+    if (isDownloadingImage) return;
+    setIsDownloadingImage(true);
+    try {
+      await saveRemoteImageToLibrary(uri);
+      Alert.alert('下載完成', '照片已儲存到手機相簿。');
+    } catch (error) {
+      Alert.alert('下載失敗', error instanceof Error ? error.message : '請稍後再試。');
+    } finally {
+      setIsDownloadingImage(false);
+    }
   };
 
   const recordItems = [
@@ -179,10 +223,10 @@ export default function DiaryViewScreen() {
               // 返回層級：日記檢視 -> 日記列表
               router.navigate('/(tabs)/diary');
             }},
-            { id: 'edit', onPress: () => router.push({
+            ...(canEdit ? [{ id: 'edit' as const, onPress: () => router.push({
               pathname: '/(tabs)/diary/add',
               params: { id, ownerId: diary?.ownerId || ownerId },
-            }) },
+            }) }] : []),
           ]}
         />
       }
@@ -194,24 +238,34 @@ export default function DiaryViewScreen() {
         >
           {/* ===== 卡片一：照片輪播 + 資訊 ===== */}
           <View style={[styles.mainCard, { backgroundColor: theme.background }]}>
-            <View style={styles.carouselContainer}>
-              <ScrollView
-                ref={carouselRef}
-                horizontal
-                pagingEnabled
-                showsHorizontalScrollIndicator={false}
-                onScroll={handleCarouselScroll}
-                scrollEventThrottle={16}
-              >
-                {displayDiary.carouselImages.map((img, idx) => (
-                  <Pressable key={idx} onPress={handleImageTap} style={{ width: cardWidth }}>
-                    <Image source={img} style={styles.carouselImage} />
-                  </Pressable>
-                ))}
-              </ScrollView>
+            <View
+              style={[
+                styles.carouselContainer,
+                diaryImageUrls.length === 0 && {
+                  height: 48,
+                  backgroundColor: theme.accentDawn,
+                },
+              ]}
+            >
+              {diaryImageUrls.length > 0 ? (
+                <ScrollView
+                  ref={carouselRef}
+                  horizontal
+                  pagingEnabled
+                  showsHorizontalScrollIndicator={false}
+                  onScroll={handleCarouselScroll}
+                  scrollEventThrottle={16}
+                >
+                  {displayDiary.carouselImages.map((img, idx) => (
+                    <Pressable key={idx} onPress={handleImageTap} style={{ width: cardWidth }}>
+                      <Image source={img} style={styles.carouselImage} />
+                    </Pressable>
+                  ))}
+                </ScrollView>
+              ) : null}
 
               {/* 分頁指示點 */}
-              <View style={styles.dotsContainer}>
+              {diaryImageUrls.length > 1 ? <View style={styles.dotsContainer}>
                 {displayDiary.carouselImages.map((_, idx) => (
                   <View
                     key={idx}
@@ -221,12 +275,19 @@ export default function DiaryViewScreen() {
                     ]}
                   />
                 ))}
-              </View>
+              </View> : null}
 
               {/* 寵物標籤 */}
-              <View style={styles.petTagsContainer}>
-                <View style={[styles.petTag, { backgroundColor: theme.accentDawn }]}>
-                  <Text style={[styles.petTagText, { color: theme.primary, fontFamily: fontFamilyName }]}>{displayDiary.petName}</Text>
+              <View style={[
+                styles.petTagsContainer,
+                diaryImageUrls.length === 0 && styles.noImagePetTagsContainer,
+              ]}>
+                <View style={[
+                  styles.petTag,
+                  { backgroundColor: theme.accentDawn },
+                  diaryImageUrls.length === 0 && styles.noImagePetTag,
+                ]}>
+                  <Text selectable style={[styles.petTagText, { color: theme.primary, fontFamily: fontFamilyName }]}>{displayDiary.petName}</Text>
                 </View>
               </View>
             </View>
@@ -234,10 +295,10 @@ export default function DiaryViewScreen() {
             {/* 日期 + 天氣 + 標題 + 數據列 */}
             <View style={styles.infoContainer}>
               <View style={styles.dateRow}>
-                <Text style={[styles.dateText, { color: labelColor, fontFamily: fontFamilyName }]}>{displayDiary.dateStr}</Text>
+                <Text selectable style={[styles.dateText, { color: labelColor, fontFamily: fontFamilyName }]}>{displayDiary.dateStr}</Text>
                 <Image source={displayDiary.weatherIcon} style={[styles.weatherIcon, { tintColor: labelColor }]} />
               </View>
-              {displayDiary.title ? <Text style={[styles.titleText, { color: labelColor, fontFamily: fontFamilyName }]}>{displayDiary.title}</Text> : null}
+              {displayDiary.title ? <Text selectable style={[styles.titleText, { color: labelColor, fontFamily: fontFamilyName }]}>{displayDiary.title}</Text> : null}
               <View style={styles.metricRow}>
                 <Text style={[styles.metricText, { color: valueColor, fontFamily: fontFamilyName }]}>{displayDiary.sensorData.temp}</Text>
                 <Text style={[styles.metricText, { color: valueColor, fontFamily: fontFamilyName }]}>{displayDiary.sensorData.humid}</Text>
@@ -251,15 +312,7 @@ export default function DiaryViewScreen() {
             </View>
           </View>
 
-          {/* ===== 卡片二：日記全文 ===== */}
-          {(displayDiary.title || displayDiary.content.trim()) ? (
-            <View style={[styles.contentCard, { backgroundColor: theme.background }]}>
-              {displayDiary.title ? <Text style={[styles.contentTitle, { color: labelColor, fontFamily: fontFamilyName }]}>{displayDiary.title}</Text> : null}
-              {displayDiary.content.trim() ? <Text style={[styles.contentBody, { color: theme.text, fontFamily: fontFamilyName }]}>{displayDiary.content}</Text> : null}
-            </View>
-          ) : null}
-
-          {/* ===== 卡片三：狀態紀錄 ===== */}
+          {/* ===== 卡片二：狀態紀錄 ===== */}
           <View style={[styles.detailCard, { backgroundColor: theme.background }]}>
             {recordItems.map((item, idx) => {
               const IconComp = item.icon;
@@ -267,7 +320,7 @@ export default function DiaryViewScreen() {
                 <View key={idx} style={{ gap: 8, width: '100%' }}>
                   <View style={styles.recordRow}>
                     <IconComp width={20} height={20} color={labelColor} />
-                    <Text style={[styles.recordLabel, { color: labelColor, fontFamily: fontFamilyName }]}>
+                    <Text selectable style={[styles.recordLabel, { color: labelColor, fontFamily: fontFamilyName }]}>
                       {item.label}：
                     </Text>
                     {['排便', '蛻皮'].includes(item.label) ? (
@@ -289,19 +342,19 @@ export default function DiaryViewScreen() {
                         ))}
                       </View>
                     ) : item.label === '飲食' ? (
-                      <Text
+                      <Text selectable
                         style={[styles.recordValue, { color: valueColor, fontFamily: fontFamilyName, flex: 1, textAlign: 'left', paddingLeft: 24, minHeight: 24 }]}
                       >
                         {item.value}
                       </Text>
                     ) : ['泡澡', '日照', '體重', '身長', '溫度', '濕度'].includes(item.label) ? (
                       <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }}>
-                        <Text
+                        <Text selectable
                           style={[styles.recordValue, { color: valueColor, fontFamily: fontFamilyName, width: 64, textAlign: 'center', marginRight: 6 }]}
                         >
                           {item.value}
                         </Text>
-                        <Text style={[styles.recordValue, { color: labelColor, fontFamily: fontFamilyName }]}>
+                        <Text selectable style={[styles.recordValue, { color: labelColor, fontFamily: fontFamilyName }]}>
                           {item.label === '泡澡' || item.label === '日照' ? '分鐘' :
                            item.label === '體重' ? '公克' :
                            item.label === '身長' ? '公分' :
@@ -310,7 +363,7 @@ export default function DiaryViewScreen() {
                         </Text>
                       </View>
                     ) : (
-                      <Text style={[styles.recordValue, { color: valueColor, fontFamily: fontFamilyName }]}>
+                      <Text selectable style={[styles.recordValue, { color: valueColor, fontFamily: fontFamilyName }]}>
                         {item.value}
                       </Text>
                     )}
@@ -345,16 +398,40 @@ export default function DiaryViewScreen() {
             })}
           </View>
 
-          {/* ===== 卡片四：附件照片 ===== */}
-          <View style={[styles.attachmentCard, { backgroundColor: theme.background }]}>
-            <View style={styles.attachmentRow}>
-              {displayDiary.attachments.map((img, idx) => (
-                <Pressable key={idx} onPress={() => setFullscreenImage(img)} style={styles.thumbnailWrapper}>
-                  <Image source={img} style={styles.thumbnail} />
-                </Pressable>
-              ))}
+          {/* ===== 卡片三：日記全文／筆記 ===== */}
+          {(displayDiary.title || displayDiary.content.trim()) ? (
+            <View style={[styles.contentCard, { backgroundColor: theme.background }]}>
+              {displayDiary.title ? <Text selectable style={[styles.contentTitle, { color: labelColor, fontFamily: fontFamilyName }]}>{displayDiary.title}</Text> : null}
+              {displayDiary.content.trim() ? <Text selectable style={[styles.contentBody, { color: labelColor, fontFamily: fontFamilyName }]}>{displayDiary.content}</Text> : null}
             </View>
-          </View>
+          ) : null}
+
+          {/* ===== 最下方：附件與刪除 ===== */}
+          {displayDiary.attachments.length > 0 ? (
+            <View style={[styles.attachmentCard, { backgroundColor: theme.background }]}>
+              <View style={styles.attachmentRow}>
+                {displayDiary.attachments.map((img, idx) => (
+                  <Pressable key={idx} onPress={() => setFullscreenImage(img)} style={styles.thumbnailWrapper}>
+                    <Image source={img} style={styles.thumbnail} />
+                  </Pressable>
+                ))}
+              </View>
+            </View>
+          ) : null}
+
+          {canEdit ? (
+            <View style={[styles.deleteCard, { backgroundColor: theme.background }]}>
+              <Pressable
+                disabled={isDeleting}
+                onPress={confirmDelete}
+                style={[styles.deleteButton, { borderColor: '#D84A4A', opacity: isDeleting ? 0.55 : 1 }]}
+              >
+                <Text style={[styles.deleteButtonText, { fontFamily: fontFamilyName }]}>
+                  {isDeleting ? '刪除中…' : '刪除日記'}
+                </Text>
+              </Pressable>
+            </View>
+          ) : null}
 
         </ScrollView>
 
@@ -369,9 +446,21 @@ export default function DiaryViewScreen() {
             style={styles.fullscreenOverlay}
             onPress={() => setFullscreenImage(null)}
           >
-            {fullscreenImage && (
+            {fullscreenImage && <View style={styles.fullscreenContent}>
               <Image source={fullscreenImage} style={styles.fullscreenImage} />
-            )}
+              <Pressable
+                disabled={isDownloadingImage}
+                onPress={event => {
+                  event.stopPropagation();
+                  void downloadImage(fullscreenImage.uri);
+                }}
+                style={[styles.downloadButton, { backgroundColor: theme.background, opacity: isDownloadingImage ? 0.6 : 1 }]}
+              >
+                <Text style={[styles.downloadButtonText, { color: theme.primary, fontFamily: fontFamilyName }]}>
+                  {isDownloadingImage ? '下載中…' : '下載圖片'}
+                </Text>
+              </Pressable>
+            </View>}
           </Pressable>
         </Modal>
       </View>
@@ -446,12 +535,24 @@ const styles = StyleSheet.create({
     left: 0,
     gap: 8,
   },
+  noImagePetTagsContainer: {
+    top: 0,
+    bottom: 0,
+    right: 0,
+    justifyContent: 'center',
+  },
   petTag: {
-
     paddingVertical: 4,
     paddingHorizontal: 14,
     borderTopRightRadius: 4,
     borderBottomRightRadius: 4,
+  },
+  noImagePetTag: {
+    flex: 1,
+    justifyContent: 'center',
+    borderTopRightRadius: 0,
+    borderBottomRightRadius: 0,
+    paddingHorizontal: 20,
   },
   petTagText: {
     fontSize: getFontSize(16, 'medium'),
@@ -525,7 +626,7 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   contentBody: {
-    fontSize: getFontSize(15, 'medium'),
+    fontSize: getFontSize(16, 'medium'),
     lineHeight: 24,
     textAlign: 'justify',
   },
@@ -577,6 +678,29 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     gap: 16,
   },
+  deleteCard: {
+    width: '100%',
+    borderRadius: 16,
+    padding: 16,
+    shadowColor: '#000000',
+    shadowOffset: { width: 4, height: 4 },
+    shadowOpacity: 0.25,
+    shadowRadius: 7,
+    elevation: 6,
+  },
+  deleteButton: {
+    width: '100%',
+    minHeight: 46,
+    borderWidth: 1,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  deleteButtonText: {
+    color: '#D84A4A',
+    fontSize: getFontSize(16, 'medium'),
+    fontWeight: '600',
+  },
   thumbnailWrapper: {
     flex: 1,
   },
@@ -595,8 +719,26 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   fullscreenImage: {
-    width: '92%',
-    height: '70%',
+    width: '100%',
+    flex: 1,
     resizeMode: 'contain',
+  },
+  fullscreenContent: {
+    width: '92%',
+    height: '78%',
+    alignItems: 'center',
+    gap: 18,
+  },
+  downloadButton: {
+    minWidth: 160,
+    minHeight: 48,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 24,
+  },
+  downloadButtonText: {
+    fontSize: getFontSize(16, 'medium'),
+    fontWeight: '600',
   },
 });

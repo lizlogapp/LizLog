@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -19,7 +19,14 @@ import { BaseScreen } from '../../../src/components/common/BaseScreen';
 import { FloatingActionBar } from '../../../src/components/FloatingActionBar';
 import { useAuth } from '../../../src/contexts/AuthContext';
 import { medicalService } from '../../../src/services/firestoreService';
-import { IMAGE_POLICY } from '../../../src/services/imageService';
+import {
+  errorCode,
+  IMAGE_POLICY,
+  ImagePipelineError,
+  imagePipelineDiagnostic,
+  imagePipelineMessage,
+  logImagePipelineError,
+} from '../../../src/services/imageService';
 import * as ImagePicker from 'expo-image-picker';
 
 const getDaysInMonth = (y: number, m: number) => new Date(y, m, 0).getDate();
@@ -44,7 +51,9 @@ export default function AddMedicalScreen() {
   // Image section
   const [selectedImages, setSelectedImages] = useState<string[]>([]);
   const [selectedImageThumbnails, setSelectedImageThumbnails] = useState<string[]>([]);
-  const [isSaving, setIsSaving] = useState(false);
+  const saveLockRef = useRef(false);
+  const createdMedicalIdRef = useRef<string | null>(id || null);
+  const medicalRecordSavedRef = useRef(Boolean(id));
 
   // Medication section
   const [medStartDate, setMedStartDate] = useState('');
@@ -62,6 +71,7 @@ export default function AddMedicalScreen() {
   const [calendarTarget, setCalendarTarget] = useState<'visit' | 'medStart' | 'medEnd'>('visit');
 
   useEffect(() => {
+    if (id) createdMedicalIdRef.current = id;
     if (id && user) {
       const resolvedOwnerId = ownerId || user.uid;
       medicalService.getById(resolvedOwnerId, id).then(doc => {
@@ -73,8 +83,12 @@ export default function AddMedicalScreen() {
           setReason(doc.visit?.reason || '');
           setDiagnosis(doc.visit?.diagnosis || '');
           setAdvice(doc.visit?.advice?.join('\n') || '');
-          setSelectedImages(doc.visit?.imageUrls || []);
-          setSelectedImageThumbnails(doc.visit?.imageThumbnailUrls || []);
+          const imageUrls = doc.visit?.imageUrls || [];
+          const thumbnailUrls = doc.visit?.imageThumbnailUrls || [];
+          setSelectedImages(imageUrls);
+          setSelectedImageThumbnails(
+            imageUrls.map((imageUrl, index) => thumbnailUrls[index] || imageUrl),
+          );
           setMedStartDate(doc.medication?.startDate || '');
           setMedEndDate(doc.medication?.endDate || '');
           setMedicine(doc.medication?.medicine || '');
@@ -85,7 +99,7 @@ export default function AddMedicalScreen() {
         }
       });
     }
-  }, [id, user]);
+  }, [id, ownerId, user]);
 
   const pickImages = async () => {
     const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
@@ -108,7 +122,11 @@ export default function AddMedicalScreen() {
   };
 
   const handleSave = async () => {
-    if (isSaving) return;
+    if (saveLockRef.current) return;
+    const remoteImageUrls = selectedImages.filter(uri => uri.startsWith('http'));
+    const normalizedRemoteThumbnails = remoteImageUrls.map(
+      (imageUrl, index) => selectedImageThumbnails[index] || imageUrl,
+    );
     const newData = {
       petId: petId || '1',
       title,
@@ -124,8 +142,8 @@ export default function AddMedicalScreen() {
         reason,
         diagnosis,
         advice: advice.split('\n').filter(Boolean),
-        imageUrls: selectedImages.filter(uri => uri.startsWith('http')),
-        imageThumbnailUrls: selectedImageThumbnails,
+        imageUrls: remoteImageUrls,
+        imageThumbnailUrls: normalizedRemoteThumbnails,
       },
       medication: {
         startDate: medStartDate,
@@ -144,25 +162,57 @@ export default function AddMedicalScreen() {
       return;
     }
 
-    setIsSaving(true);
+    saveLockRef.current = true;
+    let saveStage: 'record' | 'image' | 'writeback' = 'record';
     try {
-      const medicalId = id || await medicalService.add(resolvedOwnerId, newData);
-      if (id) await medicalService.update(resolvedOwnerId, id, newData);
-
-      const remoteImages = selectedImages.filter(uri => uri.startsWith('http'));
-      const remoteThumbnails = selectedImageThumbnails;
-      const localImages = selectedImages.filter(uri => !uri.startsWith('http'));
-      const uploadedImages = await Promise.all(
-        localImages.map((uri, index) => medicalService.uploadImage(resolvedOwnerId, medicalId, uri, index, user?.uid || resolvedOwnerId)),
+      const medicalId = createdMedicalIdRef.current
+        || medicalService.reserveId(resolvedOwnerId);
+      createdMedicalIdRef.current = medicalId;
+      await medicalService.saveWithId(
+        resolvedOwnerId,
+        medicalId,
+        newData,
+        !medicalRecordSavedRef.current,
       );
-      if (localImages.length > 0) {
-        await medicalService.update(resolvedOwnerId, medicalId, {
-          visit: {
-            ...newData.visit,
-            imageUrls: [...remoteImages, ...uploadedImages.map(image => image.imageUrl)],
-            imageThumbnailUrls: [...remoteThumbnails, ...uploadedImages.map(image => image.thumbnailUrl)],
-          },
-        });
+      medicalRecordSavedRef.current = true;
+
+      const remoteImages = [...remoteImageUrls];
+      const remoteThumbnails = [...normalizedRemoteThumbnails];
+      const localImages = selectedImages.filter(uri => !uri.startsWith('http'));
+
+      for (let index = 0; index < localImages.length; index += 1) {
+        saveStage = 'image';
+        const uploadedImage = await medicalService.uploadImage(
+          resolvedOwnerId,
+          medicalId,
+          localImages[index],
+          remoteImages.length,
+          user?.uid || resolvedOwnerId,
+        );
+        remoteImages.push(uploadedImage.imageUrl);
+        remoteThumbnails.push(uploadedImage.thumbnailUrl);
+
+        // 先把已上傳網址留在畫面狀態；即使 Firestore 寫回失敗，重試時也不會重傳同一張照片。
+        setSelectedImages([...remoteImages, ...localImages.slice(index + 1)]);
+        setSelectedImageThumbnails([...remoteThumbnails]);
+
+        saveStage = 'writeback';
+        try {
+          await medicalService.update(resolvedOwnerId, medicalId, {
+            visit: {
+              ...newData.visit,
+              imageUrls: remoteImages,
+              imageThumbnailUrls: remoteThumbnails,
+            },
+          });
+        } catch (error) {
+          throw new ImagePipelineError(
+            'writeback',
+            '照片網址寫回失敗。',
+            errorCode(error),
+            { cause: error },
+          );
+        }
       }
 
       if (petId) {
@@ -171,11 +221,26 @@ export default function AddMedicalScreen() {
         router.back();
       }
     } catch (error) {
-      Alert.alert('錯誤', error instanceof Error
-        ? error.message
-        : '醫療紀錄儲存失敗，請確認網路與圖片權限後再試。');
+      logImagePipelineError(error);
+      const diagnostic = imagePipelineDiagnostic(error);
+      if (saveStage === 'image') {
+        Alert.alert(
+          '照片上傳失敗',
+          `${imagePipelineMessage(error)}\n醫護資料已保留，不會重複新增。請留在本頁重試照片上傳。\n錯誤代碼：${diagnostic}`,
+        );
+      } else if (saveStage === 'writeback') {
+        Alert.alert(
+          '照片資料同步失敗',
+          `${imagePipelineMessage(error)}\n照片已上傳且保留在本頁，請再次確認以完成同步。\n錯誤代碼：${diagnostic}`,
+        );
+      } else {
+        Alert.alert(
+          '醫護資料儲存失敗',
+          error instanceof Error ? error.message : '請確認網路後再試。',
+        );
+      }
     } finally {
-      setIsSaving(false);
+      saveLockRef.current = false;
     }
   };
 
@@ -218,8 +283,11 @@ export default function AddMedicalScreen() {
       }
     >
       <ScrollView
+        style={styles.scrollView}
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.scrollContent}
+        keyboardDismissMode="on-drag"
+        keyboardShouldPersistTaps="handled"
       >
         <View style={[styles.formCard, { backgroundColor: theme.background }]}>
           {/* Title */}
@@ -265,7 +333,7 @@ export default function AddMedicalScreen() {
           <Text style={labelStyle}>原因</Text>
           <TextInput
             style={multiInputStyle}
-            placeholder="請輸入就診原因..."
+            placeholder="請輸入就診原因"
             placeholderTextColor={theme.text + '50'}
             multiline
             value={reason}
@@ -275,7 +343,7 @@ export default function AddMedicalScreen() {
           <Text style={labelStyle}>診斷</Text>
           <TextInput
             style={multiInputStyle}
-            placeholder="請輸入診斷結果..."
+            placeholder="請輸入診斷結果"
             placeholderTextColor={theme.text + '50'}
             multiline
             value={diagnosis}
@@ -285,7 +353,7 @@ export default function AddMedicalScreen() {
           <Text style={labelStyle}>醫囑</Text>
           <TextInput
             style={multiInputStyle}
-            placeholder="請輸入醫囑..."
+            placeholder="請輸入醫囑"
             placeholderTextColor={theme.text + '50'}
             multiline
             value={advice}
@@ -372,7 +440,7 @@ export default function AddMedicalScreen() {
           <Text style={labelStyle}>備註</Text>
           <TextInput
             style={multiInputStyle}
-            placeholder="用藥備註..."
+            placeholder="用藥備註"
             placeholderTextColor={theme.text + '50'}
             multiline
             value={medNote}
@@ -458,8 +526,11 @@ export default function AddMedicalScreen() {
 }
 
 const styles = StyleSheet.create({
+  scrollView: {
+    flex: 1,
+  },
   scrollContent: {
-    paddingBottom: 120,
+    paddingBottom: 146,
     paddingTop: 16,
   },
   formCard: {

@@ -7,6 +7,7 @@ import {
   Pressable,
   Modal,
   Image,
+  Alert,
 } from 'react-native';
 import Svg, { Path, Defs, Filter, FeDropShadow } from 'react-native-svg';
 import { useRouter, useLocalSearchParams } from 'expo-router';
@@ -32,6 +33,7 @@ export default function CoParentScreen() {
   const [members, setMembers] = useState<any[]>([]);
   const [inviteCode, setInviteCode] = useState<string>('');
   const [invitePermission, setInvitePermission] = useState<'edit' | 'view'>('edit');
+  const [isGeneratingInvite, setIsGeneratingInvite] = useState(false);
 
   React.useEffect(() => {
     if (!user || !id) return;
@@ -59,11 +61,17 @@ export default function CoParentScreen() {
   const [showLeaveModal, setShowLeaveModal] = useState(false);
 
   const handleCreateInvite = async () => {
-    if (!user || !pet) return;
+    if (!user || !pet || isGeneratingInvite) return;
     const resolvedOwnerId = ownerId || user.uid;
-    const code = await inviteService.createInvite(pet.id, resolvedOwnerId, invitePermission);
-    setInviteCode(code);
-    setShowInviteModal(true);
+    setIsGeneratingInvite(true);
+    try {
+      const code = await inviteService.createInvite(pet.id, resolvedOwnerId, invitePermission);
+      setInviteCode(code);
+    } catch {
+      Alert.alert('邀請碼產生失敗', '請確認網路連線後再試一次。');
+    } finally {
+      setIsGeneratingInvite(false);
+    }
   };
 
   const toggleMute = async (memberId: string, currentMute: boolean) => {
@@ -199,7 +207,7 @@ export default function CoParentScreen() {
       {/* ========== 邀請成員 Modal (邀請碼) ========== */}
       <Modal visible={showInviteModal} transparent animationType="fade" onRequestClose={() => setShowInviteModal(false)}>
         <Pressable style={styles.modalOverlay} onPress={() => setShowInviteModal(false)}>
-          <Pressable style={styles.modalContent} onPress={e => e.stopPropagation()}>
+          <Pressable style={[styles.modalContent, { backgroundColor: theme.background }]} onPress={e => e.stopPropagation()}>
             <Text style={[styles.modalTitle, { color: theme.primary, fontFamily: fontFamilyName }]}>
               邀請共同飼育人
             </Text>
@@ -208,12 +216,19 @@ export default function CoParentScreen() {
             </Text>
             
             <View style={styles.qrCodePlaceholder}>
-              <Text style={[{ color: theme.primary, fontFamily: fontFamilyName, fontSize: 32, letterSpacing: 4 }]}>
-                {inviteCode ? inviteCode : '產生中'}
+              <Text
+                numberOfLines={1}
+                adjustsFontSizeToFit
+                minimumFontScale={0.72}
+                style={[styles.inviteCodeText, { color: theme.primary, fontFamily: fontFamilyName }]}
+              >
+                {inviteCode || (isGeneratingInvite ? '產生中…' : '點擊下方按鈕產生邀請碼')}
               </Text>
-              <Text style={[styles.qrCodeText, { color: paletteColors.XUAN_RI + '50', fontFamily: fontFamilyName, marginTop: 8 }]}>
-                (有效期限：7天)
-              </Text>
+              {inviteCode ? (
+                <Text style={[styles.qrCodeText, { color: paletteColors.XUAN_RI + '50', fontFamily: fontFamilyName, marginTop: 8 }]}>
+                  (有效期限：7天)
+                </Text>
+              ) : null}
             </View>
 
             {/* 權限選擇區 (只有還沒產生邀請碼時才能選) */}
@@ -245,14 +260,18 @@ export default function CoParentScreen() {
               </Pressable>
               {inviteCode ? (
                 <Pressable style={[styles.modalButton, { backgroundColor: theme.primary }]} onPress={() => { setShowInviteModal(false); setInviteCode(''); }}>
-                  <Text style={[styles.modalButtonText, { color: '#FFFFFF', fontFamily: fontFamilyName }]}>
+                  <Text style={[styles.modalButtonText, { color: theme.background, fontFamily: fontFamilyName }]}>
                     完成
                   </Text>
                 </Pressable>
               ) : (
-                <Pressable style={[styles.modalButton, { backgroundColor: theme.primary }]} onPress={handleCreateInvite}>
-                  <Text style={[styles.modalButtonText, { color: '#FFFFFF', fontFamily: fontFamilyName }]}>
-                    產生邀請碼
+                <Pressable
+                  disabled={isGeneratingInvite}
+                  style={[styles.modalButton, { backgroundColor: theme.primary, opacity: isGeneratingInvite ? 0.6 : 1 }]}
+                  onPress={handleCreateInvite}
+                >
+                  <Text style={[styles.modalButtonText, { color: theme.background, fontFamily: fontFamilyName }]}>
+                    {isGeneratingInvite ? '產生中…' : '產生邀請碼'}
                   </Text>
                 </Pressable>
               )}
@@ -264,7 +283,7 @@ export default function CoParentScreen() {
       {/* ========== 刪除成員確認 Modal ========== */}
       <Modal visible={showDeleteModal} transparent animationType="fade" onRequestClose={() => setShowDeleteModal(false)}>
         <Pressable style={styles.modalOverlay} onPress={() => setShowDeleteModal(false)}>
-          <Pressable style={styles.modalContent} onPress={e => e.stopPropagation()}>
+          <Pressable style={[styles.modalContent, { backgroundColor: theme.background }]} onPress={e => e.stopPropagation()}>
             <Text style={[styles.modalTitle, { color: theme.primary, fontFamily: fontFamilyName }]}>
               確定要移除此成員嗎？
             </Text>
@@ -291,7 +310,7 @@ export default function CoParentScreen() {
       {/* ========== 退出飼育確認 Modal ========== */}
       <Modal visible={showLeaveModal} transparent animationType="fade" onRequestClose={() => setShowLeaveModal(false)}>
         <Pressable style={styles.modalOverlay} onPress={() => setShowLeaveModal(false)}>
-          <Pressable style={styles.modalContent} onPress={e => e.stopPropagation()}>
+          <Pressable style={[styles.modalContent, { backgroundColor: theme.background }]} onPress={e => e.stopPropagation()}>
             <Text style={[styles.modalTitle, { color: theme.primary, fontFamily: fontFamilyName }]}>
               確定要退出共同飼育嗎？
             </Text>
@@ -412,8 +431,8 @@ const styles = StyleSheet.create({
     lineHeight: 20,
   },
   qrCodePlaceholder: {
-    width: 160,
-    height: 160,
+    width: '100%',
+    height: 92,
     backgroundColor: 'rgba(0,0,0,0.05)',
     borderRadius: 16,
     borderWidth: 1,
@@ -422,6 +441,13 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: 24,
+    paddingHorizontal: 12,
+  },
+  inviteCodeText: {
+    width: '100%',
+    textAlign: 'center',
+    fontSize: getFontSize(22, 'large'),
+    letterSpacing: 1,
   },
   qrCodeText: {
     fontSize: getFontSize(14, 'medium'),
