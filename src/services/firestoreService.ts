@@ -148,6 +148,19 @@ export interface MedicalDoc {
   updatedAt?: any;
 }
 
+export interface DiaryRecords {
+  temp?: string;
+  humid?: string;
+  bask?: string;
+  feed?: string;
+  appetite?: number;
+  bath?: string;
+  poop?: string;
+  molt?: string;
+  weight?: string;
+  length?: string;
+}
+
 export interface DiaryPetEntry {
   petId?: string;
   name: string;
@@ -160,6 +173,7 @@ export interface DiaryPetEntry {
     poop: boolean;
     molt?: boolean;
   };
+  records?: DiaryRecords;
 }
 
 export interface DiaryDoc {
@@ -180,18 +194,7 @@ export interface DiaryDoc {
   ownerId?: string;
   accessUserIds?: string[];
   editorIds?: string[];
-  records?: {
-    temp?: string;
-    humid?: string;
-    bask?: string;
-    feed?: string;
-    appetite?: number;
-    bath?: string;
-    poop?: string;
-    molt?: string;
-    weight?: string;
-    length?: string;
-  };
+  records?: DiaryRecords;
   createdAt?: any;
   updatedAt?: any;
 }
@@ -227,6 +230,25 @@ function timestampToMillis(value: unknown): number {
 
 function safeStorageName(name: string): string {
   return name.replace(/[^a-zA-Z0-9._-]/g, '_').slice(-120) || `file-${Date.now()}`;
+}
+
+/** collection-group 文件以實際 users/{uid} 路徑補齊 ownerId，避免舊文件缺欄位時被誤認。 */
+function snapshotToCrossUserArray<T extends { ownerId?: string }>(
+  snapshot: QuerySnapshot<DocumentData>,
+): (T & { id: string })[] {
+  return snapshot.docs.map(document => ({
+    id: document.id,
+    ...document.data(),
+    ownerId: (document.data() as T).ownerId || document.ref.parent.parent?.id,
+  })) as (T & { id: string })[];
+}
+
+function compareDiariesNewest(left: DiaryDoc, right: DiaryDoc): number {
+  const byDate = right.date.localeCompare(left.date);
+  if (byDate !== 0) return byDate;
+  const leftCreatedAt = timestampToMillis(left.createdAt) || timestampToMillis(left.updatedAt);
+  const rightCreatedAt = timestampToMillis(right.createdAt) || timestampToMillis(right.updatedAt);
+  return rightCreatedAt - leftCreatedAt;
 }
 
 type StorageRequestPhase = Exclude<ImagePipelinePhase, 'writeback'>;
@@ -1076,8 +1098,12 @@ export const reminderService = {
       Object.assign(item, access);
     }));
     const sharedSnapshot = await getDocs(query(collectionGroup(db, 'reminders'), where('accessUserIds', 'array-contains', userId)));
+    // accessUserIds 會包含 owner，因此 collection-group 也會查回自己的文件。
+    // 必須排除，否則 own/shared 快照到達順序不同時，舊共享快照會讓已刪除提醒復活或讓開關回跳。
+    const shared = snapshotToCrossUserArray<ReminderDoc>(sharedSnapshot)
+      .filter(item => item.ownerId !== userId);
     const merged = new Map<string, ReminderDoc & { id: string }>();
-    [...own, ...snapshotToArray<ReminderDoc>(sharedSnapshot)].forEach(item => merged.set(`${item.ownerId || userId}:${item.id}`, item));
+    [...own, ...shared].forEach(item => merged.set(`${item.ownerId || userId}:${item.id}`, item));
     return Array.from(merged.values()).sort((a, b) => timestampToMillis(b.createdAt) - timestampToMillis(a.createdAt));
   },
 
@@ -1104,7 +1130,8 @@ export const reminderService = {
     let ownFailed = false;
     let sharedFailed = false;
     const emit = () => {
-      if (!ownReady || !sharedReady || (ownFailed && sharedFailed)) return;
+      // 本人清單先到就先顯示，不必等待 collection-group；共享清單完成後再合併。
+      if ((!ownReady && !sharedReady) || (ownFailed && sharedFailed)) return;
       const merged = new Map<string, ReminderDoc & { id: string }>();
       Array.from(sources.values()).flat().forEach(item => merged.set(`${item.ownerId || userId}:${item.id}`, item));
       callback(Array.from(merged.values()).sort((a, b) => timestampToMillis(b.createdAt) - timestampToMillis(a.createdAt)));
@@ -1128,7 +1155,10 @@ export const reminderService = {
     unsubscribes.push(onSnapshot(query(collectionGroup(db, 'reminders'), where('accessUserIds', 'array-contains', userId)), snapshot => {
       sharedReady = true;
       sharedFailed = false;
-      sources.set('shared', snapshotToArray<ReminderDoc>(snapshot));
+      sources.set(
+        'shared',
+        snapshotToCrossUserArray<ReminderDoc>(snapshot).filter(item => item.ownerId !== userId),
+      );
       emit();
     }, error => {
       sharedReady = true;
@@ -1162,6 +1192,14 @@ export const reminderService = {
     await updateDoc(docRef, {
       ...data,
       ...access,
+      updatedAt: serverTimestamp(),
+    });
+  },
+
+  /** 單卡開關只更新啟用狀態，避免重新計算 ACL 失敗導致 Switch 無法操作。 */
+  async setEnabled(userId: string, reminderId: string, isOn: boolean): Promise<void> {
+    await updateDoc(getUserDoc(userId, 'reminders', reminderId), {
+      isOn,
       updatedAt: serverTimestamp(),
     });
   },
@@ -1327,7 +1365,7 @@ export const diaryService = {
       && timestampToMillis(item.createdAt) > 0
       && Date.now() - timestampToMillis(item.createdAt) > 30 * 60 * 1000);
     void Promise.all(stalePending.map(item => diaryService.rollbackCreate(userId, item.id))).catch(() => undefined);
-    return Array.from(merged.values()).sort((a, b) => b.date.localeCompare(a.date));
+    return Array.from(merged.values()).sort(compareDiariesNewest);
   },
 
   /** 即時監聽多個使用者日記列表 */
@@ -1340,7 +1378,7 @@ export const diaryService = {
     const emit = () => {
       const merged = new Map<string, DiaryDoc & { id: string }>();
       Array.from(sources.values()).flat().forEach(item => merged.set(`${item.ownerId || userId}:${item.id}`, item));
-      callback(Array.from(merged.values()).sort((a, b) => b.date.localeCompare(a.date)));
+      callback(Array.from(merged.values()).sort(compareDiariesNewest));
     };
     unsubscribes.push(onSnapshot(query(getUserCollection(userId, 'diaries'), orderBy('date', 'desc')), snapshot => {
       const own = snapshotToOwnedArray<DiaryDoc>(snapshot, userId);

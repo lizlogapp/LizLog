@@ -126,7 +126,7 @@ export const appetiteToLabel = (value: number): string => {
     case 3: return '普通';
     case 4: return '偏好';
     case 5: return '好';
-    default: return '普通';
+    default: return '未檢測';
   }
 };
 

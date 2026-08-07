@@ -91,6 +91,7 @@ export default function DiaryScreen() {
       diary.date,
       ...(diary.pets || []).map(pet => pet.name),
       ...Object.values(diary.records || {}).map(value => String(value)),
+      ...(diary.pets || []).flatMap(pet => Object.values(pet.records || {}).map(value => String(value))),
       ...(diary.attachments || []).map(file => file.name),
     ].filter(Boolean).join(' ').toLocaleLowerCase('zh-Hant');
     return searchable.includes(normalizedQuery);
@@ -105,16 +106,19 @@ export default function DiaryScreen() {
     image: (d.thumbnailUrls?.[0] || d.thumbnailUrl || d.imageUrls?.[0] || d.imageUrl)
       ? { uri: d.thumbnailUrls?.[0] || d.thumbnailUrl || d.imageUrls?.[0] || d.imageUrl }
       : null,
-    pets: (d.pets || []).map(pet => ({
-      ...pet,
-      states: {
-        ...pet.states,
-        bask: Boolean(pet.states?.bask || Number.parseFloat(d.records?.bask || '') > 0),
-        feed: Boolean(pet.states?.feed || (d.records?.feed && d.records.feed !== '無')),
-        bath: Boolean(pet.states?.bath || Number.parseFloat(d.records?.bath || '') > 0),
-        poop: Boolean(pet.states?.poop || d.records?.poop === '有'),
-      },
-    })),
+    pets: (d.pets || []).map((pet, petIndex) => {
+      const records = pet.records || (petIndex === 0 ? d.records : undefined);
+      return {
+        ...pet,
+        states: {
+          ...pet.states,
+          bask: Boolean(pet.states?.bask || Number.parseFloat(records?.bask || '') > 0),
+          feed: Boolean(pet.states?.feed || (records?.feed && records.feed !== '無')),
+          bath: Boolean(pet.states?.bath || Number.parseFloat(records?.bath || '') > 0),
+          poop: Boolean(pet.states?.poop || records?.poop === '有'),
+        },
+      };
+    }),
   }));
 
   const diariesToShow = isDemoMode ? mockDiaries : mappedFirestoreDiaries;

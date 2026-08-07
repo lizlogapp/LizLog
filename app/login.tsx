@@ -39,6 +39,7 @@ import { paletteColors } from '../src/theme/themeColorSettings';
 import { fontFamilies, getFontSize } from '../src/theme/typographySettings';
 import * as Google from 'expo-auth-session/providers/google';
 import * as WebBrowser from 'expo-web-browser';
+import { GOOGLE_WEB_CLIENT_ID } from '../src/config/googleAuth';
 
 // 確保 OAuth 重導向後能正確關閉瀏覽器視窗
 WebBrowser.maybeCompleteAuthSession();
@@ -48,9 +49,6 @@ const PAGE_LEFT = PANEL_CONTENT_MARGIN + CONTENT_PAGE_MARGIN;
 const PAGE_TOP = STATUS_BAR_HEIGHT + PANEL_CONTENT_MARGIN + CONTENT_PAGE_MARGIN;
 const PAGE_WIDTH = W - (PANEL_CONTENT_MARGIN + CONTENT_PAGE_MARGIN) * 2;
 const PAGE_HEIGHT = H - STATUS_BAR_HEIGHT - TAB_BAR_HEIGHT - (PANEL_CONTENT_MARGIN + CONTENT_PAGE_MARGIN) * 2;
-
-// Google OAuth Web Client ID (從 Firebase 控制台取得)
-const GOOGLE_WEB_CLIENT_ID = '670714384705-co1kq6ahjop7ussdp6ve0h9ug6kv69am.apps.googleusercontent.com';
 
 export default function LoginScreen() {
   const insets = useSafeAreaInsets();
@@ -103,7 +101,12 @@ export default function LoginScreen() {
       // 成功後 _layout.tsx 會監聽 auth state 改變並自動導航
     } catch (error: any) {
       if (__DEV__) console.warn('Google sign-in error code:', error?.code ?? 'unknown');
-      Alert.alert('錯誤', 'Google 帳號登入失敗，請稍後再試');
+      Alert.alert(
+        'Google 登入未完成',
+        error?.code === 'auth/account-exists-with-different-credential'
+          ? '此信箱已有蜥日日記帳號。請先用原本的帳號密碼登入，再到「設定 > 帳號管理」綁定 Google。'
+          : 'Google 帳號登入失敗，請稍後再試。',
+      );
     } finally {
       setIsGoogleLoading(false);
     }

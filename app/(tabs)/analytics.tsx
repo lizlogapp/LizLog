@@ -66,6 +66,21 @@ export default function AnalyticsScreen() {
     return entry.pets?.find(pet => !pet.petId && pet.name === currentPetName);
   }, [currentPetId, currentPetName]);
 
+  const getPetRecordValue = React.useCallback((
+    entry: DiaryDoc,
+    key: keyof NonNullable<DiaryDoc['records']>,
+  ) => {
+    const petData = findPetData(entry);
+    if (!petData) return undefined;
+    if (petData.records && Object.prototype.hasOwnProperty.call(petData.records, key)) {
+      return petData.records[key];
+    }
+    const petCount = entry.petIds?.length || entry.pets?.length || 0;
+    const isPrimaryPet = entry.pets?.[0] === petData;
+    // 舊資料只有 top-level records；多寵物時這份資料只屬於第一張數據卡。
+    return petCount <= 1 || isPrimaryPet ? entry.records?.[key] : undefined;
+  }, [findPetData]);
+
   const petEntries = React.useMemo(() => diaryEntries
     .filter(entry => Boolean(findPetData(entry)))
     .sort((a, b) => (parseDiaryDate(b.date)?.getTime() || 0) - (parseDiaryDate(a.date)?.getTime() || 0)), [diaryEntries, findPetData]);
@@ -75,32 +90,50 @@ export default function AnalyticsScreen() {
     && String(value).trim() !== ''
     && String(value).trim() !== '-';
 
+  const isValidMetricValue = (
+    key: keyof NonNullable<DiaryDoc['records']>,
+    value: unknown,
+  ) => {
+    if (!hasValue(value)) return false;
+    const normalized = String(value).trim();
+    if (['temp', 'humid', 'bask', 'bath', 'appetite', 'weight', 'length'].includes(key)) {
+      const numeric = Number.parseFloat(normalized);
+      return Number.isFinite(numeric) && numeric >= 1;
+    }
+    if (key === 'feed') return normalized !== '無';
+    if (key === 'poop' || key === 'molt') return normalized === '有';
+    return true;
+  };
+
   const getMetric = (
     key: keyof NonNullable<DiaryDoc['records']>,
     unit = '',
     stateKey?: keyof NonNullable<DiaryDoc['pets'][number]['states']>,
   ) => {
     if (stateKey) {
-      const latest = petEntries[0];
+      const latest = petEntries.find(entry => (
+        isValidMetricValue(key, getPetRecordValue(entry, key))
+        || Boolean(findPetData(entry)?.states?.[stateKey])
+      ));
       if (!latest) return { value: '-', updatedAt: '-' };
-      const raw = latest.records?.[key];
-      if (hasValue(raw)) {
+      const raw = getPetRecordValue(latest, key);
+      if (isValidMetricValue(key, raw)) {
         const display = unit && Number.isFinite(Number.parseFloat(String(raw))) ? `${raw}${unit}` : String(raw);
         return { value: display, updatedAt: formatDiaryDate(latest.date) };
       }
       return {
-        value: findPetData(latest)?.states?.[stateKey] ? '有' : '無',
+        value: '有',
         updatedAt: formatDiaryDate(latest.date),
       };
     }
 
     const match = petEntries.find(entry => {
-      const raw = entry.records?.[key];
-      return hasValue(raw);
+      const raw = getPetRecordValue(entry, key);
+      return isValidMetricValue(key, raw);
     });
     if (!match) return { value: '-', updatedAt: '-' };
-    const raw = match.records?.[key];
-    if (hasValue(raw)) {
+    const raw = getPetRecordValue(match, key);
+    if (isValidMetricValue(key, raw)) {
       const display = unit && Number.isFinite(Number.parseFloat(String(raw))) ? `${raw}${unit}` : String(raw);
       return { value: display, updatedAt: formatDiaryDate(match.date) };
     }
@@ -126,19 +159,19 @@ export default function AnalyticsScreen() {
       };
     }
     const temperatureEntries = petEntries.map(entry => {
-      const recordValue = entry.records?.temp;
+      const recordValue = getPetRecordValue(entry, 'temp');
       return {
         entry,
         value: Number.parseFloat(String(hasValue(recordValue) ? recordValue : (findPetData(entry)?.temp ?? ''))),
       };
-    }).filter(item => Number.isFinite(item.value) && item.value > 0);
+    }).filter(item => Number.isFinite(item.value) && item.value >= 1);
     const humidityEntries = petEntries.map(entry => {
-      const recordValue = entry.records?.humid;
+      const recordValue = getPetRecordValue(entry, 'humid');
       return {
         entry,
         value: Number.parseFloat(String(hasValue(recordValue) ? recordValue : (findPetData(entry)?.humid ?? ''))),
       };
-    }).filter(item => Number.isFinite(item.value) && item.value >= 0);
+    }).filter(item => Number.isFinite(item.value) && item.value >= 1);
     const todayKey = new Date();
     const isTodayEntry = (entry: DiaryDoc) => {
       const parsed = parseDiaryDate(entry.date);
@@ -203,10 +236,10 @@ export default function AnalyticsScreen() {
       .map(entry => {
         const pet = findPetData(entry);
         const fallback = key === 'temp' ? pet?.temp : key === 'humid' ? pet?.humid : undefined;
-        const recordValue = entry.records?.[key];
-        const raw = hasValue(recordValue) ? recordValue : fallback;
+        const recordValue = getPetRecordValue(entry, key);
+        const raw = isValidMetricValue(key, recordValue) ? recordValue : fallback;
         let val = typeof raw === 'number' ? raw : Number.parseFloat(raw || '');
-        if (key === 'appetite' && val <= 0) val = Number.NaN;
+        if (val < 1) val = Number.NaN;
         const date = parseDiaryDate(entry.date);
         return {
           label: date ? `${date.getMonth() + 1}/${date.getDate()}` : entry.date,
@@ -562,9 +595,9 @@ export default function AnalyticsScreen() {
                       const stateKey: 'poop' | 'molt' = btn.text === '排便日曆' ? 'poop' : 'molt';
                       petEntries.forEach(entry => {
                         const petData = findPetData(entry);
-                        const recordValue = entry.records?.[stateKey];
+                        const recordValue = getPetRecordValue(entry, stateKey);
                         const hasRecordedEvent = recordValue === '有'
-                          || (Number.isFinite(Number.parseFloat(recordValue || '')) && Number.parseFloat(recordValue || '') > 0)
+                          || (Number.isFinite(Number.parseFloat(String(recordValue ?? ''))) && Number.parseFloat(String(recordValue ?? '')) > 0)
                           || Boolean(petData?.states?.[stateKey]);
                         if (hasRecordedEvent) {
                           const parsed = parseDiaryDate(entry.date);

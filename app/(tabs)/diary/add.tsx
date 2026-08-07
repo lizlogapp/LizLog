@@ -8,11 +8,11 @@ import { FloatingActionBar } from '../../../src/components/FloatingActionBar';
 import { BaseScreen } from '../../../src/components/common/BaseScreen';
 import Slider from '@react-native-community/slider';
 import { useAuth } from '../../../src/contexts/AuthContext';
-import { diaryService, petService, DiaryDoc, PetDoc } from '../../../src/services/firestoreService';
+import { diaryService, petService, DiaryDoc, DiaryRecords, PetDoc } from '../../../src/services/firestoreService';
 import { createImageVariants, IMAGE_POLICY } from '../../../src/services/imageService';
 import * as ImagePicker from 'expo-image-picker';
 import { sensorService } from '../../../src/services/sensorService';
-import { usePetSnapshot } from '../../../src/contexts/PetSnapshotContext';
+import { EMPTY_QUICK_PET_STATES, QuickPetStates, usePetSnapshot } from '../../../src/contexts/PetSnapshotContext';
 import DatePickerModal from '../../../src/components/DatePickerModal';
 import { getWeatherOption, WEATHER_OPTIONS } from '../../../src/data/weatherOptions';
 import { formatDiaryDate, normalizeDiaryDate, parseDiaryDate, toDiaryDateKey } from '../../../src/utils/diaryDate';
@@ -106,7 +106,7 @@ export default function AddDiaryScreen() {
   const { themeId, fontFamilyName } = useTheme();
   const theme = getThemeTokens(themeId);
   const { user } = useAuth();
-  const { snapshot } = usePetSnapshot();
+  const { activePetId, getSnapshot } = usePetSnapshot();
 
   // 色彩定義
   const labelColor = theme.primary;           // 色票/主色 用於標籤文字（溫度：、濕度：等）
@@ -117,6 +117,8 @@ export default function AddDiaryScreen() {
   // 寵物選單狀態
   const [petDocuments, setPetDocuments] = useState<(PetDoc & { id: string })[]>([]);
   const [selectedPetIds, setSelectedPetIds] = useState<string[]>([]);
+  const [quickStatesByPetId, setQuickStatesByPetId] = useState<Record<string, QuickPetStates>>({});
+  const [recordsByPetId, setRecordsByPetId] = useState<Record<string, DiaryRecords>>({});
   const [isPetDropdownVisible, setIsPetDropdownVisible] = useState(false);
 
   // 可編輯欄位
@@ -142,7 +144,6 @@ export default function AddDiaryScreen() {
   const [humid, setHumid] = useState('-');
   const [weight, setWeight] = useState('');
   const [length, setLength] = useState('');
-  const [hasIotDevice, setHasIotDevice] = useState(false);
   const [baskActive, setBaskActive] = useState(false);
   const [feedActive, setFeedActive] = useState(false);
   const [bathActive, setBathActive] = useState(false);
@@ -157,9 +158,8 @@ export default function AddDiaryScreen() {
   const [weatherIcon, setWeatherIcon] = useState('weather-sunny');
   const [isWeatherPickerVisible, setIsWeatherPickerVisible] = useState(false);
 
-  const selectedPetDocuments = selectedPetIds
-    .map(petId => petDocuments.find(pet => pet.id === petId))
-    .filter((pet): pet is PetDoc & { id: string } => Boolean(pet));
+  // 多寵物顯示與儲存順序固定依寵物選單順序，不受點選先後影響。
+  const selectedPetDocuments = petDocuments.filter(pet => selectedPetIds.includes(pet.id));
 
   const currentOwnerGroup = selectedPetDocuments[0]?.ownerId
     || petDocuments.find(pet => (pet.ownerId || user?.uid) === user?.uid)?.ownerId
@@ -185,7 +185,7 @@ export default function AddDiaryScreen() {
       setPetDocuments(writablePets);
 
       if (!isEditing && writablePets.length > 0) {
-        const defaultPet = writablePets.find(p => p.id === snapshot?.petId) || writablePets[0];
+        const defaultPet = writablePets.find(p => p.id === activePetId) || writablePets[0];
         setSelectedPetIds([defaultPet.id]);
       } else if (!isEditing && writablePets.length === 0) {
         router.replace('/(tabs)/pets');
@@ -226,6 +226,20 @@ export default function AddDiaryScreen() {
               entry.petId || writablePets.find(pet => pet.name === entry.name)?.id
             ))).filter((petId): petId is string => Boolean(petId));
             setSelectedPetIds(resolvedPetIds);
+            setQuickStatesByPetId(Object.fromEntries(doc.pets
+              .filter(entry => entry.petId)
+              .map(entry => [entry.petId as string, {
+                bask: Boolean(entry.states?.bask),
+                feed: Boolean(entry.states?.feed),
+                bath: Boolean(entry.states?.bath),
+                poop: Boolean(entry.states?.poop),
+              }])));
+            setRecordsByPetId(Object.fromEntries(doc.pets
+              .filter(entry => entry.petId)
+              .map((entry, index) => [
+                entry.petId as string,
+                entry.records || (index === 0 ? doc.records || {} : {}),
+              ])));
             const primaryPet = doc.pets[0];
             setBaskActive(Boolean(primaryPet.states?.bask || Number.parseFloat(doc.records?.bask || '') > 0));
             setFeedActive(Boolean(primaryPet.states?.feed || (doc.records?.feed && doc.records.feed !== '無')));
@@ -255,7 +269,7 @@ export default function AddDiaryScreen() {
       if (active) Alert.alert('讀取失敗', error instanceof Error ? error.message : '無法讀取日記資料。');
     });
     return () => { active = false; };
-  }, [user, isEditing, id, ownerId, snapshot?.petId]);
+  }, [user, isEditing, id, ownerId, activePetId]);
 
   React.useEffect(() => {
     const selectedPet = petDocuments.find(pet => pet.id === selectedPetIds[0]);
@@ -265,16 +279,16 @@ export default function AddDiaryScreen() {
     const hydrateSnapshot = async () => {
       const sensorId = await sensorService.resolveSensorId(selectedPet, petDocuments);
       if (!active) return;
-      setHasIotDevice(Boolean(sensorId));
       if (isEditing) return;
 
-      if (snapshot?.petId === selectedPet.id) {
-        setTemp(snapshot.temp);
-        setHumid(snapshot.humid);
-        setBaskActive(snapshot.states.bask);
-        setFeedActive(snapshot.states.feed);
-        setBathActive(snapshot.states.bath);
-        setPoopActive(snapshot.states.poop);
+      const petSnapshot = getSnapshot(selectedPet.id);
+      if (petSnapshot) {
+        setTemp(petSnapshot.temp);
+        setHumid(petSnapshot.humid);
+        setBaskActive(petSnapshot.states.bask);
+        setFeedActive(petSnapshot.states.feed);
+        setBathActive(petSnapshot.states.bath);
+        setPoopActive(petSnapshot.states.poop);
         return;
       }
 
@@ -301,7 +315,87 @@ export default function AddDiaryScreen() {
       }
     });
     return () => { active = false; };
-  }, [isEditing, petDocuments, selectedPetIds, snapshot]);
+  }, [getSnapshot, isEditing, petDocuments, selectedPetIds]);
+
+  const getDiaryQuickStates = (petId: string) => (
+    quickStatesByPetId[petId] || getSnapshot(petId)?.states || EMPTY_QUICK_PET_STATES
+  );
+
+  const setDiaryPetState = (petId: string, key: keyof QuickPetStates, value: boolean) => {
+    if (!petId) return;
+    setQuickStatesByPetId(current => {
+      const previous = current[petId] || getSnapshot(petId)?.states || EMPTY_QUICK_PET_STATES;
+      return {
+        ...current,
+        [petId]: { ...previous, [key]: value },
+      };
+    });
+    if (petId !== selectedPetDocuments[0]?.id) return;
+    if (key === 'bask') setBaskActive(value);
+    else if (key === 'feed') setFeedActive(value);
+    else if (key === 'bath') setBathActive(value);
+    else setPoopActive(value);
+  };
+
+  const toggleDiaryPetState = (petId: string, key: keyof QuickPetStates) => {
+    setDiaryPetState(petId, key, !getDiaryQuickStates(petId)[key]);
+  };
+
+  const sharedRecords = (): DiaryRecords => ({
+    temp,
+    humid,
+    weight,
+    length,
+    bask: baskMinutes,
+    bath: bathMinutes,
+    poop: poopState,
+    molt: moltState,
+    feed: feedState,
+    appetite,
+  });
+
+  const getRecordsForPet = (petId: string, petIndex: number): DiaryRecords => {
+    const saved = recordsByPetId[petId];
+    if (saved) return saved;
+    if (petIndex === 0) return sharedRecords();
+    const petSnapshot = getSnapshot(petId);
+    const states = getDiaryQuickStates(petId);
+    return {
+      temp: petSnapshot?.temp || '-',
+      humid: petSnapshot?.humid || '-',
+      weight: '-',
+      length: '-',
+      bask: states.bask ? '1' : '-',
+      bath: states.bath ? '1' : '-',
+      poop: states.poop ? '有' : '無',
+      molt: '無',
+      feed: states.feed ? '有' : '無',
+      appetite: 0,
+    };
+  };
+
+  const updateRecordsForPet = <K extends keyof DiaryRecords>(
+    petId: string,
+    petIndex: number,
+    key: K,
+    value: DiaryRecords[K],
+  ) => {
+    setRecordsByPetId(current => ({
+      ...current,
+      [petId]: { ...getRecordsForPet(petId, petIndex), ...current[petId], [key]: value },
+    }));
+    if (petIndex !== 0) return;
+    if (key === 'temp') setTemp(String(value ?? '-'));
+    else if (key === 'humid') setHumid(String(value ?? '-'));
+    else if (key === 'weight') setWeight(String(value ?? ''));
+    else if (key === 'length') setLength(String(value ?? ''));
+    else if (key === 'bask') setBaskMinutes(String(value ?? ''));
+    else if (key === 'bath') setBathMinutes(String(value ?? ''));
+    else if (key === 'poop') setPoopState(String(value ?? '無'));
+    else if (key === 'molt') setMoltState(String(value ?? '無'));
+    else if (key === 'feed') setFeedState(String(value ?? '無'));
+    else if (key === 'appetite') setAppetite(Number(value) || 0);
+  };
 
   const togglePet = (petId: string) => {
     const pet = petDocuments.find(item => item.id === petId);
@@ -407,6 +501,21 @@ export default function AddDiaryScreen() {
       .filter(file => file.url)
       .map(file => ({ name: file.name, url: file.url as string, mimeType: file.mimeType }));
     const normalizedRecord = (value: string | undefined) => value?.trim() || '-';
+    const normalizedPetRecords = (petId: string, petIndex: number): DiaryRecords => {
+      const records = getRecordsForPet(petId, petIndex);
+      return {
+        temp: normalizedRecord(records.temp),
+        humid: normalizedRecord(records.humid),
+        weight: normalizedRecord(records.weight),
+        length: normalizedRecord(records.length),
+        bask: normalizedRecord(records.bask),
+        bath: normalizedRecord(records.bath),
+        poop: records.poop || '無',
+        molt: records.molt || '無',
+        feed: normalizedRecord(records.feed),
+        appetite: Number(records.appetite) || 0,
+      };
+    };
     const newData: Omit<DiaryDoc, 'id'> = {
       status: 'published',
       date: dateKey,
@@ -418,19 +527,17 @@ export default function AddDiaryScreen() {
       imageUrls: remoteDiaryImages.map(image => image.uri),
       thumbnailUrls: remoteDiaryImages.map(image => image.thumbnailUrl || ''),
       attachments: remoteAttachments,
-      petIds: selectedPetIds,
-      pets: selectedPetDocuments.map(pet => ({
+      petIds: selectedPetDocuments.map(pet => pet.id),
+      pets: selectedPetDocuments.map((pet, petIndex) => ({
         petId: pet.id,
         name: pet.name,
         temp: hasSinglePet ? temp : '-',
         humid: hasSinglePet ? humid : '-',
         states: {
-          bask: baskActive,
-          feed: feedActive,
-          bath: bathActive,
-          poop: poopActive,
+          ...getDiaryQuickStates(pet.id),
           molt: moltActive,
         },
+        records: normalizedPetRecords(pet.id, petIndex),
       })),
       records: {
         temp: hasSinglePet ? normalizedRecord(temp) : '-',
@@ -623,159 +730,152 @@ export default function AddDiaryScreen() {
               )}
 
               {/* 簡化數據列（溫度 + 濕度 + 狀態圖標） */}
-              <View style={styles.metricRow}>
-                {(hasIotDevice || (isEditing && (temp !== '-' || humid !== '-'))) && (
-                  <>
-                    <Text style={[styles.metricText, { color: valueColor, fontFamily: fontFamilyName }]}>{temp}℃</Text>
-                    <Text style={[styles.metricText, { color: valueColor, fontFamily: fontFamilyName }]}>{humid}%</Text>
-                  </>
-                )}
-                <View style={styles.metricIconsBlock}>
-                  <Pressable style={styles.stateIconButton} accessibilityRole="button" accessibilityLabel="切換日照狀態" onPress={() => setBaskActive(value => !value)}>
-                    <Image source={baskActive ? require('../../../assets/icons/category-basking-active.png') : require('../../../assets/icons/category-basking-default.png')} style={[styles.stateIcon, { tintColor: baskActive ? theme.primary : valueColor + '60' }]} />
-                  </Pressable>
-                  <Pressable style={styles.stateIconButton} accessibilityRole="button" accessibilityLabel="切換飲食狀態" onPress={() => setFeedActive(value => !value)}>
-                    <Image source={feedActive ? require('../../../assets/icons/category-food-active.png') : require('../../../assets/icons/category-food-default.png')} style={[styles.stateIcon, { tintColor: feedActive ? theme.primary : valueColor + '60' }]} />
-                  </Pressable>
-                  <Pressable style={styles.stateIconButton} accessibilityRole="button" accessibilityLabel="切換泡澡狀態" onPress={() => setBathActive(value => !value)}>
-                    <Image source={bathActive ? require('../../../assets/icons/category-bath-active.png') : require('../../../assets/icons/category-bath-default.png')} style={[styles.stateIcon, { tintColor: bathActive ? theme.primary : valueColor + '60' }]} />
-                  </Pressable>
-                  <Pressable style={styles.stateIconButton} accessibilityRole="button" accessibilityLabel="切換排便狀態" onPress={() => setPoopActive(value => !value)}>
-                    <Image source={poopActive ? require('../../../assets/icons/category-poop-active.png') : require('../../../assets/icons/category-poop-default.png')} style={[styles.stateIcon, { tintColor: poopActive ? theme.primary : valueColor + '60' }]} />
-                  </Pressable>
-                </View>
+              <View style={styles.metricRows}>
+                {selectedPetDocuments.map((pet, petIndex) => {
+                  const states = getDiaryQuickStates(pet.id);
+                  const petSnapshot = getSnapshot(pet.id);
+                  const showSensorValues = Boolean(petSnapshot?.hasIotDevice)
+                    || (petIndex === 0 && isEditing && (temp !== '-' || humid !== '-'));
+                  return (
+                    <View key={pet.id} style={styles.metricRow}>
+                      {selectedPetDocuments.length > 1 && (
+                        <Text style={[styles.metricPetName, { color: titleValueColor, fontFamily: fontFamilyName }]} numberOfLines={1}>
+                          {pet.name}
+                        </Text>
+                      )}
+                      {showSensorValues && (
+                        <View style={styles.metricValuesBlock}>
+                          <Text style={[styles.metricText, { color: valueColor, fontFamily: fontFamilyName }]}>{petIndex === 0 ? temp : petSnapshot?.temp || '-'}℃</Text>
+                          <Text style={[styles.metricText, { color: valueColor, fontFamily: fontFamilyName }]}>{petIndex === 0 ? humid : petSnapshot?.humid || '-'}%</Text>
+                        </View>
+                      )}
+                      <View style={styles.metricIconsBlock}>
+                        <Pressable style={styles.stateIconButton} accessibilityRole="button" accessibilityLabel={`切換${pet.name}日照狀態`} onPress={() => toggleDiaryPetState(pet.id, 'bask')}>
+                          <Image source={states.bask ? require('../../../assets/icons/category-basking-active.png') : require('../../../assets/icons/category-basking-default.png')} style={[styles.stateIcon, { tintColor: states.bask ? theme.primary : valueColor + '60' }]} />
+                        </Pressable>
+                        <Pressable style={styles.stateIconButton} accessibilityRole="button" accessibilityLabel={`切換${pet.name}飲食狀態`} onPress={() => toggleDiaryPetState(pet.id, 'feed')}>
+                          <Image source={states.feed ? require('../../../assets/icons/category-food-active.png') : require('../../../assets/icons/category-food-default.png')} style={[styles.stateIcon, { tintColor: states.feed ? theme.primary : valueColor + '60' }]} />
+                        </Pressable>
+                        <Pressable style={styles.stateIconButton} accessibilityRole="button" accessibilityLabel={`切換${pet.name}泡澡狀態`} onPress={() => toggleDiaryPetState(pet.id, 'bath')}>
+                          <Image source={states.bath ? require('../../../assets/icons/category-bath-active.png') : require('../../../assets/icons/category-bath-default.png')} style={[styles.stateIcon, { tintColor: states.bath ? theme.primary : valueColor + '60' }]} />
+                        </Pressable>
+                        <Pressable style={styles.stateIconButton} accessibilityRole="button" accessibilityLabel={`切換${pet.name}排便狀態`} onPress={() => toggleDiaryPetState(pet.id, 'poop')}>
+                          <Image source={states.poop ? require('../../../assets/icons/category-poop-active.png') : require('../../../assets/icons/category-poop-default.png')} style={[styles.stateIcon, { tintColor: states.poop ? theme.primary : valueColor + '60' }]} />
+                        </Pressable>
+                      </View>
+                    </View>
+                  );
+                })}
               </View>
             </View>
           </View>
 
-          {/* ===== 卡片二：詳細狀態紀錄 ===== */}
-          <View style={[styles.detailCard, { backgroundColor: theme.background }]}>
-            {recordItems.map((item, idx) => {
-              const IconComp = item.icon;
-              return (
-                <View key={idx} style={{ gap: 8, width: '100%' }}>
-                  <View style={styles.recordRow}>
-                    <IconComp width={20} height={20} color={labelColor} />
-                    <Text style={[styles.recordLabel, { color: labelColor, fontFamily: fontFamilyName }]}>
-                      {item.label}：
-                    </Text>
-                    {['排便', '蛻皮'].includes(item.label) ? (
-                      <View style={{ flexDirection: 'row', gap: 6, flex: 1, alignItems: 'center', justifyContent: 'flex-start' }}>
-                        {['無', '有'].map((opt) => (
-                          <Pressable
-                            key={opt}
-                            style={[
-                              { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 12, borderWidth: 1, width: 64, alignItems: 'center' },
-                              (item.label === '排便' ? poopState : moltState) === opt
-                                ? { backgroundColor: theme.accentHot + '15', borderColor: theme.accentHot }
-                                : { backgroundColor: theme.primary + '05', borderColor: theme.primary + '20' }
-                            ]}
-                            onPress={() => {
-                              if (item.label === '排便') {
-                                setPoopState(opt);
-                                setPoopActive(opt === '有');
-                              } else {
-                                setMoltState(opt);
-                                setMoltActive(opt === '有');
-                              }
+          {/* ===== 卡片二：每隻寵物各自的詳細狀態紀錄 ===== */}
+          {selectedPetDocuments.map((pet, petIndex) => {
+            const petRecords = getRecordsForPet(pet.id, petIndex);
+            const appetiteValue = Number(petRecords.appetite) || 0;
+            return (
+              <View key={`records-${pet.id}`} style={[styles.detailCard, { backgroundColor: theme.background }]}>
+                {selectedPetDocuments.length > 1 && (
+                  <Text style={[styles.metricPetName, { color: titleValueColor, fontFamily: fontFamilyName, marginBottom: 8 }]}>{pet.name}</Text>
+                )}
+                {recordItems.map((item, idx) => {
+                  const IconComp = item.icon;
+                  const stateKey = item.label === '排便' ? 'poop' : 'molt';
+                  const numericKey: keyof DiaryRecords = item.label === '泡澡' ? 'bath'
+                    : item.label === '日照' ? 'bask'
+                      : item.label === '體重' ? 'weight'
+                        : item.label === '身長' ? 'length'
+                          : item.label === '溫度' ? 'temp' : 'humid';
+                  return (
+                    <View key={idx} style={{ gap: 8, width: '100%' }}>
+                      <View style={styles.recordRow}>
+                        <IconComp width={20} height={20} color={labelColor} />
+                        <Text style={[styles.recordLabel, { color: labelColor, fontFamily: fontFamilyName }]}>{item.label}：</Text>
+                        {['排便', '蛻皮'].includes(item.label) ? (
+                          <View style={{ flexDirection: 'row', gap: 6, flex: 1, alignItems: 'center', justifyContent: 'flex-start' }}>
+                            {['無', '有'].map(opt => (
+                              <Pressable
+                                key={opt}
+                                style={[
+                                  { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 12, borderWidth: 1, width: 64, alignItems: 'center' },
+                                  (petRecords[stateKey] || '無') === opt
+                                    ? { backgroundColor: theme.accentHot + '15', borderColor: theme.accentHot }
+                                    : { backgroundColor: theme.primary + '05', borderColor: theme.primary + '20' },
+                                ]}
+                                onPress={() => {
+                                  updateRecordsForPet(pet.id, petIndex, stateKey, opt);
+                                  if (stateKey === 'poop') setDiaryPetState(pet.id, 'poop', opt === '有');
+                                }}
+                              >
+                                <Text style={{ fontSize: getFontSize(13, 'medium'), fontFamily: fontFamilyName, color: (petRecords[stateKey] || '無') === opt ? theme.accentHot : theme.primary + 'A0', fontWeight: (petRecords[stateKey] || '無') === opt ? '600' : '500' }}>{opt}</Text>
+                              </Pressable>
+                            ))}
+                          </View>
+                        ) : item.label === '飲食' ? (
+                          <TextInput
+                            style={[styles.recordValue, { color: valueColor, fontFamily: fontFamilyName, flex: 1, textAlign: 'left', padding: 0, paddingLeft: 24, margin: 0, minHeight: 24 }]}
+                            value={petRecords.feed || ''}
+                            onChangeText={value => {
+                              updateRecordsForPet(pet.id, petIndex, 'feed', value);
+                              setDiaryPetState(pet.id, 'feed', Boolean(value.trim() && value.trim() !== '無'));
                             }}
-                          >
-                            <Text style={{ fontSize: getFontSize(13, 'medium'), fontFamily: fontFamilyName, color: (item.label === '排便' ? poopState : moltState) === opt ? theme.accentHot : theme.primary + 'A0', fontWeight: (item.label === '排便' ? poopState : moltState) === opt ? '600' : '500' }}>
-                              {opt}
+                            multiline
+                            selectTextOnFocus
+                            placeholder="-"
+                            placeholderTextColor={valueColor + '80'}
+                          />
+                        ) : ['泡澡', '日照', '體重', '身長', '溫度', '濕度'].includes(item.label) ? (
+                          <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }}>
+                            <TextInput
+                              style={[styles.recordValue, { color: valueColor, fontFamily: fontFamilyName, width: 64, textAlign: 'center', padding: 0, margin: 0, marginRight: 6 }]}
+                              value={String(petRecords[numericKey] ?? '')}
+                              onChangeText={value => {
+                                updateRecordsForPet(pet.id, petIndex, numericKey, value);
+                                if (numericKey === 'bath') setDiaryPetState(pet.id, 'bath', Number.parseFloat(value) > 0);
+                                if (numericKey === 'bask') setDiaryPetState(pet.id, 'bask', Number.parseFloat(value) > 0);
+                              }}
+                              keyboardType="numeric"
+                              selectTextOnFocus
+                              placeholder="-"
+                              placeholderTextColor={valueColor + '80'}
+                            />
+                            <Text style={[styles.recordValue, { color: labelColor, fontFamily: fontFamilyName }]}>
+                              {item.label === '泡澡' || item.label === '日照' ? '分鐘' : item.label === '體重' ? '公克' : item.label === '身長' ? '公分' : item.label === '溫度' ? '℃' : '%'}
                             </Text>
-                          </Pressable>
-                        ))}
+                          </View>
+                        ) : (
+                          <Text style={[styles.recordValue, { color: valueColor, fontFamily: fontFamilyName }]}>{item.value}</Text>
+                        )}
                       </View>
-                    ) : item.label === '飲食' ? (
-                      <TextInput
-                        style={[styles.recordValue, { color: valueColor, fontFamily: fontFamilyName, flex: 1, textAlign: 'left', padding: 0, paddingLeft: 24, margin: 0, minHeight: 24 }]}
-                        value={feedState}
-                        onChangeText={value => {
-                          setFeedState(value);
-                          setFeedActive(Boolean(value.trim() && value.trim() !== '無'));
-                        }}
-                        multiline
-                        selectTextOnFocus
-                        placeholder="-"
-                        placeholderTextColor={valueColor + '80'}
-                      />
-                    ) : ['泡澡', '日照', '體重', '身長', '溫度', '濕度'].includes(item.label) ? (
-                      <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }}>
-                        <TextInput
-                          style={[styles.recordValue, { color: valueColor, fontFamily: fontFamilyName, width: 64, textAlign: 'center', padding: 0, margin: 0, marginRight: 6 }]}
-                          value={
-                            item.label === '泡澡' ? bathMinutes :
-                            item.label === '日照' ? baskMinutes :
-                            item.label === '體重' ? weight :
-                            item.label === '身長' ? length :
-                            item.label === '溫度' ? temp :
-                            humid
-                          }
-                          onChangeText={value => {
-                            if (item.label === '泡澡') {
-                              setBathMinutes(value);
-                              setBathActive(Number.parseFloat(value) > 0);
-                            } else if (item.label === '日照') {
-                              setBaskMinutes(value);
-                              setBaskActive(Number.parseFloat(value) > 0);
-                            } else if (item.label === '體重') {
-                              setWeight(value);
-                            } else if (item.label === '身長') {
-                              setLength(value);
-                            } else if (item.label === '溫度') {
-                              setTemp(value);
-                            } else {
-                              setHumid(value);
-                            }
-                          }}
-                          keyboardType="numeric"
-                          selectTextOnFocus
-                          placeholder="-"
-                          placeholderTextColor={valueColor + '80'}
-                        />
-                        <Text style={[styles.recordValue, { color: labelColor, fontFamily: fontFamilyName }]}>
-                          {item.label === '泡澡' || item.label === '日照' ? '分鐘' :
-                           item.label === '體重' ? '公克' :
-                           item.label === '身長' ? '公分' :
-                           item.label === '溫度' ? '℃' :
-                           '%'}
-                        </Text>
-                      </View>
-                    ) : (
-                      <Text style={[styles.recordValue, { color: valueColor, fontFamily: fontFamilyName }]}>
-                        {item.value}
-                      </Text>
-                    )}
-                  </View>
-
-                  {/* 如果是飲食，新增食慾選項拉霸 */}
-                  {item.label === '飲食' && (
-                    <View style={[styles.recordRow, { marginTop: 4, marginBottom: 4, width: '100%', paddingRight: 0, marginRight: -16 }]}>
-                      {/* Icon 佔位 */}
-                      <View style={{ width: 20 }} />
-                      <Text style={[styles.recordLabel, { color: labelColor, fontFamily: fontFamilyName }]}>食慾：</Text>
-                      <View style={styles.sliderRow}>
-                        <Slider
-                          style={{ flex: 1, height: 40, marginLeft: 16, marginRight: 16 }}
-                          minimumValue={1}
-                          maximumValue={5}
-                          step={1}
-                          value={appetite === 0 ? 3 : appetite}
-                          onValueChange={setAppetite}
-                          minimumTrackTintColor={appetite === 0 ? '#CCCCCC' : appetite === 1 ? '#FF3B30' : appetite === 2 ? '#FF9500' : '#34C759'}
-                          maximumTrackTintColor={theme.primary + '30'}
-                          thumbTintColor={appetite === 0 ? '#CCCCCC' : appetite === 1 ? '#FF3B30' : appetite === 2 ? '#FF9500' : '#34C759'}
-                        />
-                        <Text style={[styles.recordLabel, { color: appetite === 0 ? labelColor + '80' : labelColor, fontFamily: fontFamilyName, width: 52, textAlign: 'center' }]}>
-                          {appetite === 0 ? '未檢測' : appetite === 1 ? '差' : appetite === 2 ? '偏差' : appetite === 3 ? '普通' : appetite === 4 ? '偏好' : '好'}
-                        </Text>
-                      </View>
+                      {item.label === '飲食' && (
+                        <View style={[styles.recordRow, { marginTop: 4, marginBottom: 4, width: '100%', paddingRight: 0, marginRight: -16 }]}>
+                          <View style={{ width: 20 }} />
+                          <Text style={[styles.recordLabel, { color: labelColor, fontFamily: fontFamilyName }]}>食慾：</Text>
+                          <View style={styles.sliderRow}>
+                            <Slider
+                              style={{ flex: 1, height: 40, marginLeft: 16, marginRight: 16 }}
+                              minimumValue={1}
+                              maximumValue={5}
+                              step={1}
+                              value={appetiteValue === 0 ? 3 : appetiteValue}
+                              onValueChange={value => updateRecordsForPet(pet.id, petIndex, 'appetite', value)}
+                              minimumTrackTintColor={appetiteValue === 0 ? '#CCCCCC' : appetiteValue === 1 ? '#FF3B30' : appetiteValue === 2 ? '#FF9500' : '#34C759'}
+                              maximumTrackTintColor={theme.primary + '30'}
+                              thumbTintColor={appetiteValue === 0 ? '#CCCCCC' : appetiteValue === 1 ? '#FF3B30' : appetiteValue === 2 ? '#FF9500' : '#34C759'}
+                            />
+                            <Text style={[styles.recordLabel, { color: appetiteValue === 0 ? labelColor + '80' : labelColor, fontFamily: fontFamilyName, width: 52, textAlign: 'center' }]}>
+                              {appetiteValue === 0 ? '未檢測' : appetiteValue === 1 ? '差' : appetiteValue === 2 ? '偏差' : appetiteValue === 3 ? '普通' : appetiteValue === 4 ? '偏好' : '好'}
+                            </Text>
+                          </View>
+                        </View>
+                      )}
                     </View>
-                  )}
-                </View>
-              );
-            })}
-          </View>
+                  );
+                })}
+              </View>
+            );
+          })}
 
           {/* ===== 卡片三：寫日記（可展開） ===== */}
           {!isDiaryExpanded && <Pressable
@@ -825,7 +925,7 @@ export default function AddDiaryScreen() {
               style={[styles.petPickerCard, { backgroundColor: theme.background }]}
               onPress={event => event.stopPropagation()}
             >
-              <Text style={[styles.petPickerTitle, { color: theme.primary, fontFamily: fontFamilyName }]}>選擇寵物（可多選）</Text>
+              <Text style={[styles.petPickerTitle, { color: theme.primary, fontFamily: fontFamilyName }]}>選擇寵物</Text>
               <ScrollView
                 style={styles.petDropdownScroll}
                 contentContainerStyle={styles.petPickerList}
@@ -852,7 +952,7 @@ export default function AddDiaryScreen() {
                     onPress={() => togglePet(pet.id)}
                   >
                     <Text style={[styles.petDropdownItemText, { color: theme.primary, fontFamily: fontFamilyName }]}>
-                      {selectedPetIds.includes(pet.id) ? `✓ ${pet.name}` : pet.name}
+                      {pet.name}
                     </Text>
                   </Pressable>
                 ))}
@@ -1131,11 +1231,24 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     minWidth: 120,
   },
+  metricRows: {
+    width: '100%',
+    gap: 8,
+  },
   metricRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: 12,
+    gap: 6,
+  },
+  metricPetName: {
+    width: 64,
+    fontSize: getFontSize(13, 'small'),
+    fontWeight: '600',
+  },
+  metricValuesBlock: {
+    flexDirection: 'row',
     gap: 6,
   },
   metricText: {
@@ -1277,7 +1390,8 @@ const styles = StyleSheet.create({
     lineHeight: buildLineHeight(getFontSize(16, 'medium')),
     minHeight: 44,
     padding: 0,
-    textAlign: 'justify',
+    // Android 的可編輯文字使用左右對齊時，游標可能會落在中文字形中央。
+    textAlign: 'left',
   },
 
   // ===== 上傳展開卡片 =====

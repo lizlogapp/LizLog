@@ -265,8 +265,6 @@ function RootLayoutInner() {
     router.push({
       pathname: '/(tabs)/pets/reminder',
       params: {
-        from: 'notification',
-        reminderId: route.reminderId,
         ...(route.petId ? { id: route.petId } : {}),
         ...(route.ownerId ? { ownerId: route.ownerId } : {}),
       },

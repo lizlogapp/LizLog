@@ -18,7 +18,7 @@ import { paletteColors } from '../../src/theme/themeColorSettings';
 import { useAuth } from '../../src/contexts/AuthContext';
 import { diaryService, petService, reminderService, PetDoc } from '../../src/services/firestoreService';
 import { sensorService, SensorData } from '../../src/services/sensorService';
-import { usePetSnapshot } from '../../src/contexts/PetSnapshotContext';
+import { EMPTY_QUICK_PET_STATES, usePetSnapshot } from '../../src/contexts/PetSnapshotContext';
 import { getWeatherOption } from '../../src/data/weatherOptions';
 import {
   STATUS_BAR_HEIGHT,
@@ -77,7 +77,7 @@ export default function HomeScreen() {
   const theme = getThemeTokens(themeId);
   const router = useRouter();
   const { user } = useAuth();
-  const { setSnapshot } = usePetSnapshot();
+  const { getSnapshot, setPetSnapshot, setActivePetId } = usePetSnapshot();
 
   const [loadingComplete, setLoadingComplete] = useState(true);
   const [allPets, setAllPets] = useState<(PetDoc & { id: string })[]>([]); 
@@ -258,41 +258,47 @@ export default function HomeScreen() {
     );
   };
 
-  const [activeIcons, setActiveIcons] = useState({
-    basking: false,
-    food: false,
-    bath: false,
-    poop: false,
-  });
-
-  const toggleIcon = (key: keyof typeof activeIcons) => {
-    setActiveIcons((prev) => ({ ...prev, [key]: !prev[key] }));
+  const currentQuickStates = currentPet
+    ? getSnapshot(currentPet.id)?.states || EMPTY_QUICK_PET_STATES
+    : EMPTY_QUICK_PET_STATES;
+  const activeIcons = {
+    basking: currentQuickStates.bask,
+    food: currentQuickStates.feed,
+    bath: currentQuickStates.bath,
+    poop: currentQuickStates.poop,
   };
 
-  useEffect(() => {
-    setActiveIcons({ basking: false, food: false, bath: false, poop: false });
-  }, [currentPet?.id]);
-
-  useEffect(() => {
-    if (!currentPet) {
-      setSnapshot(null);
-      return;
-    }
-
-    setSnapshot({
+  const toggleIcon = (key: keyof typeof activeIcons) => {
+    if (!currentPet) return;
+    const stateKey = key === 'basking' ? 'bask' : key === 'food' ? 'feed' : key;
+    setPetSnapshot({
       petId: currentPet.id,
       ownerId: currentPet.ownerId || user?.uid || '',
       hasIotDevice: Boolean(currentPet.sensorId || currentPet.sharedSensorPetId),
       temp: sensorData ? sensorData.temperature.toFixed(1) : '-',
       humid: sensorData ? sensorData.humidity.toFixed(0) : '-',
       states: {
-        bask: activeIcons.basking,
-        feed: activeIcons.food,
-        bath: activeIcons.bath,
-        poop: activeIcons.poop,
+        ...currentQuickStates,
+        [stateKey]: !currentQuickStates[stateKey],
       },
     });
-  }, [activeIcons, currentPet, sensorData, setSnapshot, user?.uid]);
+  };
+
+  useEffect(() => {
+    if (!currentPet) {
+      setActivePetId(null);
+      return;
+    }
+    setActivePetId(currentPet.id);
+    setPetSnapshot({
+      petId: currentPet.id,
+      ownerId: currentPet.ownerId || user?.uid || '',
+      hasIotDevice: Boolean(currentPet.sensorId || currentPet.sharedSensorPetId),
+      temp: sensorData ? sensorData.temperature.toFixed(1) : '-',
+      humid: sensorData ? sensorData.humidity.toFixed(0) : '-',
+      states: getSnapshot(currentPet.id)?.states || EMPTY_QUICK_PET_STATES,
+    });
+  }, [currentPet, getSnapshot, sensorData, setActivePetId, setPetSnapshot, user?.uid]);
 
   return (
     <View style={styles.container}>
@@ -817,8 +823,8 @@ const styles = StyleSheet.create({
     width: 90,
     justifyContent: 'center',
     alignItems: 'center',
-    paddingVertical: 12,
-    gap: 4,
+    paddingVertical: 18,
+    gap: 11,
   },
   diaryActiveRight: {
     flex: 1, // 讓右側影像完全吞噬剩下的全部空間
@@ -839,6 +845,6 @@ const styles = StyleSheet.create({
     width: 24,
     height: 24,
     resizeMode: 'contain',
-    marginTop: 2,
+    marginTop: 3,
   },
 });

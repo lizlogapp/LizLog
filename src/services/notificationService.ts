@@ -117,7 +117,8 @@ export async function getNotificationPreferences(): Promise<NotificationPreferen
   try {
     const parsed = JSON.parse(value) as Partial<NotificationPreferences>;
     return {
-      reminderEnabled: parsed.reminderEnabled ?? true,
+      // Build 11 起不再提供獨立的 App 內提醒總開關；提醒只跟隨系統通知。
+      reminderEnabled: true,
       systemEnabled: parsed.systemEnabled ?? false,
       // 舊資料沒有 configured 欄位時，不可誤判成使用者已主動關閉；
       // Build 8 可在 OS 已授權時安全地重新對齊狀態。
@@ -198,7 +199,7 @@ export function getNotificationScheduleFailureCopy(
     case 'system-disabled':
       return {
         title: '提醒已儲存',
-        message: '請先在 App 的「設定 > 通知設定」開啟提醒與系統通知，之後會自動排程。',
+        message: '請先在「設定 > 個人化設定」開啟系統通知，之後會自動排程。',
         shouldOpenSystemSettings: false,
       };
     case 'invalid-time':
@@ -271,7 +272,16 @@ async function cancelScheduledIdentifiers(identifiers: string[]): Promise<string
 async function cancelReminderNotificationUnlocked(ownerId: string, reminderId: string) {
   const key = `${ownerId}:${reminderId}`;
   const scheduleMap = await readScheduleMap();
-  const identifiers = scheduleMap[key] || [];
+  // 舊版本可能在 native 排程成功後、AsyncStorage 寫回前中斷，留下 map 不知道的孤兒通知。
+  // 除了 map 內識別碼，也以 notification data 掃描同一張提醒，確保關閉／刪除能完整清掉。
+  const scheduledRequests = await Notifications.getAllScheduledNotificationsAsync();
+  const nativeIdentifiers = scheduledRequests
+    .filter(request => {
+      const data = request.content.data;
+      return data?.ownerId === ownerId && data?.reminderId === reminderId;
+    })
+    .map(request => request.identifier);
+  const identifiers = Array.from(new Set([...(scheduleMap[key] || []), ...nativeIdentifiers]));
   const failedIdentifiers = await cancelScheduledIdentifiers(identifiers);
   if (failedIdentifiers.length > 0) scheduleMap[key] = failedIdentifiers;
   else delete scheduleMap[key];
@@ -448,7 +458,7 @@ async function scheduleReminderNotificationUnlocked(
   },
 ): Promise<NotificationScheduleResult> {
   const preferences = knownState?.preferences ?? await getNotificationPreferences();
-  if (!preferences.reminderEnabled || !reminder.isOn) {
+  if (!reminder.isOn) {
     await cancelReminderNotificationUnlocked(ownerId, reminder.id);
     return {
       scheduled: false,
@@ -659,24 +669,25 @@ export async function synchronizeReminderNotifications(
       getNotificationPreferences(),
       getNotificationPermissionState(),
     ]);
-    let preferences = storedPreferences;
+    let preferences = storedPreferences.reminderEnabled
+      ? storedPreferences
+      : { ...storedPreferences, reminderEnabled: true, reminderConfigured: true };
     if (permissionState.granted
-      && !storedPreferences.systemConfigured
-      && !storedPreferences.systemEnabled) {
+      && !preferences.systemConfigured
+      && !preferences.systemEnabled) {
       // 舊版未記錄「是否由使用者設定」。OS 已授權時只自動採用一次；
       // systemConfigured=true 的明確關閉偏好永遠不會被覆寫。
       preferences = {
-        ...storedPreferences,
+        ...preferences,
         systemEnabled: true,
         systemConfigured: true,
       };
-      await saveNotificationPreferences(preferences);
     }
-    const preferencesEnabled = preferences.reminderEnabled && preferences.systemEnabled;
+    if (preferences !== storedPreferences) await saveNotificationPreferences(preferences);
+    const preferencesEnabled = preferences.systemEnabled;
     if (!preferencesEnabled) {
       const explicitlyDisabled =
-        (preferences.reminderConfigured && !preferences.reminderEnabled)
-        || (preferences.systemConfigured && !preferences.systemEnabled);
+        preferences.systemConfigured && !preferences.systemEnabled;
       // 只有使用者偏好明確關閉時才全面清除 LizLog 排程。舊版尚未設定
       // systemEnabled 且 OS 權限仍不可用時，保留既有通知等待下次重新對齊。
       if (explicitlyDisabled) await cancelAllLizLogNotificationsUnlocked();

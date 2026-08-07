@@ -177,17 +177,20 @@ export default function DiaryViewScreen() {
     }
   };
 
-  const recordItems = [
-    { icon: IconTemp, label: '溫度', value: displayDiary.sensorData.temp },
-    { icon: IconHumid, label: '濕度', value: displayDiary.sensorData.humid },
-    { icon: IconBask, label: '日照', value: displayDiary.sensorData.bask },
-    { icon: IconFeed, label: '飲食', value: displayDiary.sensorData.feed, appetite: displayDiary.sensorData.appetite },
-    { icon: IconBath, label: '泡澡', value: displayDiary.sensorData.bath },
-    { icon: IconPoop, label: '排便', value: displayDiary.sensorData.poop },
-    { icon: IconMolt, label: '蛻皮', value: displayDiary.sensorData.molt },
-    { icon: IconWeight, label: '體重', value: displayDiary.sensorData.weight },
-    { icon: IconLength, label: '身長', value: displayDiary.sensorData.length },
-  ];
+  const buildRecordItems = (pet: NonNullable<DiaryDoc['pets']>[number], petIndex: number) => {
+    const petRecords = pet.records || (petIndex === 0 ? records : {});
+    return [
+      { icon: IconTemp, label: '溫度', value: petRecords.temp && petRecords.temp !== '-' ? petRecords.temp : (pet.temp || '-') },
+      { icon: IconHumid, label: '濕度', value: petRecords.humid && petRecords.humid !== '-' ? petRecords.humid : (pet.humid || '-') },
+      { icon: IconBask, label: '日照', value: petRecords.bask || '-' },
+      { icon: IconFeed, label: '飲食', value: petRecords.feed || '-', appetite: petRecords.appetite || 0 },
+      { icon: IconBath, label: '泡澡', value: petRecords.bath || '-' },
+      { icon: IconPoop, label: '排便', value: petRecords.poop || '-' },
+      { icon: IconMolt, label: '蛻皮', value: petRecords.molt || (pet.states?.molt ? '有' : '無') },
+      { icon: IconWeight, label: '體重', value: petRecords.weight || '-' },
+      { icon: IconLength, label: '身長', value: petRecords.length || '-' },
+    ];
+  };
 
   if (isLoading) {
     return (
@@ -313,8 +316,12 @@ export default function DiaryViewScreen() {
           </View>
 
           {/* ===== 卡片二：狀態紀錄 ===== */}
-          <View style={[styles.detailCard, { backgroundColor: theme.background }]}>
-            {recordItems.map((item, idx) => {
+          {(diary?.pets || []).map((pet, petIndex) => (
+          <View key={`records-${pet.petId || pet.name}-${petIndex}`} style={[styles.detailCard, { backgroundColor: theme.background }]}>
+            {(diary?.pets?.length || 0) > 1 && (
+              <Text style={[styles.recordLabel, { color: labelColor, fontFamily: fontFamilyName, marginBottom: 8 }]}>{pet.name}</Text>
+            )}
+            {buildRecordItems(pet, petIndex).map((item, idx) => {
               const IconComp = item.icon;
               return (
                 <View key={idx} style={{ gap: 8, width: '100%' }}>
@@ -381,14 +388,14 @@ export default function DiaryViewScreen() {
                           minimumValue={1}
                           maximumValue={5}
                           step={1}
-                          value={item.appetite}
+                          value={(item.appetite ?? 0) > 0 ? item.appetite : 3}
                           disabled={true}
-                          minimumTrackTintColor={item.appetite === 1 ? '#FF3B30' : item.appetite === 2 ? '#FF9500' : '#34C759'}
+                          minimumTrackTintColor={(item.appetite ?? 0) <= 0 ? '#CCCCCC' : item.appetite === 1 ? '#FF3B30' : item.appetite === 2 ? '#FF9500' : '#34C759'}
                           maximumTrackTintColor={theme.primary + '30'}
-                          thumbTintColor={item.appetite === 1 ? '#FF3B30' : item.appetite === 2 ? '#FF9500' : '#34C759'}
+                          thumbTintColor={(item.appetite ?? 0) <= 0 ? '#CCCCCC' : item.appetite === 1 ? '#FF3B30' : item.appetite === 2 ? '#FF9500' : '#34C759'}
                         />
-                        <Text style={[styles.recordLabel, { color: labelColor, fontFamily: fontFamilyName, width: 42, textAlign: 'center' }]}>
-                          {item.appetite === 1 ? '差' : item.appetite === 2 ? '偏差' : item.appetite === 3 ? '普通' : item.appetite === 4 ? '偏好' : '好'}
+                        <Text style={[styles.recordLabel, { color: (item.appetite ?? 0) <= 0 ? labelColor + '80' : labelColor, fontFamily: fontFamilyName, width: 52, textAlign: 'center' }]}>
+                          {(item.appetite ?? 0) <= 0 ? '未檢測' : item.appetite === 1 ? '差' : item.appetite === 2 ? '偏差' : item.appetite === 3 ? '普通' : item.appetite === 4 ? '偏好' : '好'}
                         </Text>
                       </View>
                     </View>
@@ -397,6 +404,7 @@ export default function DiaryViewScreen() {
               );
             })}
           </View>
+          ))}
 
           {/* ===== 卡片三：日記全文／筆記 ===== */}
           {(displayDiary.title || displayDiary.content.trim()) ? (

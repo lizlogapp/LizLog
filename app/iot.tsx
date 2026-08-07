@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, ScrollView, Pressable, TextInput, Alert, Modal } from 'react-native';
 import { useRouter } from 'expo-router';
 import { BaseScreen } from '../src/components/common/BaseScreen';
+import { FloatingActionBar } from '../src/components/FloatingActionBar';
 import { useTheme } from '../src/theme/ThemeContext';
 import { getThemeTokens } from '../src/theme/themeSettings';
 import { getFontSize } from '../src/theme/typographySettings';
@@ -64,17 +65,20 @@ export default function IotManagementScreen() {
 
   return (
     <View style={styles.container}>
-      <BaseScreen scrollable={false}>
+      <BaseScreen
+        scrollable={false}
+        floatingAction={<FloatingActionBar actions={[{ id: 'back', onPress: () => router.back() }]} />}
+      >
         {/* Header */}
         <View style={styles.header}>
-          <Pressable onPress={() => router.back()} style={styles.backButton}>
-            <Text style={[styles.backIcon, { color: theme.primary, fontFamily: fontFamilyName }]}>‹</Text>
-          </Pressable>
           <Text style={[styles.title, { color: theme.primary, fontFamily: fontFamilyName }]}>IoT 設備管理</Text>
-          <View style={styles.backButton} />
         </View>
 
-        <ScrollView style={styles.list} showsVerticalScrollIndicator={false}>
+        <ScrollView
+          style={styles.list}
+          contentContainerStyle={styles.listContent}
+          showsVerticalScrollIndicator={false}
+        >
           {pets.length === 0 && (
             <Text style={[styles.emptyText, { color: theme.text, fontFamily: fontFamilyName }]}>
               請先新增寵物再管理感測器
@@ -189,9 +193,8 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   header: {
-    flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
+    justifyContent: 'center',
     paddingHorizontal: 24,
     paddingTop: 32,
     paddingBottom: 16,
@@ -199,20 +202,12 @@ const styles = StyleSheet.create({
   title: {
     fontSize: getFontSize(22, 'medium'),
   },
-  backButton: {
-    width: 44,
-    height: 44,
-    justifyContent: 'center',
-    alignItems: 'flex-start',
-  },
-  backIcon: {
-    fontSize: 40,
-    lineHeight: 44,
-    marginTop: -8,
-  },
   list: {
     flex: 1,
     paddingHorizontal: 24,
+  },
+  listContent: {
+    paddingBottom: 120,
   },
   emptyText: {
     fontSize: getFontSize(16, 'medium'),

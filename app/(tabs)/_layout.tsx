@@ -149,6 +149,7 @@ function TabsLayoutInner() {
 
       {/* 隱藏 records 舊路由，避免顯示額外頁籤。 */}
       <Tabs.Screen name="records" options={{ href: null }} />
+      <Tabs.Screen name="iot" options={{ href: null }} />
     </Tabs>
   );
 }

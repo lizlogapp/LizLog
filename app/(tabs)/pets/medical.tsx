@@ -43,7 +43,10 @@ export default function MedicalScreen() {
   if (canEdit) {
     actions.push({
       id: 'add',
-      onPress: () => router.push({ pathname: '/(tabs)/pets/add-medical', params: { petId: id, ownerId } }),
+      onPress: () => router.push({
+        pathname: '/(tabs)/pets/add-medical',
+        params: { petId: id, ownerId, mode: 'create', createToken: String(Date.now()) },
+      }),
     });
   }
 

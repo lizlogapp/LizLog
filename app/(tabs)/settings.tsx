@@ -17,12 +17,17 @@ import { useRouter } from 'expo-router';
 import Constants from 'expo-constants';
 import {
   EmailAuthProvider,
+  GoogleAuthProvider,
+  linkWithCredential,
   reauthenticateWithCredential,
   signOut,
   updatePassword,
   updateProfile,
 } from 'firebase/auth';
+import * as Google from 'expo-auth-session/providers/google';
+import * as WebBrowser from 'expo-web-browser';
 import { auth } from '../../src/config/firebase';
+import { GOOGLE_WEB_CLIENT_ID } from '../../src/config/googleAuth';
 import { useTheme } from '../../src/theme/ThemeContext';
 import { getThemeTokens, ThemeId } from '../../src/theme/themeSettings';
 import { paletteColors } from '../../src/theme/themeColorSettings';
@@ -39,12 +44,13 @@ import {
 } from '../../src/services/notificationService';
 import { petService, reminderService } from '../../src/services/firestoreService';
 
+WebBrowser.maybeCompleteAuthSession();
+
 export default function SettingsScreen() {
   const { themeId, setThemeId, fontFamilyName, fontFamilyId, setFontFamilyId, isDemoMode, setIsDemoMode } = useTheme();
   const theme = getThemeTokens(themeId);
   const router = useRouter();
 
-  const [reminderEnabled, setReminderEnabled] = useState(true);
   const [sysNotifyEnabled, setSysNotifyEnabled] = useState(false);
   const [notificationSettingsBusy, setNotificationSettingsBusy] = useState(false);
   const awaitingNotificationSettingsRef = useRef(false);
@@ -63,8 +69,44 @@ export default function SettingsScreen() {
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [isSavingAccount, setIsSavingAccount] = useState(false);
+  const [isLinkingGoogle, setIsLinkingGoogle] = useState(false);
+  const [isGoogleLinked, setIsGoogleLinked] = useState(
+    () => auth.currentUser?.providerData.some(provider => provider.providerId === 'google.com') ?? false,
+  );
+  const [googleRequest, googleResponse, promptGoogleLink] = Google.useIdTokenAuthRequest({
+    clientId: GOOGLE_WEB_CLIENT_ID,
+  });
   const appVersion = Constants.expoConfig?.version ?? '0.1.0';
   const demoModeEnabled = Constants.expoConfig?.extra?.enableDemoMode === true;
+
+  useEffect(() => {
+    if (googleResponse?.type === 'success') {
+      const idToken = googleResponse.params.id_token;
+      const currentUser = auth.currentUser;
+      if (!currentUser || !idToken) {
+        setIsLinkingGoogle(false);
+        Alert.alert('無法綁定', '登入狀態已變更，請重新登入後再試。');
+        return;
+      }
+      const credential = GoogleAuthProvider.credential(idToken);
+      void linkWithCredential(currentUser, credential).then(() => {
+        setIsGoogleLinked(true);
+        Alert.alert('綁定完成', '原帳號已可使用 Google 登入，既有寵物、提醒與日記仍保留在同一帳號。');
+      }).catch((error: { code?: string }) => {
+        if (error.code === 'auth/provider-already-linked') {
+          setIsGoogleLinked(true);
+          Alert.alert('已完成', '這個帳號已綁定 Google。');
+        } else if (error.code === 'auth/credential-already-in-use') {
+          Alert.alert('無法自動合併', '這個 Google 帳號已綁定另一個蜥日日記帳號。為避免資料錯置，請先聯絡支援人員處理。');
+        } else {
+          Alert.alert('綁定失敗', '請確認 Google 帳號與目前登入信箱一致後再試。');
+        }
+      }).finally(() => setIsLinkingGoogle(false));
+    } else if (googleResponse?.type === 'error' || googleResponse?.type === 'dismiss') {
+      setIsLinkingGoogle(false);
+      if (googleResponse.type === 'error') Alert.alert('綁定失敗', 'Google 驗證未完成，請稍後再試。');
+    }
+  }, [googleResponse]);
 
   async function synchronizeAllEnabledReminders() {
     if (!auth.currentUser) return;
@@ -123,22 +165,25 @@ export default function SettingsScreen() {
     let preferences = storedPreferences;
     const shouldAdoptGrantedPermission = permission.granted
       && !storedPreferences.systemConfigured;
-    if (shouldAdoptGrantedPermission && !storedPreferences.systemEnabled) {
+    if (!storedPreferences.reminderEnabled
+      || (shouldAdoptGrantedPermission && !storedPreferences.systemEnabled)) {
       preferences = {
         ...storedPreferences,
-        systemEnabled: true,
-        systemConfigured: true,
+        reminderEnabled: true,
+        reminderConfigured: true,
+        ...(shouldAdoptGrantedPermission ? {
+          systemEnabled: true,
+          systemConfigured: true,
+        } : {}),
       };
       await saveNotificationPreferences(preferences);
     }
-    setReminderEnabled(preferences.reminderEnabled);
     setSysNotifyEnabled(preferences.systemEnabled && permission.granted);
     if (showSettingsResult && permission.appGranted && !permission.channelEnabled) {
       showNotificationSettingsGuide(true);
       return;
     }
     if (synchronizeIfReady
-      && preferences.reminderEnabled
       && preferences.systemEnabled
       && permission.granted) {
       await synchronizeAllEnabledReminders();
@@ -169,53 +214,6 @@ export default function SettingsScreen() {
     return () => subscription.remove();
   }, []);
 
-  const handleReminderToggle = async (value: boolean) => {
-    if (notificationSettingsBusy) return;
-    setNotificationSettingsBusy(true);
-    setReminderEnabled(value);
-    let previous: Awaited<ReturnType<typeof getNotificationPreferences>> | null = null;
-    try {
-      previous = await getNotificationPreferences();
-      const next = {
-        ...previous,
-        reminderEnabled: value,
-        reminderConfigured: true,
-      };
-      await saveNotificationPreferences(next);
-    } catch {
-      if (previous) {
-        await saveNotificationPreferences(previous).catch(() => undefined);
-        setReminderEnabled(previous.reminderEnabled);
-      } else {
-        await refreshNotificationSettings().catch(() => undefined);
-      }
-      Alert.alert('無法更新通知設定', '請稍後再試。');
-      setNotificationSettingsBusy(false);
-      return;
-    }
-
-    try {
-      if (!value) {
-        await cancelAllLizLogNotifications();
-      } else if (previous?.systemEnabled) {
-        const permission = await requestNotificationPermissionState();
-        setSysNotifyEnabled(permission.granted);
-        if (!permission.granted) {
-          showNotificationSettingsGuide(permission.appGranted && !permission.channelEnabled);
-        } else {
-          await synchronizeAllEnabledReminders();
-        }
-      }
-    } catch {
-      Alert.alert(
-        '提醒設定已更新',
-        '設定已儲存，但本機通知尚未同步。這不是資料儲存失敗，請稍後再試。',
-      );
-    } finally {
-      setNotificationSettingsBusy(false);
-    }
-  };
-
   const handleSystemNotificationToggle = async (value: boolean) => {
     if (notificationSettingsBusy) return;
     setNotificationSettingsBusy(true);
@@ -226,6 +224,8 @@ export default function SettingsScreen() {
       previous = await getNotificationPreferences();
       next = {
         ...previous,
+        reminderEnabled: true,
+        reminderConfigured: true,
         systemEnabled: value,
         systemConfigured: true,
       };
@@ -255,7 +255,7 @@ export default function SettingsScreen() {
         showNotificationSettingsGuide(permission.appGranted && !permission.channelEnabled);
         return;
       }
-      if (next?.reminderEnabled) await synchronizeAllEnabledReminders();
+      await synchronizeAllEnabledReminders();
     } catch {
       await refreshNotificationSettings().catch(() => undefined);
       Alert.alert(
@@ -364,22 +364,25 @@ export default function SettingsScreen() {
               <Text style={[styles.value, { color: theme.primary, fontFamily: fontFamilyName }]}>更改密碼</Text>
             </Pressable>
           </View>
-
-          {/* Section: 通知設定 */}
-          <Text style={[styles.sectionTitle, { color: theme.primary, fontFamily: fontFamilyName, marginTop: 16 }]}>
-            通知設定
-          </Text>
           <View style={styles.row}>
-            <Text style={[styles.label, { color: theme.primary, fontFamily: fontFamilyName }]}>提醒</Text>
-            <Switch
-              trackColor={{ false: '#E0E0E0', true: theme.primary }}
-              thumbColor={'#FFFFFF'}
-              onValueChange={handleReminderToggle}
-              value={reminderEnabled}
-              disabled={notificationSettingsBusy}
-              style={{ transform: [{ scaleX: 0.8 }, { scaleY: 0.8 }] }}
-            />
+            <Text style={[styles.label, { color: theme.primary, fontFamily: fontFamilyName }]}>Google</Text>
+            <Pressable
+              disabled={!googleRequest || isLinkingGoogle || isGoogleLinked}
+              onPress={() => {
+                setIsLinkingGoogle(true);
+                void promptGoogleLink();
+              }}
+            >
+              <Text style={[styles.value, { color: theme.primary, fontFamily: fontFamilyName, opacity: isLinkingGoogle ? 0.5 : 1 }]}>
+                {isGoogleLinked ? '已綁定' : isLinkingGoogle ? '綁定中…' : '綁定 Google 帳號'}
+              </Text>
+            </Pressable>
           </View>
+
+          {/* Section: 個人化設定 */}
+          <Text style={[styles.sectionTitle, { color: theme.primary, fontFamily: fontFamilyName, marginTop: 16 }]}>
+            個人化設定
+          </Text>
           <View style={styles.row}>
             <Text style={[styles.label, { color: theme.primary, fontFamily: fontFamilyName }]}>系統通知</Text>
             <Switch
@@ -391,11 +394,6 @@ export default function SettingsScreen() {
               style={{ transform: [{ scaleX: 0.8 }, { scaleY: 0.8 }] }}
             />
           </View>
-
-          {/* Section: 個人化設定 */}
-          <Text style={[styles.sectionTitle, { color: theme.primary, fontFamily: fontFamilyName, marginTop: 16 }]}>
-            個人化設定
-          </Text>
           <View style={styles.row}>
             <Text style={[styles.label, { color: theme.primary, fontFamily: fontFamilyName }]}>外觀設定</Text>
             <Pressable style={styles.valueGroup} onPress={toggleTheme}>
@@ -439,7 +437,7 @@ export default function SettingsScreen() {
             </Pressable>
             <Pressable 
               style={[styles.actionButton, { backgroundColor: theme.background }]}
-              onPress={() => router.push('/iot')}
+              onPress={() => router.push('/(tabs)/iot')}
             >
               <Text style={[styles.actionButtonText, { color: theme.primary, fontFamily: fontFamilyName }]}>
                 IoT 設備管理

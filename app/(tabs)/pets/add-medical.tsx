@@ -34,7 +34,13 @@ const getFirstDayOfMonth = (y: number, m: number) => new Date(y, m - 1, 1).getDa
 
 export default function AddMedicalScreen() {
   const router = useRouter();
-  const { petId, id, ownerId } = useLocalSearchParams<{ petId: string; id?: string; ownerId?: string }>();
+  const { petId, id, ownerId, mode } = useLocalSearchParams<{
+    petId: string;
+    id?: string;
+    ownerId?: string;
+    mode?: 'create' | 'edit';
+  }>();
+  const isEditingMedical = mode !== 'create' && Boolean(id);
   const { themeId, fontFamilyName, isDemoMode } = useTheme();
   const theme = getThemeTokens(themeId);
   const { user } = useAuth();
@@ -52,8 +58,8 @@ export default function AddMedicalScreen() {
   const [selectedImages, setSelectedImages] = useState<string[]>([]);
   const [selectedImageThumbnails, setSelectedImageThumbnails] = useState<string[]>([]);
   const saveLockRef = useRef(false);
-  const createdMedicalIdRef = useRef<string | null>(id || null);
-  const medicalRecordSavedRef = useRef(Boolean(id));
+  const createdMedicalIdRef = useRef<string | null>(isEditingMedical ? id || null : null);
+  const medicalRecordSavedRef = useRef(isEditingMedical);
 
   // Medication section
   const [medStartDate, setMedStartDate] = useState('');
@@ -71,8 +77,8 @@ export default function AddMedicalScreen() {
   const [calendarTarget, setCalendarTarget] = useState<'visit' | 'medStart' | 'medEnd'>('visit');
 
   useEffect(() => {
-    if (id) createdMedicalIdRef.current = id;
-    if (id && user) {
+    if (isEditingMedical && id) createdMedicalIdRef.current = id;
+    if (isEditingMedical && id && user) {
       const resolvedOwnerId = ownerId || user.uid;
       medicalService.getById(resolvedOwnerId, id).then(doc => {
         if (doc) {
@@ -99,7 +105,7 @@ export default function AddMedicalScreen() {
         }
       });
     }
-  }, [id, ownerId, user]);
+  }, [id, isEditingMedical, ownerId, user]);
 
   const pickImages = async () => {
     const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();

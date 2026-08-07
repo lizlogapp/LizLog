@@ -50,6 +50,8 @@ export default function ReminderScreen() {
   const [hasLoadedReminders, setHasLoadedReminders] = useState(false);
   const [petsById, setPetsById] = useState<Record<string, PetDoc & { id: string }>>({});
   const [pendingIds, setPendingIds] = useState<Set<string>>(new Set());
+  const hiddenReminderKeysRef = useRef(new Set<string>());
+  const pendingToggleValuesRef = useRef(new Map<string, boolean>());
   const permissionPromptedRef = useRef(false);
   const awaitingSettingsRef = useRef(false);
   const completedSettingsRoundTripRef = useRef(false);
@@ -68,7 +70,19 @@ export default function ReminderScreen() {
       setPetsById(Object.fromEntries(pets.map(pet => [pet.id, pet])));
     });
     const unsubscribeReminders = reminderService.onRemindersChanged(user.uid, firestoreReminders => {
-      const allReminders = firestoreReminders as ReminderNotificationInput[];
+      const allReminders = (firestoreReminders as ReminderNotificationInput[])
+        .filter(reminder => {
+          const resolvedOwnerId = reminder.ownerId || user.uid;
+          return !hiddenReminderKeysRef.current.has(`${resolvedOwnerId}:${reminder.id}`);
+        })
+        .map(reminder => {
+          const resolvedOwnerId = reminder.ownerId || user.uid;
+          const key = `${resolvedOwnerId}:${reminder.id}`;
+          const pendingValue = pendingToggleValuesRef.current.get(key);
+          if (pendingValue === undefined) return reminder;
+          if (!!reminder.isOn === pendingValue) pendingToggleValuesRef.current.delete(key);
+          return { ...reminder, isOn: pendingValue };
+        });
       const isNotificationTarget = (reminder: ReminderNotificationInput) => (
         reminder.id === reminderId
         && (!ownerId || (reminder.ownerId || user.uid) === ownerId)
@@ -80,13 +94,18 @@ export default function ReminderScreen() {
             || reminder.pets?.includes(id),
           )
         : allReminders;
-      setReminders(
-        reminderId
-          ? [...visibleReminders].sort((left, right) => (
-              Number(isNotificationTarget(right)) - Number(isNotificationTarget(left))
-            ))
-          : visibleReminders,
-      );
+      const timeValue = (value: string | undefined) => {
+        const match = value?.match(/^(\d{1,2}):(\d{2})$/);
+        if (!match) return Number.MAX_SAFE_INTEGER;
+        return Number(match[1]) * 60 + Number(match[2]);
+      };
+      setReminders([...visibleReminders].sort((left, right) => {
+        const byTime = timeValue(left.time) - timeValue(right.time);
+        if (byTime !== 0) return byTime;
+        const byType = (left.type || '').localeCompare(right.type || '', 'zh-Hant');
+        if (byType !== 0) return byType;
+        return left.id.localeCompare(right.id);
+      }));
       setHasLoadedReminders(true);
 
     });
@@ -161,11 +180,12 @@ export default function ReminderScreen() {
     const preferences = await getNotificationPreferences();
     const nextPreferences = {
       ...preferences,
+      reminderEnabled: true,
+      reminderConfigured: true,
       systemEnabled: true,
       systemConfigured: true,
     };
     await saveNotificationPreferences(nextPreferences);
-    if (!nextPreferences.reminderEnabled) return;
 
     const [allReminders, allPets] = await Promise.all([
       reminderService.getAll(user.uid),
@@ -196,7 +216,7 @@ export default function ReminderScreen() {
       getNotificationPermissionState(),
     ]);
     const userTurnedNotificationsOff = preferences.systemConfigured && !preferences.systemEnabled;
-    if (!preferences.reminderEnabled || userTurnedNotificationsOff) return;
+    if (userTurnedNotificationsOff) return;
     if (permission.granted
       && (!preferences.systemConfigured || preferences.systemEnabled)) {
       await enableNotificationsAndSynchronize(false);
@@ -250,14 +270,16 @@ export default function ReminderScreen() {
     const previousIsOn = !!reminder.isOn;
     const nextIsOn = !previousIsOn;
     const resolvedOwnerId = resolveOwnerId(reminder);
+    pendingToggleValuesRef.current.set(key, nextIsOn);
     setPending(key, true);
     setReminders(previous =>
       previous.map(item => reminderKey(item) === key ? { ...item, isOn: nextIsOn } : item),
     );
 
     try {
-      await reminderService.update(resolvedOwnerId, reminder.id, { isOn: nextIsOn });
+      await reminderService.setEnabled(resolvedOwnerId, reminder.id, nextIsOn);
     } catch (error) {
+      pendingToggleValuesRef.current.delete(key);
       setReminders(previous =>
         previous.map(item => reminderKey(item) === key ? { ...item, isOn: previousIsOn } : item),
       );
@@ -311,10 +333,16 @@ export default function ReminderScreen() {
         onPress: () => {
           void (async () => {
             setPending(key, true);
+            hiddenReminderKeysRef.current.add(key);
+            setReminders(previous => previous.filter(item => reminderKey(item) !== key));
             try {
               await reminderService.delete(resolvedOwnerId, reminder.id);
-              setReminders(previous => previous.filter(item => reminderKey(item) !== key));
             } catch {
+              hiddenReminderKeysRef.current.delete(key);
+              setReminders(previous => {
+                if (previous.some(item => reminderKey(item) === key)) return previous;
+                return [...previous, reminder].sort((left, right) => (left.time || '').localeCompare(right.time || ''));
+              });
               Alert.alert('無法刪除提醒', '請確認網路連線後再試。');
               setPending(key, false);
               return;
@@ -349,7 +377,9 @@ export default function ReminderScreen() {
               if (!canEdit) return;
               router.push({
                 pathname: '/(tabs)/pets/add-reminder',
-                params: id ? { id, ownerId } : {},
+                params: id
+                  ? { id, ownerId, mode: 'create', createToken: String(Date.now()) }
+                  : { mode: 'create', createToken: String(Date.now()) },
               });
             }},
           ].filter(action => action.id !== 'add' || canEdit)}
@@ -384,8 +414,6 @@ export default function ReminderScreen() {
               const editable = isReminderEditable(reminder);
               const pending = pendingIds.has(key);
               const resolvedOwnerId = resolveOwnerId(reminder);
-              const isNotificationTarget = reminder.id === reminderId
-                && (!ownerId || resolvedOwnerId === ownerId);
               return (
               <View
                 key={key}
@@ -394,8 +422,8 @@ export default function ReminderScreen() {
                   !reminder.isOn && styles.reminderCardOff,
                   {
                     backgroundColor: theme.background,
-                    borderColor: isNotificationTarget ? theme.primary : 'transparent',
-                    borderWidth: isNotificationTarget ? 3 : 0,
+                    borderColor: 'transparent',
+                    borderWidth: 0,
                   },
                 ]}
               >
@@ -403,11 +431,6 @@ export default function ReminderScreen() {
                 <View style={[styles.cardSideBar, { backgroundColor: reminder.isOn ? reminder.tagColor : '#CCCCCC' }]} />
 
                 <View style={styles.cardContent}>
-                  {isNotificationTarget && (
-                    <Text style={[styles.notificationTargetLabel, { color: theme.primary, fontFamily: fontFamilyName }]}>
-                      通知提醒
-                    </Text>
-                  )}
                   {/* 標題與開關 */}
                   <View style={styles.cardHeaderRow}>
                     <Text style={[styles.cardTitle, { color: theme.primary, fontFamily: fontFamilyName }]}>
@@ -457,6 +480,7 @@ export default function ReminderScreen() {
                                 reminderId: reminder.id,
                                 petId: reminder.petId,
                                 ownerId: resolvedOwnerId,
+                                mode: 'edit',
                               },
                             })}
                             disabled={pending}
@@ -540,13 +564,6 @@ const styles = StyleSheet.create({
   },
   reminderCardOff: {
     opacity: 0.6,
-  },
-  notificationTargetLabel: {
-    alignSelf: 'flex-start',
-    marginBottom: 6,
-    fontSize: getFontSize(12, 'small'),
-    fontWeight: '700',
-    letterSpacing: 1,
   },
   cardSideBar: {
     position: 'absolute',

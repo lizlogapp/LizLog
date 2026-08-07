@@ -50,13 +50,16 @@ const formatLocalDate = (date: Date) => [
 
 export default function AddReminderScreen() {
   const router = useRouter();
-  const { id, petId, reminderId, ownerId } = useLocalSearchParams<{
+  const { id, petId, reminderId, ownerId, mode } = useLocalSearchParams<{
     id?: string;
     petId?: string;
     reminderId?: string;
     ownerId?: string;
+    mode?: 'create' | 'edit';
   }>();
   const targetPetId = id || petId || '';
+  // 新增入口明確忽略任何殘留 reminderId，避免同類型提醒被誤更新。
+  const isEditingReminder = mode !== 'create' && Boolean(reminderId);
   const { themeId, fontFamilyName, isDemoMode } = useTheme();
   const theme = getThemeTokens(themeId);
   const { user } = useAuth();
@@ -203,7 +206,7 @@ export default function AddReminderScreen() {
 
   // 預填資料 (如果是編輯模式)
   useEffect(() => {
-    if (reminderId && user) {
+    if (isEditingReminder && reminderId && user) {
       reminderService.getById(ownerId || user.uid, reminderId).then(data => {
         if (!data) return;
         setSelectedPets(data.pets?.length ? data.pets : [data.petId]);
@@ -233,7 +236,7 @@ export default function AddReminderScreen() {
         setNote(data.note || '');
       });
     }
-  }, [reminderId, user, ownerId]);
+  }, [isEditingReminder, reminderId, user, ownerId]);
 
   const handleSave = async () => {
     if (!user || !isPetListReady || savingLock.current || isSaving) return;
@@ -341,8 +344,13 @@ export default function AddReminderScreen() {
     try {
       let savedId: string;
       try {
-        savedId = reminderId || await reminderService.add(resolvedOwnerId, newData);
-        if (reminderId) await reminderService.update(resolvedOwnerId, reminderId, newData);
+        if (isEditingReminder && reminderId) {
+          savedId = reminderId;
+          await reminderService.update(resolvedOwnerId, reminderId, newData);
+        } else {
+          // 每次新增都使用 Firestore 自動產生的新文件 ID；內容相同也必須保留為獨立卡片。
+          savedId = await reminderService.add(resolvedOwnerId, newData);
+        }
       } catch (error) {
         Alert.alert('提醒儲存失敗', error instanceof Error ? error.message : '請確認網路連線後再試。');
         return;
@@ -353,6 +361,12 @@ export default function AddReminderScreen() {
         ownerId: resolvedOwnerId,
         ...newData,
       };
+      // Firestore 已確認寫入後立即回列表；native 排程可在頁面切換後完成，
+      // 不讓 Android notification API 的額外等待看起來像「新增尚未成功」。
+      router.navigate({
+        pathname: '/(tabs)/pets/reminder',
+        params: { id: selectedPets[0], ownerId: resolvedOwnerId },
+      });
       const scheduleResult = await scheduleReminderNotificationDetailed(
         resolvedOwnerId,
         savedReminder,
@@ -361,39 +375,32 @@ export default function AddReminderScreen() {
         reason: 'state-read-failed' as const,
         scheduledNotificationCount: 0,
       }));
-      const navigateToReminderList = () => router.navigate({
-        pathname: '/(tabs)/pets/reminder',
-        params: { id: selectedPets[0], ownerId: resolvedOwnerId },
-      });
       if (!scheduleResult.scheduled) {
         const isNotificationSetupIssue = scheduleResult.reason === 'permission-denied'
           || scheduleResult.reason === 'channel-disabled'
           || scheduleResult.reason === 'system-disabled'
           || scheduleResult.reason === 'reminders-disabled';
         if (isNotificationSetupIssue && !(await claimNotificationSetupGuide())) {
-          navigateToReminderList();
           return;
         }
         const copy = getNotificationScheduleFailureCopy(scheduleResult);
         Alert.alert(
           copy.title,
           copy.message,
-          copy.shouldOpenSystemSettings
-            ? [
-                { text: '稍後', onPress: navigateToReminderList },
-                {
-                  text: '前往設定',
-                  onPress: () => {
-                    navigateToReminderList();
-                    void Linking.openSettings();
+            copy.shouldOpenSystemSettings
+              ? [
+                  { text: '稍後' },
+                  {
+                    text: '前往設定',
+                    onPress: () => {
+                      void Linking.openSettings();
+                    },
                   },
-                },
-              ]
-            : [{ text: '確定', onPress: navigateToReminderList }],
+                ]
+            : [{ text: '確定' }],
         );
         return;
       }
-      navigateToReminderList();
     } finally {
       savingLock.current = false;
       setIsSaving(false);

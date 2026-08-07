@@ -192,7 +192,7 @@ export default function MedicalDetailScreen() {
 
           {/* Bottom Actions */}
           <View style={styles.actionSection}>
-            {canEdit && <Pressable style={[styles.actionButton, { backgroundColor: theme.background }]} onPress={() => router.push({ pathname: '/(tabs)/pets/add-medical', params: { id, petId, ownerId } })}>
+            {canEdit && <Pressable style={[styles.actionButton, { backgroundColor: theme.background }]} onPress={() => router.push({ pathname: '/(tabs)/pets/add-medical', params: { id, petId, ownerId, mode: 'edit' } })}>
               <Image source={require('../../../assets/icons/icon-edit.png')} style={[styles.actionIcon, { tintColor: theme.primary }]} />
             </Pressable>}
             {canEdit && <Pressable style={[styles.actionButton, { backgroundColor: theme.background }]} onPress={() => setShowDeleteModal(true)}>
